@@ -18,8 +18,8 @@ $ca = New-SelfSignedCertificate -Type Custom -Subject "CN=LaoheTeam.top" -Friend
 $leaf = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Laohehehe" -FriendlyName "netHEmusic signer" -Signer $ca -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date "2100-06-17")
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root "build") | Out-Null
-$pfx = Join-Path $root "build\Laohehehe.pfx"
-$cer = Join-Path $root "build\LaoheTeam.cer"
+$pfx = Join-Path $root "resources\Laohehehe.pfx"
+$cer = Join-Path $root "resources\LaoheTeam.cer"
 $pass = ConvertTo-SecureString $PfxPass -Force -AsPlainText
 Export-PfxCertificate -Cert $leaf -FilePath $pfx -Password $pass | Out-Null
 Export-Certificate -Cert $ca -FilePath $cer -Force | Out-Null

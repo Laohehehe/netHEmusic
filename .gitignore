@@ -18,6 +18,8 @@ node_modules/
 *.pfx
 *.cer
 *.snk
+# 例外：公开的签名 CA 证书，随源码一起分发（私钥 .pfx 仍然不入库）
+!resources/LaoheTeam.cer
 
 # ---- IDE ----
 .vs/
