@@ -360,3 +360,14 @@ html.no-fx .fx-shake{animation:none;}
 .np-btn:active,.np-close:active{transform:scale(.94);}
 /* 小窗口下的自适应 */
 @media (max-width: 900px){ .np-wrap{grid-template-columns:1fr;gap:18px;padding:36px 26px 110px;} .np-cover-wrap{width:150px;} .np-title{font-size:22px;} .np-line{font-size:15px;} .np-line.on{font-size:20px;} }
+/* 音量：喇叭图标 + 静音态（红色） */
+.pl-vol{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:28px;height:28px;border-radius:50%;cursor:pointer;
+  color:rgba(var(--md-accent-color-grey-base-rgb),.8);
+  transition:color .2s ease,background .2s ease,transform .22s cubic-bezier(.2,.8,.3,1.3);
+}
+.pl-vol svg{width:19px;height:19px;display:block;}
+.pl-vol:hover{color:var(--md-accent-color);background:var(--nm-fill);transform:scale(1.12);}
+.pl-vol.muted{color:#e2564d;}
+.pl-vol.muted:hover{color:#ff6b60;}

@@ -59,6 +59,8 @@
     playNext:ico('<line x1="3" x2="13" y1="6" y2="6"/><line x1="3" x2="11" y1="12" y2="12"/><line x1="3" x2="11" y1="18" y2="18"/><path d="M15 11l6 4-6 4z"/>'),
     trash:   ico('<polyline points="3 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>'),
     share:   ico('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" x2="15.4" y1="10.5" y2="6.5"/><line x1="8.6" x2="15.4" y1="13.5" y2="17.5"/>'),
+    volOn:   ico('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.6 8.6a5 5 0 0 1 0 6.8"/><path d="M18.6 5.6a9 9 0 0 1 0 12.8"/>'),
+    volMute: ico('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="17" y1="9" x2="23" y2="15"/><line x1="23" y1="9" x2="17" y2="15"/>'),
     // 播放模式四态
     modeOrder:  ico('<line x1="4" x2="19" y1="12" y2="12"/><polyline points="14 6 20 12 14 18"/>'),
     modeList:   ico('<polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'),
@@ -779,7 +781,27 @@
   // 点击播放条封面 → 进入歌词页
   $('#pl-cover').onclick = () => openNowPlaying();
   $('#pl-like').onclick = () => toast('收藏开发中');
-  $('#pl-volume').oninput = e => NE.post({type:'volume', v: e.target.value});
+  // ---- 音量：滑块与真实音量双向同步；点喇叭图标静音/恢复 ----
+  var lastVol = 80;
+  function updateVolUI(v) {
+    var s = $('#pl-volume'); if (s) s.value = v;
+    var ic = $('#pl-vol-icon');
+    if (ic) {
+      ic.innerHTML = v <= 0 ? SVG.volMute : SVG.volOn;
+      ic.classList.toggle('muted', v <= 0);
+      ic.title = v <= 0 ? '已静音（点击恢复音量 ' + lastVol + '%）' : '音量 ' + v + '%（点击静音）';
+    }
+  }
+  function applyVolume(v, post) {
+    v = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+    if (v > 0) lastVol = v;
+    updateVolUI(v);
+    if (post) NE.post({ type: 'volume', v: v });
+  }
+  $('#pl-volume').oninput = e => applyVolume(e.target.value, true);
+  var volIcon0 = $('#pl-vol-icon');
+  if (volIcon0) volIcon0.onclick = () => { var cur = Number($('#pl-volume').value) || 0; applyVolume(cur > 0 ? 0 : lastVol, true); };
+  NE.on('volume_changed', function (d) { applyVolume(d.v, false); });
 
   // ---- 全窗口歌词页：按钮 / Esc / 进度条跳转 ----
   (function initNowPlaying() {
@@ -819,6 +841,7 @@
   NE.getSettings().then(function (s) {
     try {
       applyMode(s.playMode || 'order', true);
+      applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
       if (!LYRIC_LOCKED) setLyricBtn(String(s.desktopLyric) !== 'false' && s.desktopLyric !== false);
     } catch (e) { }
   }).catch(function () { });
