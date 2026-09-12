@@ -247,6 +247,18 @@ public sealed class PlayerService
     }
     public int GetVolume() => _config.Volume;
     public TimeSpan Position => _player.PlaybackSession.Position;
+
+    /// <summary>当前音频的真实时长（媒体会话给的值最准，前端进度条用）。</summary>
+    public TimeSpan Duration
+    {
+        get
+        {
+            try { var d = _player.PlaybackSession.NaturalDuration; if (d > TimeSpan.Zero) return d; } catch { }
+            var c = Current;
+            return c is null ? TimeSpan.Zero : TimeSpan.FromMilliseconds(c.Duration);
+        }
+    }
+
     public void Seek(TimeSpan t) { try { _player.PlaybackSession.Position = t; } catch { } }
 
     /// <summary>把当前索引相邻的三首（上/当前/下）解析出播放直链并填入内存环；其它歌曲由磁盘缓存按需加载。</summary>

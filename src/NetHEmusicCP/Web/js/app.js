@@ -245,8 +245,10 @@
 
   async function openNowPlaying() {
     var np = npEl('np'); if (!np) return;
+    var wasOpen = npOpen;
     npOpen = true;
     np.classList.add('show'); np.setAttribute('aria-hidden', 'false');
+    if (!wasOpen) requestAnimationFrame(npCoverFlip);
     var ns = nowPlaying || queue[playingIndex];
     if (!ns) { npEl('np-title').textContent = '未在播放'; npEl('np-artist').textContent = '—'; npEl('np-album').textContent = ''; npRenderLyric([]); return; }
     npRenderSong(ns);
@@ -262,9 +264,52 @@
       } catch (e) { npRenderLyric([]); }
     }
   }
+  // 封面“飞入”：从 dock 小封面 FLIP 到大封面，让歌词页像是从播放条长出来的
+  function npCoverFlip() {
+    var wrap = document.querySelector('#np .np-cover-wrap');
+    var from = document.getElementById('pl-cover-wrap');
+    if (!wrap || !from) return;
+    var a = from.getBoundingClientRect(), b = wrap.getBoundingClientRect();
+    if (!a.width || !b.width) return;
+    var sx = a.width / b.width, sy = a.height / b.height;
+    var s = Math.max(.12, Math.min(sx, sy));
+    var dx = (a.left + a.width / 2) - (b.left + b.width / 2);
+    var dy = (a.top + a.height / 2) - (b.top + b.height / 2);
+    wrap.style.transition = 'none';
+    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(' + s + ')';
+    wrap.style.opacity = '.85';
+    void wrap.offsetWidth;                       // 强制回流，保证起始帧生效
+    requestAnimationFrame(function () {
+      wrap.style.transition = 'transform .52s cubic-bezier(.2,.8,.25,1), opacity .3s ease';
+      wrap.style.transform = 'none';
+      wrap.style.opacity = '1';
+    });
+  }
+
   function closeNowPlaying() {
     var np = npEl('np'); if (!np) return;
-    npOpen = false; np.classList.remove('show'); np.setAttribute('aria-hidden', 'true');
+    var wrap = document.querySelector('#np .np-cover-wrap');
+    var from = document.getElementById('pl-cover-wrap');
+    if (wrap && from) {                          // 收起时反向飞回 dock
+      var a = from.getBoundingClientRect(), b = wrap.getBoundingClientRect();
+      if (a.width && b.width) {
+        var s = Math.max(.12, Math.min(a.width / b.width, a.height / b.height));
+        var dx = (a.left + a.width / 2) - (b.left + b.width / 2);
+        var dy = (a.top + a.height / 2) - (b.top + b.height / 2);
+        wrap.style.transition = 'transform .42s cubic-bezier(.4,0,.6,1), opacity .3s ease';
+        wrap.style.transformOrigin = 'center';
+        wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(' + s + ')';
+        wrap.style.opacity = '.6';
+      }
+    }
+    npOpen = false;
+    np.classList.remove('show');
+    np.setAttribute('aria-hidden', 'true');
+    setTimeout(function () {
+      if (npOpen) return;
+      var w = document.querySelector('#np .np-cover-wrap');
+      if (w) { w.style.transition = 'none'; w.style.transform = 'none'; w.style.opacity = ''; }
+    }, 460);
   }
 
   // 旧的 go('lyric') 也走全窗口歌词页
