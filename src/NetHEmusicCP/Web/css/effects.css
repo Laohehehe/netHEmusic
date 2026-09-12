@@ -84,3 +84,36 @@ html.no-fx .fx-shake{animation:none;}
 .row-btn:active{transform:scale(.94);}
 .row-btn svg{width:23px;height:23px;display:block;fill:currentColor;}
 .row-btn.primary{color:var(--md-accent-color);}
+/* ---------- 公告弹窗 ---------- */
+.modal-mask{
+  position:fixed;inset:0;z-index:6000;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.45);backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;transition:opacity .22s ease;
+}
+.modal-mask.show{opacity:1;pointer-events:auto;}
+.modal-card{
+  width:min(520px,86vw);max-height:80vh;overflow:auto;
+  background:var(--md-accent-color-bg-darken);
+  border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.12);
+  border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.55);
+  transform:translateY(14px) scale(.97);
+  transition:transform .28s cubic-bezier(.2,.8,.3,1.15);
+}
+.modal-mask.show .modal-card{transform:none;}
+.modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px 10px;}
+.modal-head h3{margin:0;flex:1;font-size:16px;font-weight:700;color:var(--md-accent-color-secondary);}
+.modal-dot{width:8px;height:8px;border-radius:50%;background:var(--md-accent-color);box-shadow:0 0 10px rgba(var(--md-accent-color-rgb),.85);}
+.modal-x{
+  width:30px;height:30px;border:none;border-radius:50%;background:transparent;cursor:pointer;
+  color:rgba(var(--md-accent-color-grey-base-rgb),.7);
+  font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:13px;
+  transition:background .18s ease,color .18s ease,transform .18s ease;
+}
+.modal-x:hover{background:rgba(var(--md-accent-color-grey-base-rgb),.12);color:var(--md-accent-color);transform:rotate(90deg);}
+.modal-body{padding:2px 18px 6px;font-size:13.5px;line-height:1.8;color:rgba(var(--md-accent-color-grey-base-rgb),.84);}
+.modal-body p{margin:0 0 10px;}
+.modal-body b{color:var(--md-accent-color);}
+.modal-tip{font-size:12.5px;color:rgba(var(--md-accent-color-grey-base-rgb),.5);}
+.modal-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px 16px;}
+.modal-check{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:rgba(var(--md-accent-color-grey-base-rgb),.6);}
+.modal-check input{accent-color:var(--md-accent-color);}
