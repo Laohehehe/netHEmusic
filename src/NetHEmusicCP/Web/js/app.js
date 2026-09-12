@@ -481,10 +481,17 @@
     var vs = MODES.map(function (m) { return m.v; });
     applyMode(vs[(vs.indexOf(curMode) + 1) % vs.length], false);
   };
+  // 桌面歌词按钮：暂时锁定（功能已实现但先不开放），点击只提示开发中
+  var LYRIC_LOCKED = true;
   $('#pb-lyric').onclick = function () {
+    if (LYRIC_LOCKED) { toast('桌面歌词开发中…'); return; }
     var on = !$('#pb-lyric').classList.contains('on');
     setLyricBtn(on); NE.post({ type: 'desktop_lyric', on: on });
   };
+  if (LYRIC_LOCKED) {
+    var lb = $('#pb-lyric');
+    if (lb) { lb.classList.add('locked'); lb.title = '桌面歌词（开发中）'; }
+  }
   $('#pl-list').onclick = function (e) { e.stopPropagation(); toggleQueuePanel(); };
   document.addEventListener('click', function (e) {
     if (plOpen && !(e.target.closest && (e.target.closest('#plpanel') || e.target.closest('#pl-list')))) toggleQueuePanel(false);
@@ -504,10 +511,13 @@
     if (cur && $('#pl-title').textContent === '未在播放') showSongMeta(cur);
   });
   NE.on('queue_changed', function () { if (plOpen) NE.post({ type: 'queue_get' }); });
-  NE.on('desktop_lyric_state', function (d) { setLyricBtn(!!d.on); });
-  // 启动时同步：播放模式 / 桌面歌词状态 / 上次的播放列表
+  NE.on('desktop_lyric_state', function (d) { if (!LYRIC_LOCKED) setLyricBtn(!!d.on); });
+  // 启动时同步：播放模式 / （未锁定时）桌面歌词状态 / 上次的播放列表
   NE.getSettings().then(function (s) {
-    try { applyMode(s.playMode || 'order', true); setLyricBtn(String(s.desktopLyric) !== 'false' && s.desktopLyric !== false); } catch (e) { }
+    try {
+      applyMode(s.playMode || 'order', true);
+      if (!LYRIC_LOCKED) setLyricBtn(String(s.desktopLyric) !== 'false' && s.desktopLyric !== false);
+    } catch (e) { }
   }).catch(function () { });
   setTimeout(function () { NE.post({ type: 'queue_get' }); }, 900);
 
