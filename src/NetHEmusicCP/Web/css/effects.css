@@ -301,8 +301,8 @@ html.no-fx .fx-shake{animation:none;}
 .np-scrim{
   position:absolute;inset:0;
   background:
-    radial-gradient(130% 100% at 22% 18%, rgba(0,0,0,.06), rgba(0,0,0,.42) 72%),
-    linear-gradient(180deg, rgba(0,0,0,.22) 0%, rgba(0,0,0,.06) 42%, rgba(0,0,0,.45) 100%);
+    radial-gradient(130% 100% at 22% 18%, rgba(0,0,0,.02), rgba(0,0,0,.28) 72%),
+    linear-gradient(180deg, rgba(0,0,0,.10) 0%, rgba(0,0,0,.02) 42%, rgba(0,0,0,.30) 100%);
 }
 .np-wrap{
   position:absolute;inset:0;display:grid;grid-template-columns:minmax(300px,38%) 1fr;
@@ -341,12 +341,20 @@ html.no-fx .fx-shake{animation:none;}
   text-shadow:0 2px 20px rgba(0,0,0,.45);
   transform:scale(1.02);
 }
-/* 底部控制条 */
+/* 底部控制条（两行：进度 + 控制，整体更靠下） */
 .np-bar{
-  position:absolute;left:0;right:0;bottom:0;height:86px;
-  display:flex;align-items:center;gap:14px;padding:0 34px;
-  background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.5));
+  position:absolute;left:0;right:0;bottom:0;padding:26px 34px 14px;
+  display:flex;flex-direction:column;gap:8px;justify-content:flex-end;
+  background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.34));
 }
+.np-bar-row{display:flex;align-items:center;gap:14px;}
+.np-bar-ctrl{justify-content:center;gap:8px;}
+.np-sep{flex:1;} /* 控制键居中：左右各一个弹性间隔 */
+.np-bar-ctrl .np-btn,.np-bar-ctrl .np-close{position:relative;}
+.np-bar-ctrl::before,.np-bar-ctrl::after{content:'';flex:1;} /* 两侧留白，让上一首/播放/下一首居中 */
+.np-play{width:44px;height:44px;background:rgba(255,255,255,.14);}
+.np-play svg{width:22px;height:22px;}
+.np-play:hover{background:rgba(255,255,255,.26);}
 .np-time{font-size:12px;color:rgba(255,255,255,.7);font-variant-numeric:tabular-nums;min-width:40px;text-align:center;}
 .np-prog{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.22);cursor:pointer;overflow:hidden;}
 .np-fill{height:100%;width:0;border-radius:3px;background:#fff;transition:width .18s linear;box-shadow:0 0 10px rgba(255,255,255,.5);}
