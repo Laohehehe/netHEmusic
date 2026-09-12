@@ -1,0 +1,21 @@
+<Window
+    x:Class="netHEmusic.Windows.DesktopLyricWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid x:Name="Root" Background="Transparent">
+        <Border x:Name="Card" CornerRadius="12" Padding="18,10" BorderThickness="2" BorderBrush="Transparent"
+                Background="{ThemeResource AppSurfaceDarkenBrush}" Opacity="0.94">
+            <Grid>
+                <StackPanel x:Name="HorizontalLyric" Orientation="Vertical" Spacing="2" HorizontalAlignment="Center">
+                    <TextBlock x:Name="LineText" FontSize="20" FontWeight="SemiBold" Foreground="{ThemeResource AppTextBrush}" TextWrapping="Wrap" TextAlignment="Center"/>
+                    <TextBlock x:Name="SubLineText" FontSize="14" Foreground="{ThemeResource AppMutedBrush}" TextWrapping="Wrap" TextAlignment="Center"/>
+                </StackPanel>
+                <StackPanel x:Name="VerticalLyric" Orientation="Vertical" Spacing="6" HorizontalAlignment="Center" Visibility="Collapsed">
+                    <TextBlock x:Name="VLineText" FontSize="22" FontWeight="Bold" Foreground="{ThemeResource AppTextBrush}" Text=""/>
+                    <TextBlock x:Name="VSubText" FontSize="15" Foreground="{ThemeResource AppMutedBrush}" Text=""/>
+                </StackPanel>
+                <TextBlock x:Name="EmptyText" Text="— netHEmusic 桌面歌词 —" FontSize="16" Foreground="{ThemeResource AppMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

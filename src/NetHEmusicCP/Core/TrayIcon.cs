@@ -1,0 +1,95 @@
+using System;
+using System.Runtime.InteropServices;
+using netHEmusic.Core.Logging;
+
+namespace netHEmusic.Core;
+
+/// <summary>系统托盘图标（Win32 Shell_NotifyIcon + 隐藏消息窗）。用于「关闭=最小化到托盘」：提供 打开/退出 菜单与双击恢复。</summary>
+public sealed class TrayIcon : IDisposable
+{
+    private const int WM_USER = 0x0400;
+    private const int WM_TRAYICON = WM_USER + 1;
+    private const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2;
+    private const uint NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4;
+    private const uint WM_LBUTTONDBLCLK = 0x0203;
+    private const uint WM_CONTEXTMENU = 0x007B;
+    private const uint WM_COMMAND = 0x0111;
+    private const uint WM_CLOSE = 0x0010;
+    private const uint MF_STRING = 0x0, TPM_LEFTALIGN = 0x0, TPM_RIGHTBUTTON = 0x2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NOTIFYICONDATA
+    {
+        public uint cbSize; public IntPtr hWnd; public uint uID; public uint uFlags; public uint uCallbackMessage;
+        public IntPtr hIcon;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
+        public uint dwState; public uint dwStateMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo; public uint uTimeout; public uint uVersion;
+    }
+
+    [DllImport("shell32.dll")] private static extern bool Shell_NotifyIcon(uint m, ref NOTIFYICONDATA d);
+    [DllImport("user32.dll")] private static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr p, IntPtr m, IntPtr i, IntPtr pv);
+    [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr h);
+    [DllImport("user32.dll")] private static extern IntPtr DefWindowProcW(IntPtr h, uint m, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] private static extern IntPtr GetModuleHandle(string? n);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr LoadIconW(IntPtr h, IntPtr id);
+    [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr h);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr CreatePopupMenu();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool AppendMenuW(IntPtr h, uint f, UIntPtr id, string s);
+    [DllImport("user32.dll")] private static extern bool TrackPopupMenu(IntPtr h, uint f, int x, int y, int r, IntPtr w, IntPtr rc);
+    [DllImport("user32.dll")] private static extern bool DestroyMenu(IntPtr h);
+    [DllImport("user32.dll")] private static extern IntPtr SetWindowLongPtr(IntPtr h, int idx, IntPtr v);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr h, int c);
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr h);
+
+    private IntPtr _hwnd, _hIcon; private readonly IntPtr _mainHwnd; private readonly Action _onOpen, _onExit;
+    private readonly WndProcDelegate _wp; private readonly string _tip = "netHEmusic 网易云音乐下载器";
+    private delegate IntPtr WndProcDelegate(IntPtr h, uint m, IntPtr w, IntPtr l);
+
+    public TrayIcon(IntPtr mainHwnd, Action onOpen, Action onExit)
+    {
+        _mainHwnd = mainHwnd; _onOpen = onOpen; _onExit = onExit; _wp = WndProc;
+        _hwnd = CreateWindowEx(0, "STATIC", "netHEmusicTray", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
+        SetWindowLongPtr(_hwnd, -4, Marshal.GetFunctionPointerForDelegate(_wp));
+        _hIcon = LoadIconW(GetModuleHandle(null), new IntPtr(32512));
+        var nid = new NOTIFYICONDATA { cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(), hWnd = _hwnd, uID = 1, uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP, uCallbackMessage = WM_TRAYICON, hIcon = _hIcon, szTip = _tip };
+        Shell_NotifyIcon(NIM_ADD, ref nid);
+        LogManager.Log("托盘图标已创建");
+    }
+
+    private IntPtr WndProc(IntPtr h, uint m, IntPtr w, IntPtr l)
+    {
+        try
+        {
+            if (m == WM_TRAYICON)
+            {
+                var evt = (uint)l.ToInt64();
+                if (evt == WM_LBUTTONDBLCLK) { _onOpen(); return IntPtr.Zero; }
+                if (evt == WM_CONTEXTMENU)
+                {
+                    var menu = CreatePopupMenu();
+                    AppendMenuW(menu, MF_STRING, new UIntPtr(1), "打开 netHEmusic");
+                    AppendMenuW(menu, MF_STRING, new UIntPtr(2), "退出");
+                    TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON, 0, 0, 0, h, IntPtr.Zero);
+                    DestroyMenu(menu); return IntPtr.Zero;
+                }
+            }
+            else if (m == WM_COMMAND)
+            {
+                var id = w.ToInt64();
+                if (id == 1) _onOpen(); else if (id == 2) _onExit();
+                return IntPtr.Zero;
+            }
+            else if (m == WM_CLOSE) return IntPtr.Zero;
+        }
+        catch (Exception e) { LogManager.Error("托盘消息失败: " + e.Message); }
+        return DefWindowProcW(h, m, w, l);
+    }
+
+    public static void ShowMainWindow(IntPtr hwnd) { try { ShowWindow(hwnd, 5); SetForegroundWindow(hwnd); } catch { } }
+
+    public void Dispose()
+    {
+        try { var nid = new NOTIFYICONDATA { cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(), hWnd = _hwnd, uID = 1 }; Shell_NotifyIcon(NIM_DELETE, ref nid); if (_hIcon != IntPtr.Zero) DestroyIcon(_hIcon); if (_hwnd != IntPtr.Zero) DestroyWindow(_hwnd); } catch { }
+    }
+}
