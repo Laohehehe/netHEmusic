@@ -60,6 +60,8 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception e) { LogManager.Debug("标题栏: " + e.Message); }
         WindowHelper.ApplyBackdrop(this, AppServices.Config.Mica);
+        // 隐藏标题栏的系统菜单（右键 / Alt+Space）
+        try { WindowMenuBlocker.Attach(WinRT.Interop.WindowNative.GetWindowHandle(this)); } catch (Exception ex) { LogManager.Debug("Attach 标题栏菜单屏蔽失败: " + ex.Message); }
 
         AppServices.OnThemeApplied = () => { try { ApplyNativeTheme(); } catch { } PushTheme(); };
         InitWebView();
