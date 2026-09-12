@@ -2,7 +2,7 @@
 (function () {
   const NE = window.NE; const $ = s => document.querySelector(s);
   const view = $('#view');
-  let queue = []; let playingIndex = -1; let currentList = []; let nowPlaying = null;
+  let queue = []; let playingIndex = -1; let currentList = []; let nowPlaying = null; let appSettings = {};
 
   function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
   function fmt(ms) { if (!ms || ms <= 0) return '00:00'; const s = Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
@@ -310,6 +310,9 @@
   }
 
   var lyPrevIndex = 0;
+  // 关键点：行与行之间的“滚动”交给容器的 translateY（可过渡），
+  // 每行自己的 top 用【未缩放】的自然行高算一次即可（静态），
+  // 缩放/模糊/透明/旋转/弧线位移全部放在 transform 里 —— 这样换行是连续滑动而不是瞬移。
   function npLayout() {
     var wrap = npEl('np-lyric'), box = npEl('np-lyric-inner');
     if (!wrap || !box) return;
@@ -318,41 +321,42 @@
     var curved = lyStyles.layout === 'curved';
     var curvature = Math.max(1, lyStyles.curve) * 0.9;
     var fs = parseFloat(getComputedStyle(nodes[cur]).fontSize) || 18;
-    var space = fs * 1.2;
-    var h = [], s = [], b = [], o = [], top = [];
+    var space = fs * 1.25;
+    var h = [], s = [], b = [], o = [], base = [];
     for (var i = 0; i < nodes.length; i++) h[i] = nodes[i].offsetHeight || fs * 1.5;
-    top[cur] = wrap.clientHeight * 0.5 - h[cur] / 2;     // 当前行垂直居中
-    s[cur] = 1; b[cur] = 0; o[cur] = 1;
-    for (var i = cur - 1; i >= 0; i--) {
-      var off = i - cur;
-      s[i] = lyScale(off); b[i] = lyBlurPx(off); o[i] = lyOpacity(off);
-      top[i] = top[i + 1] - h[i] * s[i] - space;
-    }
-    for (var i = cur + 1; i < nodes.length; i++) {
-      var off2 = i - cur;
-      s[i] = lyScale(off2); b[i] = lyBlurPx(off2); o[i] = lyOpacity(off2);
-      top[i] = top[i - 1] + h[i - 1] * s[i - 1] + space;
-    }
-    var goingDown = cur >= lyPrevIndex;
+    // 静态基准位置（从未缩放行高累加）
+    base[0] = 0;
+    for (var i = 1; i < nodes.length; i++) base[i] = base[i - 1] + h[i - 1] + space;
     for (var i = 0; i < nodes.length; i++) {
-      var n = nodes[i], off3 = i - cur, extraTop = 0, left = 0, deg = 0;
+      var off = i - cur;
+      s[i] = off === 0 ? 1 : lyScale(off);
+      b[i] = off === 0 ? 0 : lyBlurPx(off);
+      o[i] = off === 0 ? 1 : lyOpacity(off);
+    }
+    var centerY = wrap.clientHeight * 0.5;
+    var off3, extraTop, left, deg, rel;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i]; var off2 = i - cur;
+      n.style.top = base[i].toFixed(1) + 'px';
+      extraTop = 0; left = 0; deg = 0;
       if (curved) {
-        var a = lyArc(top[cur] - top[i], h[i] * s[i], curvature);
-        deg = a.rotate; extraTop = a.extraTop; left = a.left;
-        // 越靠外越透明，避免弧形排到屏幕外还亮着
-        var rel = Math.abs((top[cur] - top[i]) * 2 / Math.max(1, window.innerHeight));
+        var yOff = base[cur] - base[i];
+        var arc = lyArc(yOff, h[i] * s[i], curvature);
+        deg = arc.rotate; extraTop = arc.extraTop; left = arc.left;
+        rel = Math.abs(yOff * 2 / Math.max(1, window.innerHeight));
         o[i] = Math.min(o[i], Math.max(1 - Math.pow(rel, 1.15) * 1.2, 0));
       }
-      n.style.top = (top[i] + extraTop).toFixed(1) + 'px';
-      n.style.transform = 'translateX(' + left.toFixed(1) + 'px) scale(' + s[i].toFixed(3) + ')' + (curved ? ' rotate(' + deg.toFixed(2) + 'deg)' : '');
+      n.style.transform = 'translateY(' + extraTop.toFixed(1) + 'px) translateX(' + left.toFixed(1) + 'px) scale(' + s[i].toFixed(3) + ')' + (curved ? (' rotate(' + deg.toFixed(2) + 'deg)') : '');
       n.style.filter = b[i] > 0.05 ? 'blur(' + b[i].toFixed(2) + 'px)' : '';
       n.style.opacity = o[i].toFixed(3);
-      n.style.zIndex = String(900 - Math.abs(off3));
-      // 错落：离当前行越远，动得越晚一点
-      var dly = off3 === 0 ? 0 : Math.min(Math.abs(off3), 4) * 28 + 20;
-      n.style.transitionDelay = (goingDown ? dly : dly) + 'ms';
+      n.style.zIndex = String(900 - Math.abs(off2));
+      // 错落：离当前行越远，动得越晚一点（换行时形成波浪感）
+      var dly = off2 === 0 ? 0 : Math.min(Math.abs(off2), 4) * 22 + 16;
+      n.style.transitionDelay = dly + 'ms';
       n.classList.toggle('on', i === cur && npIndex >= 0);
     }
+    // 容器整体滑动，使当前行居中（这一层是有过渡的，换行不再瞬移）
+    box.style.transform = 'translateY(' + (centerY - base[cur] - h[cur] / 2).toFixed(1) + 'px)';
     lyPrevIndex = cur;
   }
 
@@ -429,8 +433,71 @@
 
   window.addEventListener('resize', function () { if (npOpen) npLayout(); });
 
+  // ---- 歌词页内的“歌词显示设置”面板（可视化实时调整）----
+  function npBuildSettings() {
+    var box = npEl('np-settings-body'); if (!box) return;
+    box.innerHTML = '';
+    var s = appSettings || {};
+    function persist(k, v) { NE.setSetting(k, v); npApplyStyleFromState(); if (npLines.length) npRenderLyric(npLines); }
+    function row(label) {
+      var r = el('div', 'nps-row'); r.appendChild(el('label', 'nps-label', label)); box.appendChild(r); return r;
+    }
+    function addSwitch(label, key, field, def) {
+      var r = row(label);
+      var t = el('div', 'nps-switch' + (lyStyles[field] ? ' on' : ''));
+      r.appendChild(t);
+      t.onclick = function () {
+        var on = !t.classList.contains('on'); t.classList.toggle('on', on);
+        lyStyles[field] = on;
+        if (field === 'glow' && on) { lyStyles.shadow = false; NE.setSetting('lyric_shadow', 'false'); }
+        if (field === 'shadow' && on) { lyStyles.glow = false; NE.setSetting('lyric_glow', 'false'); }
+        persist(key, on ? 'true' : 'false');
+        npBuildSettings();                       // 互斥项要刷新另一个开关的状态
+      };
+    }
+    function addRange(label, key, field, lo, hi) {
+      var r = row(label);
+      var val = el('span', 'nps-val', String(lyStyles[field]));
+      var i = el('input'); i.type = 'range'; i.min = lo; i.max = hi; i.value = lyStyles[field];
+      i.oninput = function () { val.textContent = i.value; lyStyles[field] = Number(i.value); npApplyStyleFromState(); };
+      i.onchange = function () { persist(key, i.value); };
+      r.appendChild(i); r.appendChild(val);
+    }
+    function addSelect(label, key, field, opts) {
+      var r = row(label);
+      var sel = el('select', 'nps-select');
+      opts.forEach(function (o) {
+        var op = document.createElement('option'); op.value = o.v; op.textContent = o.t;
+        if (lyStyles[field] === o.v) op.selected = true;
+        sel.appendChild(op);
+      });
+      sel.onchange = function () { lyStyles[field] = sel.value; persist(key, sel.value); };
+      r.appendChild(sel);
+    }
+    addSwitch('字体辉光', 'lyric_glow', 'glow');
+    addSwitch('字体阴影', 'lyric_shadow', 'shadow');
+    addSwitch('字体描边', 'lyric_stroke', 'stroke');
+    addSelect('歌词排列', 'lyric_layout', 'layout', [{ v: 'vertical', t: '竖向' }, { v: 'curved', t: '旋转弧形' }]);
+    addRange('排列曲率', 'lyric_curve', 'curve', 0, 100);
+    addSwitch('逐字动画', 'lyric_char_anim', 'charAnim');
+    addSwitch('非当前行模糊', 'lyric_blur', 'blur');
+    addRange('模糊程度', 'lyric_blur_amount', 'blurAmt', 0, 100);
+    addSelect('动画曲线', 'lyric_ease', 'ease', [
+      { v: 'smooth', t: '平滑' }, { v: 'sharp', t: '急促' }, { v: 'gentle', t: '温和' }, { v: 'easeout', t: '缓出' }
+    ]);
+  }
+  function npToggleSettings(force) {
+    var p = npEl('np-settings'); if (!p) return;
+    var on = (force === undefined) ? !p.classList.contains('show') : !!force;
+    if (on) npBuildSettings();
+    p.classList.toggle('show', on);
+    p.setAttribute('aria-hidden', on ? 'false' : 'true');
+    var g = npEl('np-gear'); if (g) g.classList.toggle('on', on);
+  }
+
   function closeNowPlaying() {
     var np = npEl('np'); if (!np) return;
+    npToggleSettings(false);
     var wrap = document.querySelector('#np .np-cover-wrap');
     var from = document.getElementById('pl-cover-wrap');
     if (wrap && from) {                          // 收起时反向飞回 dock
@@ -766,7 +833,6 @@
     }
 
     html.appendChild(group('主题 / 外观', [ custSel('配色方案','scheme', s.scheme, s.schemes||[]), sw('Mica 背景','mica', s.mica), sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray) ]));
-    html.appendChild(lyricGroup(s));
     html.appendChild(fxGroup(s));
     html.appendChild(group('下载', [ txt('默认下载目录','downloadDir', s.downloadDir), sel('音质','quality', s.quality, ['standard','high','lossless']) ]));
     html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, ['order','list','single','random']) ]));
@@ -1063,6 +1129,10 @@
     function npIcon(id, svg) { var b = document.getElementById(id); if (b) b.innerHTML = svg; return b; }
     var pv = npIcon('np-prev', SVG.prev); if (pv) pv.onclick = function () { NE.post({ type: 'prev' }); };
     var nx = npIcon('np-next', SVG.next); if (nx) nx.onclick = function () { NE.post({ type: 'next' }); };
+    var gear = npIcon('np-gear', ico('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.9 8.9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9.4a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'));
+    if (gear) gear.onclick = function (e) { e.stopPropagation(); npToggleSettings(); };
+    var gclose = document.getElementById('np-settings-close');
+    if (gclose) gclose.onclick = function () { npToggleSettings(false); };
     var pl = npIcon('np-play', npPlaying ? SVG.pause : SVG.play);
     if (pl) pl.onclick = function () { NE.post({ type: 'toggle' }); npSetPlaying(!npPlaying); };
     // dock 的进度条也支持点击跳转
@@ -1086,6 +1156,7 @@
   // 启动时同步：播放模式 / （未锁定时）桌面歌词状态 / 上次的播放列表
   NE.getSettings().then(function (s) {
     try {
+      appSettings = s || {};
       applyMode(s.playMode || 'order', true);
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
       npApplyLyricSettings(s);                                 // 歌词页外观设置

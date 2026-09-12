@@ -437,7 +437,9 @@ public sealed partial class MainWindow : Window
             default:
                 // 前端自定义设置：fx_* / ui_* 原样落到 [App] 段。
                 // 以后新增这类设置项只改前端即可，不用改 C#、不用重编译。
-                if (key.StartsWith("fx_", StringComparison.OrdinalIgnoreCase) || key.StartsWith("ui_", StringComparison.OrdinalIgnoreCase))
+                if (key.StartsWith("fx_", StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith("ui_", StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith("lyric_", StringComparison.OrdinalIgnoreCase))
                 { AppServices.Config.Set("App", key, value); LogManager.Debug("自定义设置: " + key + "=" + value); }
                 break;
             case "downloadDir": try { if (!string.IsNullOrWhiteSpace(value)) AppServices.Config.DownloadDir = value; } catch { } break;
