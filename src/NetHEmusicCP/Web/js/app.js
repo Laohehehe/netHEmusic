@@ -28,7 +28,11 @@
 
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
   function pop(el) { if(!el) return; el.classList.remove('fx-pop'); void el.offsetWidth; el.classList.add('fx-pop'); }
-  function setPlaying(on) { var p = $('#player'); if(p) p.classList.toggle('playing', !!on); var pb = $('#pb-play'); if(pb) pb.innerHTML = on ? SVG.pause : SVG.play; }
+  function setPlaying(on) {
+    var p = $('#player'); if(p) p.classList.toggle('playing', !!on);
+    var pb = $('#pb-play'); if(pb) pb.innerHTML = on ? SVG.pause : SVG.play;
+    npSetPlaying(on);   // 歌词页的播放/暂停按钮同步
+  }
   // 只更新歌名/歌手/封面（恢复播放列表时用，不改播放状态）
   function showSongMeta(ns) {
     if(!ns) return;
@@ -193,7 +197,12 @@
   }
   // ================= 全窗口歌词页（点封面进入） =================
   var npOpen = false, npLines = [], npIndex = -1, npSongId = 0;
+  var npDurMs = 0, npPosMs = 0, npPlaying = false;   // 由 position / playing 消息维护
   function npEl(id) { return document.getElementById(id); }
+  function npSetPlaying(on) {
+    npPlaying = !!on;
+    var b = npEl('np-play'); if (b) b.innerHTML = npPlaying ? SVG.pause : SVG.play;
+  }
 
   function parseLrc(lrc) {
     var out = [];
@@ -626,6 +635,7 @@
     if(d.song){
       nowPlaying = normSong(d.song);
       setPlayer(d.song);
+      npSetPlaying(true);
       if (npOpen) openNowPlaying();          // 歌词页开着时跟着换歌换词
       renderQueue();                          // 刷新播放列表高亮
     }
@@ -634,7 +644,9 @@
     $('#pl-cur').textContent=fmt(d.pos||0); if(d.dur){ $('#pl-dur').textContent=fmt(d.dur); }
     $('#pl-fill').style.width=(d.dur?Math.min(100,(d.pos||0)/d.dur*100):0)+'%';
     // 全窗口歌词页
-    npSync(d.pos||0);
+    npPosMs = d.pos || 0;
+    if (d.dur) npDurMs = d.dur;
+    npSync(npPosMs);
     var f = $('#np-fill'), c = $('#np-cur'), u = $('#np-dur');
     if (f) f.style.width = (d.dur ? Math.min(100, (d.pos||0)/d.dur*100) : 0) + '%';
     if (c) c.textContent = fmt(d.pos||0);
@@ -812,19 +824,46 @@
     if (dl) { dl.innerHTML = SVG.dl; dl.onclick = function () { var ns = queue[playingIndex]; if (ns) NE.post({ type: 'download', song: ns }); }; }
     var sh = document.getElementById('np-share');
     if (sh) { sh.innerHTML = SVG.share; sh.onclick = function () { var ns = queue[playingIndex]; if (ns) NE.post({ type: 'share', song: ns }); }; }
-    var prog = document.getElementById('np-prog');
-    if (prog) {
-      prog.onclick = function (e) {
-        var r = prog.getBoundingClientRect();
-        var ns = queue[playingIndex]; if (!ns || !ns.Duration) return;
-        var ratio = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-        NE.post({ type: 'seek', pos: Math.round(ratio * ns.Duration) });
-      };
+    // 进度条：点击 / 拖动跳转（时长取播放器真实时长，队列里的 Duration 常常是 0）
+    function npSeekRatio(clientX) {
+      var prog = document.getElementById('np-prog'); if (!prog) return -1;
+      var r = prog.getBoundingClientRect();
+      if (!r.width) return -1;
+      return Math.min(1, Math.max(0, (clientX - r.left) / r.width));
     }
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && npOpen) closeNowPlaying(); });
+    function npApplySeek(clientX, commit) {
+      var ratio = npSeekRatio(clientX); if (ratio < 0) return;
+      var d = npDurMs || (queue[playingIndex] && queue[playingIndex].Duration) || 0;
+      if (d <= 0) { if (commit) toast('时长还没加载出来，稍后再试'); return; }
+      var ms = Math.round(ratio * d);
+      var f = document.getElementById('np-fill');
+      if (f) f.style.width = (ratio * 100) + '%';
+      var c = document.getElementById('np-cur');
+      if (c) c.textContent = fmt(ms);
+      if (commit) { NE.post({ type: 'seek', pos: ms }); npPosMs = ms; }
+    }
+    var npProg = document.getElementById('np-prog');
+    if (npProg) {
+      var dragging = false;
+      npProg.onmousedown = function (e) { e.preventDefault(); dragging = true; npApplySeek(e.clientX, false); };
+      document.addEventListener('mousemove', function (e) { if (dragging) npApplySeek(e.clientX, false); });
+      document.addEventListener('mouseup', function (e) {
+        if (!dragging) return;
+        dragging = false;
+        npApplySeek(e.clientX, true);
+      });
+    }
+    // 播放控制
+    function npIcon(id, svg) { var b = document.getElementById(id); if (b) b.innerHTML = svg; return b; }
+    var pv = npIcon('np-prev', SVG.prev); if (pv) pv.onclick = function () { NE.post({ type: 'prev' }); };
+    var nx = npIcon('np-next', SVG.next); if (nx) nx.onclick = function () { NE.post({ type: 'next' }); };
+    var pl = npIcon('np-play', npPlaying ? SVG.pause : SVG.play);
+    if (pl) pl.onclick = function () { NE.post({ type: 'toggle' }); npSetPlaying(!npPlaying); };
+    // dock 的进度条也支持点击跳转
+    var dockBar = document.getElementById('pl-bar');
   })();
 
-  // 队列消息：C# 恢复/变更播放列表时刷新面板与 dock 显示
+  // TEMP-SEEK-TEST：自动放歌 → 打开歌词页 → 合成“点击进度条 50%”
   NE.on('queue', function (d) {
     queue = (d.songs || []).map(normSong);
     playingIndex = (typeof d.index === 'number') ? d.index : -1;

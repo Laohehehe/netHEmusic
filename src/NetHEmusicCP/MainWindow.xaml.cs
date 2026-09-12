@@ -246,7 +246,17 @@ public sealed partial class MainWindow : Window
         var now = DateTime.Now;
         if ((now - _lastReload).TotalMilliseconds < 400) return;
         _lastReload = now;
-        AppServices.RunOnUi(() => { try { WebView.CoreWebView2?.Reload(); LogManager.Log("Web 热重载完成"); } catch { } });
+        AppServices.RunOnUi(() =>
+        {
+            try
+            {
+                // 热重载前先关掉缓存，否则 WebView2 会用旧的 css/js（改了没反应的元凶）
+                _ = WebView.CoreWebView2?.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
+                WebView.CoreWebView2?.Reload();
+                LogManager.Log("Web 热重载完成");
+            }
+            catch { }
+        });
     }
     private void PostToWeb(object msg) { try { WebView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(msg)); } catch { } }
     private void PushTheme()
