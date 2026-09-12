@@ -7,6 +7,12 @@
     <AssemblyName>netHEmusic_Setup_26.9.12.22</AssemblyName>
     <ApplicationIcon>..\..\resources\icon.ico</ApplicationIcon>
     <Version>26.9.12.22</Version>
+    <!-- 单文件自包含：安装包本身要能独立运行（内嵌 62MB 应用 zip） -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\..\build\netHEmusic-26.9.12.22.zip" LogicalName="app.zip" />
