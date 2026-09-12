@@ -45,6 +45,10 @@ public sealed class PlayerService
     public event Action<string, long>? FrontendCommand;
 
     private volatile bool _frontendPlaying;
+    private int _frontendLoadedIndex = -1;      // 已经下发给网页播放器的曲目下标（-1 = 网页还没有音频）
+
+    /// <summary>网页重载后调用：网页里的播放器已经清空。</summary>
+    public void ResetFrontendAudio() { _frontendLoadedIndex = -1; _frontendPlaying = false; }
 
     /// <summary>网页侧上报的播放状态。</summary>
     public void SetFrontendState(bool playing, long posMs, long durMs)
@@ -124,7 +128,12 @@ public sealed class PlayerService
 
     public void Play()
     {
-        if (FrontendAudio) { FrontendCommand?.Invoke("play", 0); return; }
+        if (FrontendAudio)
+        {
+            if (_index >= 0 && _frontendLoadedIndex == _index) FrontendCommand?.Invoke("play", 0);
+            else _ = PlayCurrentAsync();      // 网页里没有这首的音频（刚启动/刚重载）→ 重新解析直链下发
+            return;
+        }
         if (!ResumeIfLoaded()) _player.Play();
     }
 
@@ -138,7 +147,13 @@ public sealed class PlayerService
     public async Task ToggleAsync()
     {
         // 前端模式：自己不发命令就什么都不会发生（进度由网页持有）
-        if (FrontendAudio) { FrontendCommand?.Invoke(Playing ? "pause" : "play", 0); return; }
+        if (FrontendAudio)
+        {
+            if (Playing) { FrontendCommand?.Invoke("pause", 0); return; }
+            if (_index >= 0 && _frontendLoadedIndex == _index) FrontendCommand?.Invoke("play", 0);
+            else await PlayCurrentAsync();    // 重启软件后网页是空的，必须先重新加载直链
+            return;
+        }
         if (Playing) { Pause(); return; }
         if (ResumeIfLoaded()) return;
         await PlayCurrentAsync();
@@ -285,6 +300,7 @@ public sealed class PlayerService
             if (FrontendAudio)
             {
                 UpdateSmtc(s);
+                _frontendLoadedIndex = _index;
                 FrontendLoad?.Invoke(new FrontendAudioLoad(s, url, _index));
                 LogManager.Log("交给前端播放: " + s.DisplayName);
                 return;
