@@ -222,3 +222,7 @@ html.no-fx .fx-shake{animation:none;}
 .pl-item-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pl-item-artist{max-width:110px;font-size:11px;color:rgba(var(--md-accent-color-grey-base-rgb),.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pl-empty{padding:22px;text-align:center;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.45);}
+/* 桌面歌词按钮锁定态：压暗 + 悬停给“开发中”的暗示 */
+.ly-btn.locked{opacity:.5;}
+.ly-btn.locked:hover{opacity:.8;transform:scale(1.06);}
+.ly-btn.locked .ly-badge{display:none;}
