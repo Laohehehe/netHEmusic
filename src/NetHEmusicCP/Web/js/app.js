@@ -187,7 +187,67 @@
       document.addEventListener('click', function(){ box.classList.remove('open'); });
       return r;
     }
-    html.appendChild(group('主题 / 外观', [ custSel('配色方案','scheme', s.scheme, s.schemes||[]), sw('Mica 背景','mica', s.mica), sw('鼠标特效（拖尾 / 点击 / 抖动）','uiEffects', s.uiEffects), sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray) ]));
+    // ---- 鼠标特效（细分设置；改动即时生效，不用重开界面）----
+    function fxApply(p) { try { if (window.FX && window.FX.setConfig) window.FX.setConfig(p); } catch (e) { } }
+    function fxSw(label, key, val, fk) {
+      var r = el('div','set-row'); r.appendChild(el('label','',label));
+      var t = el('div','set-switch'+(val?' on':'')); t.title = label;
+      t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); var p={}; p[fk]=on; fxApply(p); };
+      r.appendChild(t); return r;
+    }
+    function fxSel(label, key, val, opts, fk) {
+      var r = el('div','set-row'); r.appendChild(el('label','',label));
+      var sl = el('select');
+      opts.forEach(function(o){ var op=el('option','',o.t); op.value=o.v; if(o.v===val) op.selected=true; sl.appendChild(op); });
+      sl.onchange = function(){ NE.setSetting(key, sl.value); var p={}; p[fk]=sl.value; fxApply(p); };
+      r.appendChild(sl); return r;
+    }
+    function fxRng(label, key, val, fk) {
+      var v = (val===undefined||val===null||val==='') ? 50 : Number(val);
+      var r = el('div','set-row'); var lb = el('label','',label+' ('+v+')'); r.appendChild(lb);
+      var i = el('input'); i.type='range'; i.min=0; i.max=100; i.value=v;
+      i.oninput = function(){ lb.textContent = label+' ('+i.value+')'; NE.setSetting(key, i.value); var p={}; p[fk]=Number(i.value); fxApply(p); };
+      r.appendChild(i); return r;
+    }
+    function fxColorRow(colorVal, autoVal) {
+      var r = el('div','set-row'); r.appendChild(el('label','','特效颜色'));
+      var box = el('div','fx-color');
+      var auto = el('div','set-switch'+(autoVal?' on':'')); auto.title='跟随当前配色方案的强调色';
+      var tip = el('span','fx-color-tip','跟随主题');
+      var inp = el('input'); inp.type='color'; inp.value = (colorVal && colorVal!=='auto' && /^#[0-9a-fA-F]{6}$/.test(colorVal)) ? colorVal : '#e23535';
+      inp.disabled = !!autoVal;
+      auto.onclick = function(){ var on=!auto.classList.contains('on'); auto.classList.toggle('on',on); inp.disabled=on; NE.setSetting('fxColor', on?'auto':inp.value); fxApply({ color: on?'auto':inp.value }); };
+      inp.oninput = function(){ if(auto.classList.contains('on')) return; NE.setSetting('fxColor', inp.value); fxApply({ color: inp.value }); };
+      box.appendChild(tip); box.appendChild(auto); box.appendChild(inp); r.appendChild(box); return r;
+    }
+    function fxGroup(s) {
+      var g = el('div','set-group');
+      g.appendChild(el('h3','','鼠标特效'));
+      var on = s.uiEffects !== false && String(s.uiEffects) !== 'false';
+      var master = el('div','set-row'); master.appendChild(el('label','','启用鼠标特效'));
+      var mt = el('div','set-switch'+(on?' on':'')); master.appendChild(mt); g.appendChild(master);
+      var d = el('div','fx-detail'+(on?'':' hidden'));
+      // 拖尾
+      d.appendChild(fxSw('光标拖尾','fxTrail', s.fxTrail, 'trail'));
+      d.appendChild(fxRng('拖尾长度','fxTrailLen', s.fxTrailLen, 'trailLen'));
+      d.appendChild(fxRng('拖尾粗细','fxTrailWidth', s.fxTrailWidth, 'trailWidth'));
+      d.appendChild(fxSw('光标光晕','fxGlow', s.fxGlow, 'glow'));
+      // 点击
+      d.appendChild(fxSw('点击特效','fxClick', s.fxClick, 'click'));
+      d.appendChild(fxSel('点击样式','fxClickStyle', s.fxClickStyle, [ {v:'both',t:'波纹 + 火花'}, {v:'ring',t:'仅波纹'}, {v:'spark',t:'仅火花'} ], 'clickStyle'));
+      d.appendChild(fxRng('特效大小','fxClickSize', s.fxClickSize, 'clickSize'));
+      // 抖动
+      d.appendChild(fxSw('按钮抖动','fxShake', s.fxShake, 'shake'));
+      d.appendChild(fxRng('抖动强度','fxShakePower', s.fxShakePower, 'shakePower'));
+      // 颜色
+      d.appendChild(fxColorRow(s.fxColor, s.fxColor === 'auto' || s.fxColor === undefined));
+      g.appendChild(d);
+      mt.onclick = function(){ var v=!mt.classList.contains('on'); mt.classList.toggle('on',v); d.classList.toggle('hidden',!v); NE.setSetting('uiEffects', v?'true':'false'); fxApply({ enabled: v }); };
+      return g;
+    }
+
+    html.appendChild(group('主题 / 外观', [ custSel('配色方案','scheme', s.scheme, s.schemes||[]), sw('Mica 背景','mica', s.mica), sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray) ]));
+    html.appendChild(fxGroup(s));
     html.appendChild(group('下载', [ txt('默认下载目录','downloadDir', s.downloadDir), sel('音质','quality', s.quality, ['standard','high','lossless']) ]));
     html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, ['order','list','single','random']) ]));
     html.appendChild(group('网络 / 代理', [ txt('代理地址','proxy', s.proxy) ]));

@@ -233,6 +233,10 @@ public sealed partial class MainWindow : Window
 
     private void HandleWebDownload(JsonElement doc) { if (doc.TryGetProperty("song", out var s)) { var song = new Song { Id = s.TryGetProperty("Id", out var id) ? id.GetInt64() : 0, Title = s.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "", Artists = new List<Artist> { new Artist { Name = s.TryGetProperty("Artist", out var a) ? a.GetString() ?? "" : "" } }, Album = new Album { Name = s.TryGetProperty("Album", out var al) ? al.GetString() ?? "" : "", PicUrl = s.TryGetProperty("Pic", out var p) ? p.GetString() : "" } }; if (song.Id > 0) _ = AppServices.Download.Download(song, AppServices.Config.DownloadDir, AppServices.Config.Quality); } }
 
+    /// <summary>读取 [App] 段的布尔配置（默认值字符串）。</summary>
+    private static bool BoolCfg(string key, string def = "false")
+        => AppServices.Config.Get("App", key, def).Equals("true", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>把当前设置推给前端设置页。</summary>
     private void HandleGetSettings()
     {
@@ -242,7 +246,17 @@ public sealed partial class MainWindow : Window
             ["schemes"] = AppServices.Theme.SchemeNames(),
             ["mica"] = AppServices.Config.Mica,
             ["closeToTray"] = AppServices.Config.Get("App", "close_to_tray", "false").Equals("true", StringComparison.OrdinalIgnoreCase),
-            ["uiEffects"] = AppServices.Config.Get("App", "ui_effects", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
+            ["uiEffects"] = BoolCfg("ui_effects", "true"),
+            ["fxTrail"] = BoolCfg("fx_trail", "true"),
+            ["fxTrailLen"] = AppServices.Config.Get("App", "fx_trail_len", "55"),
+            ["fxTrailWidth"] = AppServices.Config.Get("App", "fx_trail_width", "50"),
+            ["fxGlow"] = BoolCfg("fx_glow", "true"),
+            ["fxClick"] = BoolCfg("fx_click", "true"),
+            ["fxClickStyle"] = AppServices.Config.Get("App", "fx_click_style", "both"),
+            ["fxClickSize"] = AppServices.Config.Get("App", "fx_click_size", "50"),
+            ["fxShake"] = BoolCfg("fx_shake", "true"),
+            ["fxShakePower"] = AppServices.Config.Get("App", "fx_shake_power", "50"),
+            ["fxColor"] = AppServices.Config.Get("App", "fx_color", "auto"),
             ["downloadDir"] = AppServices.Config.DownloadDir,
             ["quality"] = AppServices.Config.Quality,
             ["volume"] = AppServices.Config.Volume,
@@ -275,6 +289,16 @@ public sealed partial class MainWindow : Window
             case "mica": AppServices.Config.Mica = b; WindowHelper.ApplyBackdrop(this, b); break;
             case "closeToTray": AppServices.Config.Set("App", "close_to_tray", b ? "true" : "false"); break;
             case "uiEffects": AppServices.Config.Set("App", "ui_effects", b ? "true" : "false"); break;
+            case "fxTrail": AppServices.Config.Set("App", "fx_trail", b ? "true" : "false"); break;
+            case "fxTrailLen": AppServices.Config.Set("App", "fx_trail_len", value); break;
+            case "fxTrailWidth": AppServices.Config.Set("App", "fx_trail_width", value); break;
+            case "fxGlow": AppServices.Config.Set("App", "fx_glow", b ? "true" : "false"); break;
+            case "fxClick": AppServices.Config.Set("App", "fx_click", b ? "true" : "false"); break;
+            case "fxClickStyle": AppServices.Config.Set("App", "fx_click_style", value); break;
+            case "fxClickSize": AppServices.Config.Set("App", "fx_click_size", value); break;
+            case "fxShake": AppServices.Config.Set("App", "fx_shake", b ? "true" : "false"); break;
+            case "fxShakePower": AppServices.Config.Set("App", "fx_shake_power", value); break;
+            case "fxColor": AppServices.Config.Set("App", "fx_color", value); break;
             case "downloadDir": try { if (!string.IsNullOrWhiteSpace(value)) AppServices.Config.DownloadDir = value; } catch { } break;
             case "quality": AppServices.Config.Quality = value; break;
             case "volume": if (int.TryParse(value, out var vol)) AppServices.Player.SetVolume(vol); break;
