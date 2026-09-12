@@ -19,6 +19,8 @@ public sealed class AppConfig
     private readonly string _dir;
     private readonly string _iniPath;
     private readonly string _cookiePath;
+    // 读写 config.ini 的串行锁：避免多处同时 Set 时“读-改-写”互相覆盖（曾导致 [Version] 段被写丢）
+    private readonly object _ioLock = new();
 
     public AppConfig()
     {
@@ -85,7 +87,7 @@ public sealed class AppConfig
 
     public string Get(string section, string key, string def = "")
     {
-        try { var d = Load(); return d.Data.TryGetValue(section, out var m) && m.TryGetValue(key, out var v) ? v : def; }
+        try { lock (_ioLock) { var d = Load(); return d.Data.TryGetValue(section, out var m) && m.TryGetValue(key, out var v) ? v : def; } }
         catch { return def; }
     }
 
@@ -94,10 +96,13 @@ public sealed class AppConfig
     {
         try
         {
-            var d = Load();
-            return d.Data.TryGetValue(section, out var m)
-                ? new Dictionary<string, string>(m, StringComparer.OrdinalIgnoreCase)
-                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            lock (_ioLock)
+            {
+                var d = Load();
+                return d.Data.TryGetValue(section, out var m)
+                    ? new Dictionary<string, string>(m, StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
         }
         catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
     }
@@ -106,10 +111,13 @@ public sealed class AppConfig
     {
         try
         {
-            var d = Load();
-            if (!d.Data.ContainsKey(section)) { d.Data[section] = new(StringComparer.OrdinalIgnoreCase); d.SectionOrder.Add(section); }
-            d.Data[section][key] = (value?.ToString() ?? "");
-            Save(d);
+            lock (_ioLock)
+            {
+                var d = Load();
+                if (!d.Data.ContainsKey(section)) { d.Data[section] = new(StringComparer.OrdinalIgnoreCase); d.SectionOrder.Add(section); }
+                d.Data[section][key] = (value?.ToString() ?? "");
+                Save(d);
+            }
         }
         catch (Exception e) { LogManager.Error("写 config.ini 失败: " + e); }
     }
@@ -135,15 +143,21 @@ public sealed class AppConfig
         {
             ["repo"] = "Laohehehe/NET163download",
             ["mirrors"] = "gh-proxy.com;ghm.078465.xyz;ghfast.top",
-            ["current_version"] = "26.8.28"
+            ["current_version"] = "26.9.12.20"
         };
         d.SectionOrder.Add("Update");
         d.Data["Network"] = new(StringComparer.OrdinalIgnoreCase) { ["proxy"] = "" };
         d.SectionOrder.Add("Network");
+        // 记录“上一次已公告/已运行”的版本号：比当前版本旧就弹更新公告
+        d.Data["Version"] = new(StringComparer.OrdinalIgnoreCase) { ["version"] = "0.0.0.0" };
+        d.SectionOrder.Add("Version");
         Save(d);
     }
 
     // ---------- 便捷属性 ----------
+    /// <summary>config.ini [Version] version：上次已公告过的版本（缺失视为 0.0.0.0）。</summary>
+    public string VersionSeen { get => Get("Version", "version", "0.0.0.0"); set => Set("Version", "version", value); }
+
     public bool FirstRun { get => Get("App", "first_run", "true").Equals("true", StringComparison.OrdinalIgnoreCase); set => Set("App", "first_run", value ? "true" : "false"); }
     public string Theme { get => Get("App", "theme", "dark") is var t && (t == "light" || t == "dark") ? t : "dark"; set => Set("App", "theme", value); }
     public string Language { get => Get("App", "language", "zh_cn"); set => Set("App", "language", value); }

@@ -54,7 +54,7 @@ public sealed class UpdateManager
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("netHEmusic/" + Version);
     }
 
-    public string Version => "26.8.28";
+    public string Version => "26.9.12.20";
     private string Repo => _config.UpdateRepo;
     public UpdateState State { get { lock (_lock) return _state; } }
 

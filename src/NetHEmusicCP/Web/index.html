@@ -67,11 +67,13 @@
       <button class="modal-x" data-close title="关闭">&#xE711;</button>
     </div>
     <div class="modal-body">
-      <p>这里是 <b>netHEmusic 26.8.28</b> 的公告弹窗测试内容，随便写点什么占位。</p>
-      <p>· 点右上角 × 、底部「知道了」、点遮罩或按 Esc 都能关闭<br>
-         · 配色 / 圆角 / 强调色全部跟随当前配色方案<br>
-         · 按钮点击会带上鼠标特效（抖动 + 波纹）</p>
-      <p class="modal-tip">以后可以用来放版本更新说明、活动通知、维护提醒等。</p>
+      <p id="notice-lead"></p>
+      <!-- ======== 更新公告正文（占位内容，已注释；下次发版时把下面这段取消注释并改写） ========
+      <p>· 新增：xxx 功能，可在 设置 → xxx 里调整<br>
+         · 优化：xxx 的交互与动画<br>
+         · 修复：xxx 问题</p>
+      ======== 更新公告正文结束 ======== -->
+      <p class="modal-tip" id="notice-ver"></p>
     </div>
     <div class="modal-foot">
       <label class="modal-check"><input type="checkbox" id="notice-mute"> 本次运行不再提示</label>
