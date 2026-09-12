@@ -36,6 +36,24 @@ public sealed class PlayerService
     public event Action<TimeSpan>? PositionChanged;
     public event Action<int, int>? QueueChanged; // (index, count)
 
+    /// <summary>前端播放模式：音频交给网页 <audio> 播（可拿 Web Audio 频谱）。</summary>
+    public bool FrontendAudio => string.Equals(_config.Get("Player", "frontend_audio", "false"), "true", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>请求前端播放某条直链。</summary>
+    public event Action<FrontendAudioLoad>? FrontendLoad;
+    /// <summary>给前端播放器下命令（play/pause/seek/volume/stop）。</summary>
+    public event Action<string, long>? FrontendCommand;
+
+    private volatile bool _frontendPlaying;
+
+    /// <summary>网页侧上报的播放状态。</summary>
+    public void SetFrontendState(bool playing, long posMs, long durMs)
+    {
+        _frontendPlaying = playing;
+        try { _smtc.PlaybackStatus = playing ? MediaPlaybackStatus.Playing : MediaPlaybackStatus.Paused; } catch { }
+        PlaybackChanged?.Invoke(playing);
+    }
+
     public PlayerService(AppConfig config, CacheManager cache)
     {
         _config = config;
@@ -74,7 +92,7 @@ public sealed class PlayerService
         }
     }
 
-    public bool Playing => _player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+    public bool Playing => FrontendAudio ? _frontendPlaying : (_player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing);
     public Song? Current => _index >= 0 && _index < _queue.Count ? _queue[_index] : null;
     public int Index => _index;
     public int Count => _queue.Count;
@@ -104,12 +122,23 @@ public sealed class PlayerService
     /// <summary>开始播放当前曲目（若已加载过媒体则从当前位置继续）。</summary>
     public async Task PlayAsync() { if (ResumeIfLoaded()) return; await PlayCurrentAsync(); }
 
-    public void Play() { if (!ResumeIfLoaded()) _player.Play(); }
-    public void Pause() => _player.Pause();
+    public void Play()
+    {
+        if (FrontendAudio) { FrontendCommand?.Invoke("play", 0); return; }
+        if (!ResumeIfLoaded()) _player.Play();
+    }
+
+    public void Pause()
+    {
+        if (FrontendAudio) { FrontendCommand?.Invoke("pause", 0); return; }
+        _player.Pause();
+    }
 
     /// <summary>播放/暂停切换：暂停后继续播放【不能重建媒体源】，否则进度会归零。</summary>
     public async Task ToggleAsync()
     {
+        // 前端模式：自己不发命令就什么都不会发生（进度由网页持有）
+        if (FrontendAudio) { FrontendCommand?.Invoke(Playing ? "pause" : "play", 0); return; }
         if (Playing) { Pause(); return; }
         if (ResumeIfLoaded()) return;
         await PlayCurrentAsync();
@@ -163,8 +192,8 @@ public sealed class PlayerService
         _ = PrefetchRingAsync();
     }
 
-    /// <summary>一首播完后按当前模式决定下一首。</summary>
-    private async Task AutoNextAsync()
+    /// <summary>一首播完后按当前模式决定下一首（前端播放结束时由网页触发）。</summary>
+    public async Task AutoNextAsync()
     {
         if (_queue.Count == 0 || _index < 0) return;
         switch (Mode)
@@ -230,6 +259,9 @@ public sealed class PlayerService
         _ = PrefetchRingAsync();
     }
 
+    /// <summary>前端播放任务载荷（曲目 / 直链 / 队列下标）。</summary>
+    public sealed record FrontendAudioLoad(Model.Song Song, string Url, int Index);
+
     /// <summary>播放索引对应的歌曲。源优先内存环缓存文件，其次即时直链流。</summary>
     private async Task PlayCurrentAsync()
     {
@@ -239,16 +271,26 @@ public sealed class PlayerService
 
         try
         {
-            Uri? uri = null;
-            if (_memoryRing.TryGetValue(s.Id, out var cached) && !string.IsNullOrEmpty(cached) && Uri.TryCreate(cached, UriKind.Absolute, out var cu)) uri = cu;
-            if (uri is null)
+            // 解析播放直链（内存环缓存优先，其次即时请求）
+            string? url = null;
+            if (_memoryRing.TryGetValue(s.Id, out var cached) && !string.IsNullOrEmpty(cached)) url = cached;
+            if (string.IsNullOrEmpty(url))
             {
                 var sm = await AppServices.Netease.SongUrl(s.Id.ToString(), DownloadManager.BitRate(_config.Quality));
-                var u = sm.Values.FirstOrDefault(v => !string.IsNullOrEmpty(v));
-                if (string.IsNullOrEmpty(u)) { LogManager.Warn("无播放地址 id=" + s.Id); return; }
-                uri = new Uri(u);
+                url = sm.Values.FirstOrDefault(v => !string.IsNullOrEmpty(v));
+            }
+            if (string.IsNullOrEmpty(url)) { LogManager.Warn("无播放地址 id=" + s.Id); return; }
+
+            // 前端播放模式：直链交给网页，由 <audio> + Web Audio 播放（可拿真实频谱）
+            if (FrontendAudio)
+            {
+                UpdateSmtc(s);
+                FrontendLoad?.Invoke(new FrontendAudioLoad(s, url, _index));
+                LogManager.Log("交给前端播放: " + s.DisplayName);
+                return;
             }
 
+            var uri = new Uri(url);
             var src = MediaSource.CreateFromUri(uri);
             var item = new MediaPlaybackItem(src);
             var props = item.GetDisplayProperties();
@@ -286,6 +328,7 @@ public sealed class PlayerService
     {
         _config.Volume = v;
         _player.Volume = v / 100.0;
+        if (FrontendAudio) FrontendCommand?.Invoke("volume", v);
     }
     public int GetVolume() => _config.Volume;
     public TimeSpan Position => _player.PlaybackSession.Position;
@@ -301,7 +344,11 @@ public sealed class PlayerService
         }
     }
 
-    public void Seek(TimeSpan t) { try { _player.PlaybackSession.Position = t; } catch { } }
+    public void Seek(TimeSpan t)
+    {
+        if (FrontendAudio) { FrontendCommand?.Invoke("seek", (long)t.TotalMilliseconds); return; }
+        try { _player.PlaybackSession.Position = t; } catch { }
+    }
 
     /// <summary>把当前索引相邻的三首（上/当前/下）解析出播放直链并填入内存环；其它歌曲由磁盘缓存按需加载。</summary>
     private async Task PrefetchRingAsync()

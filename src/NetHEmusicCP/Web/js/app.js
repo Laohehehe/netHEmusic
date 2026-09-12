@@ -72,6 +72,108 @@
   function isTyping(el) {
     return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
   }
+  // ================= 前端播放内核（Phase A）=================
+  // 音频由本页的 <audio> 播放，接 Web Audio 的 Analyser 拿真实频谱（背景律动用）。
+  // C# 侧只负责解析直链 / 队列与模式 / 持久化 / SMTC。
+  var AU = {
+    el: null, ctx: null, srcNode: null, analyser: null, freq: null,
+    ready: false, playing: false, durMs: 0, posMs: 0, lastPost: 0, curIndex: -1
+  };
+  function auInit() {
+    if (AU.el) return AU.el;
+    var a = document.createElement('audio');
+    a.id = 'np-audio';
+    a.crossOrigin = 'anonymous';     // 必须：否则 createMediaElementSource 后频谱被跨域污染
+    a.preload = 'auto';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    AU.el = a;
+
+    a.addEventListener('loadedmetadata', function () { AU.durMs = (a.duration || 0) * 1000; auPushUI(0); auPostState(true); });
+    a.addEventListener('durationchange', function () { AU.durMs = (a.duration || 0) * 1000; auPushUI(AU.posMs); });
+    a.addEventListener('timeupdate', function () { AU.posMs = (a.currentTime || 0) * 1000; auPushUI(AU.posMs); auPostState(false); });
+    a.addEventListener('play', function () { AU.playing = true; setPlaying(true); auPostState(true); });
+    a.addEventListener('pause', function () { AU.playing = false; setPlaying(false); auPostState(true); });
+    a.addEventListener('ended', function () { AU.playing = false; auPostState(true); NE.post({ type: 'audio_ended' }); });
+    a.addEventListener('error', function () {
+      var msg = (a.error && a.error.message) || 'unknown';
+      try { NE.post({ type: 'log', msg: '[au] error ' + (a.error && a.error.code) + ' ' + msg }); } catch (e) { }
+      NE.post({ type: 'audio_error', message: msg });
+    });
+    try { a.volume = Math.max(0, Math.min(1, (Number($('#pl-volume') && $('#pl-volume').value) || 70) / 100)); } catch (e) { }
+    return a;
+  }
+  function auCtx() {
+    if (AU.ctx) return AU.ctx;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      AU.ctx = new AC();
+      AU.srcNode = AU.ctx.createMediaElementSource(AU.el);
+      AU.analyser = AU.ctx.createAnalyser();
+      AU.analyser.fftSize = 256;
+      AU.analyser.smoothingTimeConstant = 0.8;
+      AU.freq = new Uint8Array(AU.analyser.frequencyBinCount);
+      AU.srcNode.connect(AU.analyser);
+      AU.analyser.connect(AU.ctx.destination);
+      NE.post({ type: 'log', msg: '[au] AudioContext ready, bins=' + AU.analyser.frequencyBinCount });
+    } catch (e) { NE.post({ type: 'log', msg: '[au] AudioContext FAILED: ' + e.message }); }
+    return AU.ctx;
+  }
+  function auFft() {
+    if (!AU.analyser || !AU.freq) return null;
+    try { AU.analyser.getByteFrequencyData(AU.freq); return AU.freq; } catch (e) { return null; }
+  }
+  function auPushUI(pos) {
+    var d = AU.durMs || npDurMs || 0;
+    npPosMs = pos; if (d) npDurMs = d;
+    var f = $('#pl-fill'), c = $('#pl-cur'), u = $('#pl-dur');
+    if (c) c.textContent = fmt(pos);
+    if (u && d) u.textContent = fmt(d);
+    if (f) f.style.width = (d ? Math.min(100, pos / d * 100) : 0) + '%';
+    var nf = $('#np-fill'), nc = $('#np-cur'), nu = $('#np-dur');
+    if (nf) nf.style.width = (d ? Math.min(100, pos / d * 100) : 0) + '%';
+    if (nc) nc.textContent = fmt(pos);
+    if (nu && d) nu.textContent = fmt(d);
+    npSync(pos);
+  }
+  function auPostState(force) {
+    var now = Date.now();
+    if (!force && now - AU.lastPost < 900) return;      // 限流：约 1 次/秒
+    AU.lastPost = now;
+    NE.post({ type: 'audio_state', playing: AU.playing, pos: Math.round(AU.posMs), dur: Math.round(AU.durMs) });
+  }
+  function auLoad(url, song, index, autoplay, startMs) {
+    auInit();
+    AU.curIndex = (typeof index === 'number') ? index : -1;
+    AU.posMs = startMs || 0;
+    AU.playing = false;
+    AU.el.src = url;
+    try { AU.el.load(); } catch (e) { }
+    if (startMs > 0) { try { AU.el.currentTime = startMs / 1000; } catch (e) { } }
+    if (autoplay) auPlay();
+  }
+  function auPlay() {
+    auInit(); auCtx();
+    if (AU.ctx && AU.ctx.state === 'suspended') { try { AU.ctx.resume(); } catch (e) { } }
+    var p = AU.el.play();
+    if (p && p.catch) p.catch(function (e) { try { NE.post({ type: 'log', msg: '[au] play rejected: ' + e.message }); } catch (e2) { } });
+  }
+  function auPause() { if (AU.el) AU.el.pause(); }
+  function auSeek(ms) { if (!AU.el) return; try { AU.el.currentTime = ms / 1000; AU.posMs = ms; auPushUI(ms); } catch (e) { } }
+  function auSetVolume(v) { auInit(); try { AU.el.volume = Math.max(0, Math.min(1, v / 100)); } catch (e) { } }
+
+  NE.on('audio_load', function (d) { auLoad(d.url, d.song, d.index, d.autoplay !== false, d.startMs || 0); });
+  NE.on('audio_cmd', function (d) {
+    if (!d || !d.cmd) return;
+    if (d.cmd === 'play') auPlay();
+    else if (d.cmd === 'pause') auPause();
+    else if (d.cmd === 'seek') auSeek(Number(d.value) || 0);
+    else if (d.cmd === 'stop') { auPause(); auSeek(0); }
+    else if (d.cmd === 'volume') auSetVolume(Number(d.value) || 0);
+  });
+  window.AU = AU;                    // 供频谱/交叉淡化使用
+  window.AUFft = auFft;
+
   function runHotkey(action) {
     switch (action) {
       case 'hk_play':  NE.post({ type: 'toggle' }); break;
@@ -1271,6 +1373,7 @@
     v = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
     if (v > 0) lastVol = v;
     updateVolUI(v);
+    try { if (window.AU && AU.el) AU.el.volume = v / 100; } catch (e) { }
     if (post) NE.post({ type: 'volume', v: v });
   }
   $('#pl-volume').oninput = e => applyVolume(e.target.value, true);
