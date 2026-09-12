@@ -67,7 +67,14 @@ public sealed partial class MainWindow : Window
         InitWebView();
 
         // 把播放状态推给 Web 前端播放条
-        AppServices.Player.SongChanged += s => { if (s is not null) { AppServices.RunOnUi(() => PostToWeb(new { type = "playing", song = ToSongDto(s) })); if (_lyricWin is not null) _ = PushLyricToWindowAsync(); } };
+        AppServices.Player.SongChanged += s =>
+        {
+            if (s is null) return;
+            // 换歌就记住“当前是第几首”，否则退出时 index 还停在加载队列那一刻的值（重启会跳回第一首）
+            SavePlaylistIndex(AppServices.Player.Index);
+            AppServices.RunOnUi(() => PostToWeb(new { type = "playing", song = ToSongDto(s) }));
+            if (_lyricWin is not null) _ = PushLyricToWindowAsync();
+        };
         AppServices.Player.PositionChanged += pos => AppServices.RunOnUi(() =>
         {
             var total = AppServices.Player.Duration;
@@ -82,6 +89,8 @@ public sealed partial class MainWindow : Window
             SavePlaylist(idx);
             AppServices.RunOnUi(() => PostToWeb(new { type = "queue_changed", index = idx, count = count }));
         };
+        // 关闭窗口时再存一次当前曲目下标（双保险）
+        try { AppWindow.Closing += (s, e) => SavePlaylistIndex(AppServices.Player.Index); } catch (Exception ex) { LogManager.Debug("挂 Closing 失败: " + ex.Message); }
         AppServices.Download.Completed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载完成: " + it.Display }));
         AppServices.Download.Failed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载失败: " + (it.Error ?? "") }));
 
@@ -178,6 +187,13 @@ public sealed partial class MainWindow : Window
             AppServices.RunOnUi(() => { try { _lyricWin?.SetLyric(lrc, tl, ro); } catch { } });
         }
         catch (Exception e) { LogManager.Debug("推送歌词失败: " + e.Message); }
+    }
+
+    /// <summary>只更新“当前第几首”（很小，可以在每次换歌时写）。</summary>
+    private void SavePlaylistIndex(int index)
+    {
+        try { AppServices.Config.PlaylistIndex = Math.Max(0, index); }
+        catch (Exception e) { LogManager.Debug("保存播放下标失败: " + e.Message); }
     }
 
     /// <summary>把当前播放队列写进 config，重启后可以恢复。</summary>
