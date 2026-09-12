@@ -434,5 +434,20 @@
   });
 
 
+  // ---------- 公告弹窗 ----------
+  (function notice() {
+    var mask = document.getElementById('notice'); if (!mask) return;
+    var mute = document.getElementById('notice-mute');
+    try { if (sessionStorage.getItem('nethem_notice_muted') === '1') return; } catch (e) { }
+    function close() {
+      if (mute && mute.checked) { try { sessionStorage.setItem('nethem_notice_muted', '1'); } catch (e) { } }
+      mask.classList.remove('show'); mask.setAttribute('aria-hidden', 'true');
+    }
+    mask.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = close; });
+    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && mask.classList.contains('show')) close(); });
+    setTimeout(function () { mask.classList.add('show'); mask.setAttribute('aria-hidden', 'false'); }, 700);
+  })();
+
   window.addEventListener('load', ()=>{ NE.post({type:'discover'}); go('home'); });
 })();
