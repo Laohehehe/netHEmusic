@@ -101,10 +101,35 @@ public sealed class PlayerService
         QueueChanged?.Invoke(_index, _queue.Count);
     }
 
-    public async Task PlayAsync() => await PlayCurrentAsync();
-    public void Play() => _player.Play();
+    /// <summary>开始播放当前曲目（若已加载过媒体则从当前位置继续）。</summary>
+    public async Task PlayAsync() { if (ResumeIfLoaded()) return; await PlayCurrentAsync(); }
+
+    public void Play() { if (!ResumeIfLoaded()) _player.Play(); }
     public void Pause() => _player.Pause();
-    public async Task ToggleAsync() { if (Playing) Pause(); else await PlayCurrentAsync(); }
+
+    /// <summary>播放/暂停切换：暂停后继续播放【不能重建媒体源】，否则进度会归零。</summary>
+    public async Task ToggleAsync()
+    {
+        if (Playing) { Pause(); return; }
+        if (ResumeIfLoaded()) return;
+        await PlayCurrentAsync();
+    }
+
+    /// <summary>已经加载过媒体就直接从当前位置继续（播完了则从头开始）。返回是否已处理。</summary>
+    private bool ResumeIfLoaded()
+    {
+        try
+        {
+            if (_player.Source is null) return false;
+            var s = _player.PlaybackSession;
+            if (s is null) return false;
+            if (s.NaturalDuration > TimeSpan.Zero && s.Position >= s.NaturalDuration - TimeSpan.FromMilliseconds(400))
+                s.Position = TimeSpan.Zero;          // 已经播完 → 从头再来
+            _player.Play();
+            return true;
+        }
+        catch (Exception e) { LogManager.Debug("继续播放失败，改为重新加载: " + e.Message); return false; }
+    }
 
     public async Task NextAsync() => await StepAsync(1);
     public async Task PrevAsync() => await StepAsync(-1);
@@ -117,7 +142,23 @@ public sealed class PlayerService
     private async Task StepAsync(int dir)
     {
         if (_queue.Count == 0 || _index < 0) return;
-        _index = (_index + dir + _queue.Count) % _queue.Count;
+        // 随机模式下手动切歌也要随机（原来这里只按顺序 +1/-1，导致“随机播放”看起来没生效）
+        if (Mode == "random" && _queue.Count > 1)
+        {
+            int next;
+            do { next = _rand.Next(_queue.Count); } while (next == _index);
+            _index = next;
+            LogManager.Log("随机切歌 → 第 " + (_index + 1) + " 首");
+        }
+        else if (Mode == "single" && dir > 0)
+        {
+            // 单曲循环：手动“下一首”仍然换歌，但保持单曲循环设置
+            _index = (_index + 1) % _queue.Count;
+        }
+        else
+        {
+            _index = (_index + dir + _queue.Count) % _queue.Count;
+        }
         await PlayCurrentAsync();
         _ = PrefetchRingAsync();
     }

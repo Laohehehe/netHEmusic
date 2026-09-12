@@ -552,3 +552,4 @@ html.no-fx .fx-shake{animation:none;}
   transition:color .2s ease, border-color .2s ease;
 }
 .hk-reset:hover{color:var(--md-accent-color);border-color:var(--md-accent-color);}
+.hk-btn.off{color:rgba(var(--md-accent-color-grey-base-rgb),.45);border-style:dashed;}
