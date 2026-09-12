@@ -19,7 +19,7 @@ public static class Program
     {
         try
         {
-            Console.WriteLine("netHEmusic 26.9.12.21 安装程序");
+            Console.WriteLine("netHEmusic 26.9.12.22 安装程序");
             string installDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Programs", "netHEmusic");

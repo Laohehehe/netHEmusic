@@ -4,7 +4,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $dotnet = Join-Path $root ".toolchain\dotnet\dotnet.exe"
 Write-Host "=== [1/3] 版本一致 & 结构校验 ==="
 $csproj = Get-Content (Join-Path $root "src\NetHEmusicCP\NetHEmusicCP.csproj") -Raw
-if ($csproj -notmatch "<Version>26.9.12.21</Version>") { throw "csproj 版本非 26.9.12.21" }
+if ($csproj -notmatch "<Version>26.9.12.22</Version>") { throw "csproj 版本非 26.9.12.22" }
 foreach ($req in @("Core\Api\NetEaseClient.cs","Core\Config\AppConfig.cs","Core\Logging\LogManager.cs","Core\Download\DownloadManager.cs","Core\Update\UpdateManager.cs","Core\Playback\PlayerService.cs","Core\Theme\ThemeManager.cs","MainWindow.xaml.cs")) {
     if (-not (Test-Path (Join-Path $root "src\NetHEmusicCP\$req"))) { throw "缺失核心文件: $req" }
     Write-Host "  ok $req"

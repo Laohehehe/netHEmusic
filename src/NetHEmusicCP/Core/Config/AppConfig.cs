@@ -143,7 +143,7 @@ public sealed class AppConfig
         {
             ["repo"] = "Laohehehe/NET163download",
             ["mirrors"] = "gh-proxy.com;ghm.078465.xyz;ghfast.top",
-            ["current_version"] = "26.9.12.21"
+            ["current_version"] = "26.9.12.22"
         };
         d.SectionOrder.Add("Update");
         d.Data["Network"] = new(StringComparer.OrdinalIgnoreCase) { ["proxy"] = "" };
