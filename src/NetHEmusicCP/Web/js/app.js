@@ -172,16 +172,39 @@
     html.appendChild(el('h2','page-title','设置'));
     function group(title, rows) { var g = el('div','set-group'); g.appendChild(el('h3','',title)); rows.forEach(function(r){ g.appendChild(r); }); return g; }
     function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); if(key==='uiEffects' && window.FX) window.FX.setEnabled(on); }; r.appendChild(t); return r; }
-    function sel(label, key, val, opts) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var sl=el('select'); opts.forEach(function(o){ var op=el('option','',o); op.value=o; if(o===val) op.selected=true; sl.appendChild(op); }); sl.onchange=function(){ NE.setSetting(key, sl.value); }; r.appendChild(sl); return r; }
+    // 原生 <select> 的弹层在 WebView2 里定位会飘，这里统一用自定义下拉
+    function sel(label, key, val, opts) { return custSel(label, key, val, opts); }
     function txt(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var i=el('input'); i.type='text'; i.value=val||''; i.onchange=function(){ NE.setSetting(key, i.value); }; r.appendChild(i); return r; }
     function rng(label, key, val) { var r = el('div','set-row'); var lb=el('label','',label+' ('+(val||80)+')'); r.appendChild(lb); var i=el('input'); i.type='range'; i.min=0; i.max=100; i.value=val||80; i.oninput=function(){ lb.textContent=label+' ('+i.value+')'; NE.setSetting(key, i.value); }; r.appendChild(i); return r; }
     function info(label) { var r = el('div','set-row'); r.appendChild(el('label','',label)); return r; }
-    function custSel(label, key, val, opts) {
+    // 自定义下拉：opts 支持字符串数组或 [{v:值,t:显示名}]；onPick(值) 用于即时生效
+    function custSel(label, key, val, opts, onPick) {
+      var list0 = opts || [];
+      function valOf(o) { return (o && typeof o === 'object') ? o.v : o; }
+      function txtOf(o) { return (o && typeof o === 'object') ? o.t : o; }
       var r = el('div','set-row'); r.appendChild(el('label','',label));
       var box = el('div','cust-select');
-      var v = el('div','cs-value'); v.innerHTML = '<span>'+esc(val)+'</span><i class="ic">&#xE70D;</i>';
+      var cur = null;
+      list0.forEach(function(o){ if (valOf(o) === val) cur = o; });
+      if (cur === null && list0.length) cur = list0[0];
+      var v = el('div','cs-value'); v.innerHTML = '<span>'+esc(txtOf(cur))+'</span><i class="ic">&#xE70D;</i>';
       var list = el('div','cs-list');
-      (opts||[]).forEach(function(o){ var it = el('div','cs-item'+(o===val?' sel':''),esc(o)); it.onclick=function(e){ e.stopPropagation(); var rr=it.getBoundingClientRect(); if(key==='scheme'){ rippleArm(rr.left+rr.width/2, rr.top+rr.height/2, [function(){ box.classList.remove('open'); }]); } else { box.classList.remove('open'); } NE.setSetting(key,o); v.querySelector('span').textContent=o; list.querySelectorAll('.cs-item').forEach(function(x){x.classList.remove('sel');}); it.classList.add('sel'); if(key==='scheme'){ setTimeout(function(){ box.classList.remove('open'); }, 1200); } }; list.appendChild(it); });
+      list0.forEach(function(o){
+        var it = el('div','cs-item'+(valOf(o)===val?' sel':''), esc(txtOf(o)));
+        it.onclick = function(e){
+          e.stopPropagation();
+          var rr = it.getBoundingClientRect();
+          if (key === 'scheme') { rippleArm(rr.left + rr.width/2, rr.top + rr.height/2, [function(){ box.classList.remove('open'); }]); }
+          else { box.classList.remove('open'); }
+          NE.setSetting(key, valOf(o));
+          v.querySelector('span').textContent = txtOf(o);
+          list.querySelectorAll('.cs-item').forEach(function(x){ x.classList.remove('sel'); });
+          it.classList.add('sel');
+          if (key === 'scheme') { setTimeout(function(){ box.classList.remove('open'); }, 1200); }
+          if (onPick) { try { onPick(valOf(o)); } catch (err) { } }
+        };
+        list.appendChild(it);
+      });
       v.onclick=function(e){ e.stopPropagation(); document.querySelectorAll('.cust-select.open').forEach(function(x){ if(x!==box) x.classList.remove('open'); }); box.classList.toggle('open'); };
       box.appendChild(v); box.appendChild(list); r.appendChild(box);
       document.addEventListener('click', function(){ box.classList.remove('open'); });
@@ -196,11 +219,7 @@
       r.appendChild(t); return r;
     }
     function fxSel(label, key, val, opts, fk) {
-      var r = el('div','set-row'); r.appendChild(el('label','',label));
-      var sl = el('select');
-      opts.forEach(function(o){ var op=el('option','',o.t); op.value=o.v; if(o.v===val) op.selected=true; sl.appendChild(op); });
-      sl.onchange = function(){ NE.setSetting(key, sl.value); var p={}; p[fk]=sl.value; fxApply(p); };
-      r.appendChild(sl); return r;
+      return custSel(label, key, val, opts, function(v){ var p={}; p[fk]=v; fxApply(p); });
     }
     function fxRng(label, key, val, fk) {
       var v = (val===undefined||val===null||val==='') ? 50 : Number(val);
@@ -210,15 +229,43 @@
       r.appendChild(i); return r;
     }
     function fxColorRow(colorVal, autoVal) {
+      var PALETTE = ['#e23535', '#07c160', '#1d6eff', '#5865f2', '#9b59b6', '#f0a020', '#00bcd4', '#ffffff'];
       var r = el('div','set-row'); r.appendChild(el('label','','特效颜色'));
       var box = el('div','fx-color');
-      var auto = el('div','set-switch'+(autoVal?' on':'')); auto.title='跟随当前配色方案的强调色';
+      var auto = el('div','set-switch'+(autoVal?' on':'')); auto.title = '跟随当前配色方案的强调色';
       var tip = el('span','fx-color-tip','跟随主题');
-      var inp = el('input'); inp.type='color'; inp.value = (colorVal && colorVal!=='auto' && /^#[0-9a-fA-F]{6}$/.test(colorVal)) ? colorVal : '#e23535';
-      inp.disabled = !!autoVal;
-      auto.onclick = function(){ var on=!auto.classList.contains('on'); auto.classList.toggle('on',on); inp.disabled=on; NE.setSetting('fxColor', on?'auto':inp.value); fxApply({ color: on?'auto':inp.value }); };
-      inp.oninput = function(){ if(auto.classList.contains('on')) return; NE.setSetting('fxColor', inp.value); fxApply({ color: inp.value }); };
-      box.appendChild(tip); box.appendChild(auto); box.appendChild(inp); r.appendChild(box); return r;
+      var cur = (colorVal && colorVal !== 'auto' && /^#[0-9a-fA-F]{6}$/.test(colorVal)) ? colorVal : '#e23535';
+      var wrap = el('div','fx-picker' + (autoVal ? ' off' : ''));
+      var sw = el('div','fx-swatch-list');
+      PALETTE.forEach(function(c){
+        var s = el('span','fx-swatch' + (!autoVal && c.toLowerCase() === cur.toLowerCase() ? ' on' : ''));
+        s.style.background = c; s.title = c;
+        s.onclick = function(){
+          if (auto.classList.contains('on')) return;
+          cur = c;
+          sw.querySelectorAll('.fx-swatch').forEach(function(x){ x.classList.remove('on'); });
+          s.classList.add('on'); hex.value = c;
+          NE.setSetting('fxColor', c); fxApply({ color: c });
+        };
+        sw.appendChild(s);
+      });
+      var hex = el('input'); hex.type = 'text'; hex.className = 'fx-hex';
+      hex.value = autoVal ? '' : cur; hex.placeholder = autoVal ? '跟随主题' : '#RRGGBB'; hex.disabled = !!autoVal;
+      hex.onchange = function(){
+        var v = (hex.value || '').trim(); if (v.charAt(0) !== '#') v = '#' + v;
+        if (!/^#[0-9a-fA-F]{6}$/.test(v)) { hex.value = cur; return; }
+        cur = v.toLowerCase(); hex.value = cur;
+        NE.setSetting('fxColor', cur); fxApply({ color: cur });
+        sw.querySelectorAll('.fx-swatch').forEach(function(x){ x.classList.remove('on'); });
+      };
+      wrap.appendChild(sw); wrap.appendChild(hex);
+      auto.onclick = function(){
+        var on = !auto.classList.contains('on'); auto.classList.toggle('on', on);
+        wrap.classList.toggle('off', on); hex.disabled = on;
+        hex.value = on ? '' : cur;
+        NE.setSetting('fxColor', on ? 'auto' : cur); fxApply({ color: on ? 'auto' : cur });
+      };
+      box.appendChild(tip); box.appendChild(auto); box.appendChild(wrap); r.appendChild(box); return r;
     }
     function fxGroup(s) {
       var g = el('div','set-group');
