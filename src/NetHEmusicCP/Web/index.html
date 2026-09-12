@@ -29,6 +29,34 @@
     </header>
     <main id="view"><div class="big-load">加载中…</div></main>
 
+    <!-- 全窗口歌词页（点 dock 封面进入，Esc / 右下角按钮收起） -->
+    <div id="np" class="np" aria-hidden="true">
+      <div class="np-bg" id="np-bg"></div>
+      <div class="np-scrim"></div>
+      <div class="np-wrap">
+        <div class="np-left">
+          <div class="np-cover-wrap">
+            <i class="ic np-cover-ph">&#xE8D6;</i>
+            <img class="np-cover" id="np-cover" src="" alt="">
+          </div>
+          <div class="np-title" id="np-title">未在播放</div>
+          <div class="np-artist" id="np-artist">—</div>
+          <div class="np-album" id="np-album"></div>
+        </div>
+        <div class="np-right">
+          <div class="np-lyric" id="np-lyric"><div class="np-lyric-inner" id="np-lyric-inner"></div></div>
+        </div>
+      </div>
+      <div class="np-bar">
+        <span class="np-time" id="np-cur">00:00</span>
+        <div class="np-prog" id="np-prog"><div class="np-fill" id="np-fill"></div></div>
+        <span class="np-time" id="np-dur">00:00</span>
+        <button class="np-btn" id="np-download" title="下载"></button>
+        <button class="np-btn" id="np-share" title="分享"></button>
+        <button class="np-close" id="np-close" title="收起歌词页 (Esc)"></button>
+      </div>
+    </div>
+
     <!-- 播放列表右键菜单 -->
     <div id="pl-ctx" class="ctx-menu pl-ctx" style="display:none"></div>
 

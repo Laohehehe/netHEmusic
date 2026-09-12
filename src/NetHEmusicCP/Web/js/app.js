@@ -2,7 +2,7 @@
 (function () {
   const NE = window.NE; const $ = s => document.querySelector(s);
   const view = $('#view');
-  let queue = []; let playingIndex = -1; let currentList = [];
+  let queue = []; let playingIndex = -1; let currentList = []; let nowPlaying = null;
 
   function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
   function fmt(ms) { if (!ms || ms <= 0) return '00:00'; const s = Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
@@ -189,13 +189,86 @@
     try { const h = await NE.searchHot(); const hots=(h.result&&h.result.hots)||[]; const hw=el('div','hot-wrap'); hw.appendChild(el('h3','sec-title','热门搜索')); const hg=el('div','hot-grid'); hots.slice(0,20).forEach(it=>{ const t=el('span','hot-item',esc(it.first||it.keyword||'')); t.onclick=()=>{ input.value=t.textContent; doSearch(); }; hg.appendChild(t); }); hw.appendChild(hg); html.appendChild(hw); } catch(e){}
     view.innerHTML=''; view.appendChild(html);
   }
-  async function goLyric() {
-    loading();
-    const ns = queue[playingIndex];
-    if(!ns){ view.innerHTML='<div class="big-load">请先播放一首歌再查看歌词</div>'; return; }
-    try { const r = await NE.lyric(ns.Id); const lrc=(r.lrc&&r.lrc.lyric)||'暂无歌词'; const html=el('div','page'); html.appendChild(el('h2','page-title','歌词 — '+esc(ns.Title))); html.appendChild(el('pre','lyric-pre', esc(lrc))); view.innerHTML=''; view.appendChild(html); }
-    catch(e){ view.innerHTML='<div class="big-load">歌词加载失败</div>'; }
+  // ================= 全窗口歌词页（点封面进入） =================
+  var npOpen = false, npLines = [], npIndex = -1, npSongId = 0;
+  function npEl(id) { return document.getElementById(id); }
+
+  function parseLrc(lrc) {
+    var out = [];
+    (lrc || '').split('\n').forEach(function (line) {
+      var m = line.match(/^\s*\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]\s*(.*)$/);
+      if (!m) return;
+      var ms = parseInt(m[1], 10) * 60000 + parseInt(m[2], 10) * 1000;
+      if (m[3]) ms += parseInt((m[3] + '00').slice(0, 3), 10);
+      var txt = (m[4] || '').trim();
+      if (txt) out.push({ t: ms, s: txt });
+    });
+    out.sort(function (a, b) { return a.t - b.t; });
+    return out;
   }
+
+  function npRenderSong(ns) {
+    if (!ns) return;
+    var cover = npEl('np-cover'), bg = npEl('np-bg');
+    var pic = ns.Pic ? ns.Pic.replace(/\^\d+\^/, '') : '';
+    if (pic) { cover.src = pic; bg.style.backgroundImage = 'url("' + pic + '")'; }
+    else { cover.removeAttribute('src'); bg.style.backgroundImage = 'none'; }
+    npEl('np-title').textContent = ns.Title || '';
+    npEl('np-artist').textContent = ns.Artist || '';
+    npEl('np-album').textContent = ns.Album || '';
+  }
+
+  function npRenderLyric(lines) {
+    var box = npEl('np-lyric-inner'); if (!box) return;
+    box.innerHTML = '';
+    if (!lines.length) { box.innerHTML = '<div class="np-line on">暂无歌词</div>'; return; }
+    lines.forEach(function (l) {
+      box.appendChild(el('div', 'np-line', esc(l.s)));
+    });
+  }
+
+  function npSync(pos) {
+    if (!npOpen || !npLines.length) return;
+    var i = -1;
+    for (var k = 0; k < npLines.length; k++) { if (npLines[k].t <= pos) i = k; else break; }
+    if (i === npIndex) return;
+    npIndex = i;
+    var box = npEl('np-lyric-inner'); if (!box) return;
+    var nodes = box.children;
+    for (var j = 0; j < nodes.length; j++) nodes[j].classList.toggle('on', j === i);
+    if (i >= 0 && nodes[i]) {
+      var wrap = npEl('np-lyric');
+      var target = nodes[i].offsetTop + nodes[i].offsetHeight / 2 - wrap.clientHeight / 2;
+      box.style.transform = 'translateY(' + (-Math.max(0, target)) + 'px)';
+    }
+  }
+
+  async function openNowPlaying() {
+    var np = npEl('np'); if (!np) return;
+    npOpen = true;
+    np.classList.add('show'); np.setAttribute('aria-hidden', 'false');
+    var ns = nowPlaying || queue[playingIndex];
+    if (!ns) { npEl('np-title').textContent = '未在播放'; npEl('np-artist').textContent = '—'; npEl('np-album').textContent = ''; npRenderLyric([]); return; }
+    npRenderSong(ns);
+    if (npSongId !== ns.Id) {
+      npSongId = ns.Id; npLines = []; npIndex = -1;
+      npRenderLyric([]); npEl('np-lyric-inner').innerHTML = '<div class="np-line">歌词加载中…</div>';
+      try {
+        var r = await NE.lyric(ns.Id);
+        if (!npOpen || npSongId !== ns.Id) return;
+        npLines = parseLrc((r && r.lrc && r.lrc.lyric) || '');
+        npRenderLyric(npLines);
+        npIndex = -1;
+      } catch (e) { npRenderLyric([]); }
+    }
+  }
+  function closeNowPlaying() {
+    var np = npEl('np'); if (!np) return;
+    npOpen = false; np.classList.remove('show'); np.setAttribute('aria-hidden', 'true');
+  }
+
+  // 旧的 go('lyric') 也走全窗口歌词页
+  async function goLyric() { return openNowPlaying(); }
   // 我的歌单：登录后展示账号下的歌单（创建 + 收藏）
   async function goLiked() {
     loading();
@@ -502,8 +575,24 @@
     setTimeout(finish, 1600);
   }
   NE.on('theme', themeWithRipple);
-  NE.on('playing', function(d){ if(d.song) setPlayer(d.song); });
-  NE.on('position', function(d){ $('#pl-cur').textContent=fmt(d.pos||0); if(d.dur){ $('#pl-dur').textContent=fmt(d.dur); } $('#pl-fill').style.width=(d.dur?Math.min(100,(d.pos||0)/d.dur*100):0)+'%'; });
+  NE.on('playing', function(d){
+    if(d.song){
+      nowPlaying = normSong(d.song);
+      setPlayer(d.song);
+      if (npOpen) openNowPlaying();          // 歌词页开着时跟着换歌换词
+      renderQueue();                          // 刷新播放列表高亮
+    }
+  });
+  NE.on('position', function(d){
+    $('#pl-cur').textContent=fmt(d.pos||0); if(d.dur){ $('#pl-dur').textContent=fmt(d.dur); }
+    $('#pl-fill').style.width=(d.dur?Math.min(100,(d.pos||0)/d.dur*100):0)+'%';
+    // 全窗口歌词页
+    npSync(d.pos||0);
+    var f = $('#np-fill'), c = $('#np-cur'), u = $('#np-dur');
+    if (f) f.style.width = (d.dur ? Math.min(100, (d.pos||0)/d.dur*100) : 0) + '%';
+    if (c) c.textContent = fmt(d.pos||0);
+    if (u && d.dur) u.textContent = fmt(d.dur);
+  });
   NE.on('toast', function(d){ toast(d.text||''); });
   NE.on('nav', function(d){ if(d.view) go(d.view, d); });
 
@@ -643,9 +732,30 @@
   });
   $('#pl-dl').onclick = () => { if(queue[playingIndex]) NE.post({type:'download', song:queue[playingIndex]}); };
   // 点击播放条封面 → 进入歌词页
-  $('#pl-cover').onclick = () => { document.querySelectorAll('#nav a').forEach(x=>x.classList.remove('on')); go('lyric'); };
+  $('#pl-cover').onclick = () => openNowPlaying();
   $('#pl-like').onclick = () => toast('收藏开发中');
   $('#pl-volume').oninput = e => NE.post({type:'volume', v: e.target.value});
+
+  // ---- 全窗口歌词页：按钮 / Esc / 进度条跳转 ----
+  (function initNowPlaying() {
+    var np = document.getElementById('np'); if (!np) return;
+    var close = document.getElementById('np-close');
+    if (close) { close.innerHTML = ico('<polyline points="6 9 12 15 18 9"/>'); close.onclick = closeNowPlaying; }
+    var dl = document.getElementById('np-download');
+    if (dl) { dl.innerHTML = SVG.dl; dl.onclick = function () { var ns = queue[playingIndex]; if (ns) NE.post({ type: 'download', song: ns }); }; }
+    var sh = document.getElementById('np-share');
+    if (sh) { sh.innerHTML = SVG.share; sh.onclick = function () { var ns = queue[playingIndex]; if (ns) NE.post({ type: 'share', song: ns }); }; }
+    var prog = document.getElementById('np-prog');
+    if (prog) {
+      prog.onclick = function (e) {
+        var r = prog.getBoundingClientRect();
+        var ns = queue[playingIndex]; if (!ns || !ns.Duration) return;
+        var ratio = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+        NE.post({ type: 'seek', pos: Math.round(ratio * ns.Duration) });
+      };
+    }
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && npOpen) closeNowPlaying(); });
+  })();
 
   // 队列消息：C# 恢复/变更播放列表时刷新面板与 dock 显示
   NE.on('queue', function (d) {
@@ -655,7 +765,10 @@
     var cur = queue[playingIndex];
     if (cur && $('#pl-title').textContent === '未在播放') showSongMeta(cur);
   });
-  NE.on('queue_changed', function () { if (plOpen) NE.post({ type: 'queue_get' }); });
+  NE.on('queue_changed', function (d) {
+    if (d && typeof d.index === 'number') { playingIndex = d.index; if (plOpen) { NE.post({ type: 'queue_get' }); } }
+    else if (plOpen) NE.post({ type: 'queue_get' });
+  });
   NE.on('desktop_lyric_state', function (d) { if (!LYRIC_LOCKED) setLyricBtn(!!d.on); });
   // 启动时同步：播放模式 / （未锁定时）桌面歌词状态 / 上次的播放列表
   NE.getSettings().then(function (s) {

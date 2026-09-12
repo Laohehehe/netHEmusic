@@ -283,6 +283,7 @@ public sealed partial class MainWindow : Window
                 case "queue_get": PostToWeb(new { type = "queue", songs = AppServices.Player.Queue.Select(ToSongDto).ToList(), index = AppServices.Player.Index }); break;
                 case "play_index": { if (doc.TryGetProperty("index", out var qi) && qi.TryGetInt32(out var qn)) _ = AppServices.Player.PlayAtAsync(qn); break; }
                 case "queue_clear": AppServices.Player.ClearQueue(); LogManager.Log("已清空播放列表"); break;
+                case "seek": { if (doc.TryGetProperty("pos", out var sk) && sk.TryGetInt64(out var skn)) AppServices.Player.Seek(TimeSpan.FromMilliseconds(skn)); break; }
                 case "queue_remove": { if (doc.TryGetProperty("index", out var ri) && ri.TryGetInt32(out var rn)) AppServices.Player.RemoveAt(rn); break; }
                 case "queue_next": { if (doc.TryGetProperty("index", out var ni) && ni.TryGetInt32(out var nn)) AppServices.Player.MoveToNext(nn); break; }
                 case "share":
