@@ -120,7 +120,23 @@ public partial class App : Application
             if (!ok || !AppServices.CertificatePresent()) { LogManager.Log("证书未安装，退出"); ExitApp(); return; }
         }
 
-        // 4) 启动 主窗口（先用户协议 → 更新检测 → 进入主界面）
+        // 4) 用户协议：首次运行必须输入协议里的启用密码才算通过；不通过就退出，不加载主窗口
+        if (AppServices.Config.FirstRun)
+        {
+            LogManager.Log("首次运行：弹出用户协议");
+            var licenseWin = new netHEmusic.Windows.UserLicenseWindow();
+            licenseWin.Activate();
+            bool agreed = await licenseWin.WaitAsync();
+            if (!agreed || AppServices.Config.FirstRun)
+            {
+                LogManager.Warn("用户协议未通过，退出（不加载主窗口）");
+                ExitApp();
+                return;
+            }
+            LogManager.Log("用户协议已通过，继续启动");
+        }
+
+        // 5) 启动 主窗口（更新检测 → 进入主界面）
         _window = new MainWindow();
         _window.Activate();
 

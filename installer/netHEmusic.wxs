@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- netHEmusic 安装包（MSI）：用户级安装，不需要管理员 -->
+  <Package Name="netHEmusic"
+           Manufacturer="Laohehehe"
+           Version="26.9.12.22"
+           UpgradeCode="8F3C1A24-6B7E-4C9D-9E15-2A7D5B4C1E01"
+           Scope="perMachine"
+           Language="2052"
+           Codepage="65001"
+           InstallerVersion="500">
+
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="已经安装了更新版本的 netHEmusic。" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon.ico" SourceFile="resources\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/Laohehehe/netHEmusic" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="netHEmusic" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuDir" Name="netHEmusic" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="Main" Title="netHEmusic" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+  </Package>
+
+  <!-- 应用本体：直接收编 Release 输出（win-x64 自包含目录） -->
+  <Fragment>
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="..\build\app\**" />
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- 快捷方式 -->
+  <Fragment>
+    <Component Id="StartMenuShortcut" Directory="AppMenuDir" Guid="A1B2C3D4-0001-4A01-9E01-0A1B2C3D4E01">
+      <Shortcut Id="StartMenuLnk" Name="netHEmusic" Description="netHEmusic 播放器"
+                Target="[INSTALLFOLDER]NetHEmusicCP.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
+      <RemoveFolder Id="RemoveAppMenuDir" Directory="AppMenuDir" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\netHEmusic" Name="startmenu" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="A1B2C3D4-0002-4A02-9E02-0A1B2C3D4E02">
+      <Shortcut Id="DesktopLnk" Name="netHEmusic" Description="netHEmusic 播放器"
+                Target="[INSTALLFOLDER]NetHEmusicCP.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
+      <RegistryValue Root="HKCU" Key="Software\netHEmusic" Name="desktop" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>

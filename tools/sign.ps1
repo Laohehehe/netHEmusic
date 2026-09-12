@@ -14,8 +14,8 @@ if (-not $signtool) { throw "signtool not found" }
 
 # clean old certs then create CA (issuer) + leaf (signer)
 Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue | Where-Object { $_.Subject -match "LaoheTeam|Laohehehe" } | Remove-Item -Force -ErrorAction SilentlyContinue
-$ca = New-SelfSignedCertificate -Type Custom -Subject "CN=LaoheTeam.top" -FriendlyName "LaoheTeam CA" -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date "2100-06-17") -TextExtension @("2.5.29.19={critical}{text}ca=1","2.5.29.37={text}1.3.6.1.5.5.7.3.3")
-$leaf = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Laohehehe" -FriendlyName "netHEmusic signer" -Signer $ca -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date "2100-06-17")
+$ca = New-SelfSignedCertificate -Type Custom -Subject "CN=LaoheTeam.top" -FriendlyName "LaoheTeam CA" -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date "2100-06-17") -KeyUsage CertSign,CRLSign,DigitalSignature -TextExtension @("2.5.29.19={critical}{text}ca=1","2.5.29.37={text}1.3.6.1.5.5.7.3.3")
+$leaf = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Laohehehe" -FriendlyName "netHEmusic signer" -Signer $ca -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date "2100-06-17") -KeyUsage DigitalSignature -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root "build") | Out-Null
 $pfx = Join-Path $root "resources\Laohehehe.pfx"

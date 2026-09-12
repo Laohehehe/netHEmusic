@@ -149,7 +149,10 @@ public sealed partial class MainWindow : Window
             {
                 AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required"
             };
-            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, null, envOptions);
+            // 用户数据放到 %APPDATA%\netHEmusic\webview：安装目录保持只读，MSI 卸载才干净
+            string webviewData = Path.Combine(AppServices.Config.DataDir, "webview");
+            try { Directory.CreateDirectory(webviewData); } catch { }
+            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, webviewData, envOptions);
             await WebView.EnsureCoreWebView2Async(env);
             var core = WebView.CoreWebView2;
             var webFolder = FindWebFolder();
