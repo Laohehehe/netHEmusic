@@ -246,3 +246,21 @@ html.no-fx .fx-shake{animation:none;}
 .account-info .acc-avatar{width:64px;height:64px;border-radius:50%;object-fit:cover;background:rgba(var(--md-accent-color-grey-base-rgb),.12);}
 .acc-nick{font-size:16px;font-weight:700;color:var(--md-accent-color-secondary);}
 .acc-sub{margin-top:4px;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);}
+/* ================= 播放列表面板：清空按钮 + 右键菜单 ================= */
+.pl-panel-head{gap:8px;}
+.pl-clear{
+  margin-left:auto;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;
+  border:none;border-radius:50%;background:transparent;cursor:pointer;
+  color:rgba(var(--md-accent-color-grey-base-rgb),.6);
+  transition:color .18s ease, background .18s ease, transform .2s cubic-bezier(.2,.8,.3,1.3);
+}
+.pl-clear svg{width:16px;height:16px;display:block;}
+.pl-clear:hover{color:var(--md-accent-color);background:var(--nm-fill);transform:scale(1.12);}
+.pl-clear.armed{color:#fff;background:#e23b3b;animation:pl-clear-pulse 1s ease-in-out infinite;}
+@keyframes pl-clear-pulse{0%,100%{box-shadow:0 0 0 0 rgba(226,59,59,.55);}50%{box-shadow:0 0 0 6px rgba(226,59,59,0);}}
+
+.pl-ctx{z-index:1100;min-width:150px;}
+.pl-ctx .ctx-item{display:flex;align-items:center;gap:9px;}
+.pl-ctx .ctx-ic{display:inline-flex;width:15px;height:15px;flex:0 0 auto;opacity:.85;}
+.pl-ctx .ctx-ic svg{width:15px;height:15px;display:block;}
+.pl-ctx .ctx-item:hover .ctx-ic{opacity:1;}

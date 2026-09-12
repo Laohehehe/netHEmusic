@@ -56,6 +56,9 @@
     playlist:ico('<line x1="3" x2="14" y1="6" y2="6"/><line x1="3" x2="14" y1="12" y2="12"/><line x1="3" x2="9" y1="18" y2="18"/><path d="M16.5 14.4l6 3.6-6 3.6z"/>'),
     dl:      ico('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>'),
     star:    ico('<path d="M12 3.6l2.7 5.4 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.9l6-.9z"/>'),
+    playNext:ico('<line x1="3" x2="13" y1="6" y2="6"/><line x1="3" x2="11" y1="12" y2="12"/><line x1="3" x2="11" y1="18" y2="18"/><path d="M15 11l6 4-6 4z"/>'),
+    trash:   ico('<polyline points="3 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>'),
+    share:   ico('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" x2="15.4" y1="10.5" y2="6.5"/><line x1="8.6" x2="15.4" y1="13.5" y2="17.5"/>'),
     // 播放模式四态
     modeOrder:  ico('<line x1="4" x2="19" y1="12" y2="12"/><polyline points="14 6 20 12 14 18"/>'),
     modeList:   ico('<polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'),
@@ -193,10 +196,28 @@
     try { const r = await NE.lyric(ns.Id); const lrc=(r.lrc&&r.lrc.lyric)||'暂无歌词'; const html=el('div','page'); html.appendChild(el('h2','page-title','歌词 — '+esc(ns.Title))); html.appendChild(el('pre','lyric-pre', esc(lrc))); view.innerHTML=''; view.appendChild(html); }
     catch(e){ view.innerHTML='<div class="big-load">歌词加载失败</div>'; }
   }
+  // 我的歌单：登录后展示账号下的歌单（创建 + 收藏）
   async function goLiked() {
     loading();
-    const html = el('div','page'); html.appendChild(el('h2','page-title','我喜欢的音乐'));
-    try { const r=await NE.recommend(); const songs=(r.data&&r.data.dailySongs)||[]; const dl=el('div'); renderSongs(songs,dl); html.appendChild(dl); } catch(e){ html.appendChild(el('div','big-load','加载失败')); }
+    const html = el('div','page'); html.appendChild(el('h2','page-title','我的歌单'));
+    try {
+      const st = await NE.loginStatus();
+      const uid = (st && st.data && st.data.profile && st.data.profile.userId)
+        || (st && st.profile && st.profile.userId) || 0;
+      if (!uid) {
+        html.appendChild(el('p','muted','登录后可以查看你创建和收藏的歌单'));
+        const b = el('button','action-btn','去登录'); b.onclick = () => { document.querySelectorAll('#sidebar a').forEach(x=>x.classList.remove('on')); go('account'); };
+        html.appendChild(b);
+      } else {
+        const r = await NE.userPlaylist(uid, 200);
+        const list = (r && r.playlist) || [];
+        const sub = (r && r.playlist && r.playlist.length) ? '' : '';
+        html.appendChild(el('p','muted','共 ' + list.length + ' 个歌单'));
+        const grid = el('div','pl-grid');
+        list.forEach(p => grid.appendChild(playlistCard(p)));
+        html.appendChild(grid);
+      }
+    } catch (e) { html.appendChild(el('div','big-load','加载失败: ' + e.message)); }
     view.innerHTML=''; view.appendChild(html);
   }
   async function goAccount() {
@@ -513,7 +534,8 @@
   }
 
   // ---- 当前播放列表面板 ----
-  var plOpen = false;
+  var plOpen = false, plCtxIndex = -1;
+
   function renderQueue() {
     var box = $('#plpanel-list'); if (!box) return;
     var cnt = $('#plpanel-count'); if (cnt) cnt.textContent = queue.length ? (queue.length + ' 首') : '';
@@ -525,10 +547,52 @@
         + '<span class="pl-item-title">' + esc(ns.Title) + '</span>'
         + '<span class="pl-item-artist">' + esc(ns.Artist) + '</span>';
       it.onclick = function () { NE.post({ type: 'play_index', index: i }); };
+      it.oncontextmenu = function (e) { e.preventDefault(); e.stopPropagation(); showQueueMenu(e.clientX, e.clientY, i); };
       box.appendChild(it);
     });
     var cur = box.querySelector('.pl-item.on'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
   }
+
+  // 播放列表右键菜单：播放 / 下一首播放 / 删除 / 分享
+  var PL_MENU = [
+    { a: 'play', ic: 'play', t: '播放' },
+    { a: 'next', ic: 'playNext', t: '下一首播放' },
+    { a: 'remove', ic: 'trash', t: '删除' },
+    { a: 'share', ic: 'share', t: '分享' }
+  ];
+  function ensureQueueMenu() {
+    var m = $('#pl-ctx'); if (!m || m.dataset.ready) return m;
+    m.innerHTML = '';
+    PL_MENU.forEach(function (it) {
+      var d = el('div', 'ctx-item');
+      d.innerHTML = '<span class="ctx-ic">' + SVG[it.ic] + '</span><span>' + it.t + '</span>';
+      d.onclick = function (e) {
+        e.stopPropagation();
+        hideQueueMenu();
+        if (plCtxIndex < 0 || !queue[plCtxIndex]) return;
+        var ns = queue[plCtxIndex], idx = plCtxIndex;
+        if (it.a === 'play') NE.post({ type: 'play_index', index: idx });
+        else if (it.a === 'next') { NE.post({ type: 'queue_next', index: idx }); toast('已把《' + ns.Title + '》设为下一首播放'); }
+        else if (it.a === 'remove') { NE.post({ type: 'queue_remove', index: idx }); toast('已从播放列表移除'); }
+        else if (it.a === 'share') NE.post({ type: 'share', song: ns });
+      };
+      m.appendChild(d);
+    });
+    m.dataset.ready = '1';
+    return m;
+  }
+  function showQueueMenu(x, y, index) {
+    var m = ensureQueueMenu(); if (!m) return;
+    plCtxIndex = index;
+    m.style.display = 'block';
+    m.style.left = Math.min(x, window.innerWidth - 170) + 'px';
+    m.style.top = Math.min(y, window.innerHeight - 170) + 'px';
+  }
+  function hideQueueMenu() { var m = $('#pl-ctx'); if (m) m.style.display = 'none'; plCtxIndex = -1; }
+  document.addEventListener('click', hideQueueMenu);
+  document.addEventListener('contextmenu', function (e) {
+    if (plOpen && !(e.target.closest && e.target.closest('.pl-item'))) hideQueueMenu();
+  });
   function toggleQueuePanel(force) {
     plOpen = (force === undefined) ? !plOpen : !!force;
     var p = $('#plpanel'); if (!p) return;
@@ -537,6 +601,24 @@
   }
 
   initDockIcons();
+  // 播放列表“清空”按钮：点一次变成确认态，再点才真的清空
+  (function initClearBtn() {
+    var b = $('#plpanel-clear'); if (!b) return;
+    b.innerHTML = SVG.trash;
+    var armed = false, timer = 0;
+    b.onclick = function (e) {
+      e.stopPropagation();
+      if (!armed) {
+        armed = true; b.classList.add('armed'); b.title = '再点一次确认清空';
+        clearTimeout(timer); timer = setTimeout(function () { armed = false; b.classList.remove('armed'); b.title = '清空播放列表'; }, 3000);
+        toast('再点一次确认清空播放列表');
+        return;
+      }
+      armed = false; clearTimeout(timer); b.classList.remove('armed'); b.title = '清空播放列表';
+      NE.post({ type: 'queue_clear' });
+      toast('播放列表已清空');
+    };
+  })();
   $('#pb-play').onclick = () => { NE.post({type:'toggle'}); setPlaying(!$('#player').classList.contains('playing')); pop($('#pb-play')); };
   $('#pb-prev').onclick = () => NE.post({type:'prev'});
   $('#pb-next').onclick = () => NE.post({type:'next'});

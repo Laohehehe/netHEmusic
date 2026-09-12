@@ -39,6 +39,8 @@
     loginQrKey: function(){ return api('login/qr/key'); },
     loginQrCreate: function(key){ return api('login/qr/create', { key:key, qrimg:'true' }); },
     loginQrCheck: function(key){ return api('login/qr/check', { key:key }); },
+    userPlaylist: function(uid, limit){ return api('user/playlist', { uid: uid, limit: limit || 200 }); },
+    songDetail: function(ids){ return api('song/detail', { ids: ids }); },
     loginStatus: function(){ return api('login/status'); },
     logout: function(){ return api('logout', {}, true); }
   };
