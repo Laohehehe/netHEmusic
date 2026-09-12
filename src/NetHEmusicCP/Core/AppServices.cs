@@ -54,7 +54,7 @@ public static class AppServices
         LogManager.Init(Path.Combine(Config.DataDir, "logs"));
 
         Lang = new LangService(Config, ResolveLangRoot());
-        Netease = new NetEaseClient();
+        Netease = new NetEaseClient(Config.ApiBase);   // API 服务地址见 config.ini [Network] api_base
         Netease.SetCookie(Config.LoadCookie()); // 恢复登录态
         Cache = new CacheManager(Config);
         Cache.EnsureDir();

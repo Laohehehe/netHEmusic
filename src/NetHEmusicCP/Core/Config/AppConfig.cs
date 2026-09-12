@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using netHEmusic.Core.Logging;
+using netHEmusic.Core.Security;
 
 namespace netHEmusic.Core.Config;
 
@@ -28,6 +29,8 @@ public sealed class AppConfig
         Directory.CreateDirectory(_dir);
         _iniPath = Path.Combine(_dir, "config.ini");
         _cookiePath = Path.Combine(_dir, "cookie.txt");
+        // 初始化敏感数据保护（RSA 密钥对，私钥经 DPAPI 二次保护）
+        SecureStore.Init(Path.Combine(_dir, "keys"));
         if (!File.Exists(_iniPath)) CreateDefaultIni();
     }
 
@@ -146,7 +149,12 @@ public sealed class AppConfig
             ["current_version"] = "26.9.12.22"
         };
         d.SectionOrder.Add("Update");
-        d.Data["Network"] = new(StringComparer.OrdinalIgnoreCase) { ["proxy"] = "" };
+        d.Data["Network"] = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["proxy"] = "",
+            // 网易云 API 服务地址（NeteaseCloudMusicApi 部署实例），接口文档见 {api_base}/docs/
+            ["api_base"] = "http://8.166.131.193:3000"
+        };
         d.SectionOrder.Add("Network");
         // 记录“上一次已公告/已运行”的版本号：比当前版本旧就弹更新公告
         d.Data["Version"] = new(StringComparer.OrdinalIgnoreCase) { ["version"] = "0.0.0.0" };
@@ -199,6 +207,13 @@ public sealed class AppConfig
         }
         set { try { Directory.CreateDirectory(value); } catch { } Set("Cache", "dir", value); }
     }
+    /// <summary>网易云 API 服务地址（NeteaseCloudMusicApi 实例，文档 {base}/docs/）。</summary>
+    public string ApiBase
+    {
+        get { var v = (Get("Network", "api_base", "") ?? "").Trim(); return string.IsNullOrEmpty(v) ? "http://8.166.131.193:3000" : v.TrimEnd('/'); }
+        set => Set("Network", "api_base", (value ?? "").Trim());
+    }
+
     public long CacheLimitMb { get { long.TryParse(Get("Cache", "limit_mb", "1024"), out var v); return Math.Max(1, v); } set => Set("Cache", "limit_mb", value); }
     public long MemLimitMb { get { long.TryParse(Get("Cache", "mem_limit_mb", "160"), out var v); return Math.Max(64, v); } set => Set("Cache", "mem_limit_mb", value); }
 
@@ -218,17 +233,26 @@ public sealed class AppConfig
     public string GetPlayback() => Get("Player", "playback", "");
     public void SavePlayback(string json) => Set("Player", "playback", json);
 
-    // ---------- Cookie（DPAPI 加密） ----------
+    // ---------- 登录凭据（非对称 + 混合加密；旧版 DPAPI 自动迁移） ----------
     private static readonly byte[] DpapiPrefix = Encoding.ASCII.GetBytes("DPAPI1:");
 
+    /// <summary>登录 token/cookie 加密落盘：RSA-OAEP 包裹 AES-256-GCM 密钥（见 SecureStore）。</summary>
     public void SaveCookie(string cookie)
     {
         try
         {
             if (string.IsNullOrEmpty(cookie)) { ClearCookie(); return; }
+            var blob = SecureStore.Protect(cookie);
+            if (!string.IsNullOrEmpty(blob))
+            {
+                File.WriteAllText(_cookiePath, blob, new UTF8Encoding(false));
+                LogManager.Log("登录凭据已用非对称加密保存（RSA-2048 + AES-256-GCM）");
+                return;
+            }
+            // 兜底：非对称不可用时退回 DPAPI
             var enc = ProtectedData.Protect(Encoding.UTF8.GetBytes(cookie), null, DataProtectionScope.CurrentUser);
             File.WriteAllBytes(_cookiePath, Combine(DpapiPrefix, enc));
-            LogManager.Log("登录 cookie 已加密保存");
+            LogManager.Log("登录凭据已用 DPAPI 保存（非对称不可用，已回退）");
         }
         catch (Exception e) { LogManager.Error("保存 cookie 失败: " + e); }
     }
@@ -239,14 +263,25 @@ public sealed class AppConfig
         {
             if (!File.Exists(_cookiePath)) return "";
             var raw = File.ReadAllBytes(_cookiePath);
+
+            // 1) 新格式：NMSEC1:（非对称）
+            var text = Encoding.UTF8.GetString(raw).Trim();
+            if (text.StartsWith("NMSEC1:", StringComparison.Ordinal))
+                return SecureStore.Unprotect(text);
+
+            // 2) 旧格式：DPAPI1: → 解开后自动迁移到新格式
             if (raw.Length > DpapiPrefix.Length && raw.AsSpan(0, DpapiPrefix.Length).SequenceEqual(DpapiPrefix))
             {
-                var payload = raw[DpapiPrefix.Length..];
-                try { return Encoding.UTF8.GetString(ProtectedData.Unprotect(payload, null, DataProtectionScope.CurrentUser)); }
+                try
+                {
+                    var legacy = Encoding.UTF8.GetString(ProtectedData.Unprotect(raw[DpapiPrefix.Length..], null, DataProtectionScope.CurrentUser));
+                    if (!string.IsNullOrEmpty(legacy)) { try { SaveCookie(legacy); } catch { } }
+                    return legacy;
+                }
                 catch { return ""; } // 换用户/机器 -> 视为未登录
             }
-            // 旧版明文：自动迁移为加密
-            var text = Encoding.UTF8.GetString(raw).Trim();
+
+            // 3) 更旧的明文格式 → 迁移
             if (!string.IsNullOrEmpty(text)) { try { SaveCookie(text); } catch { } }
             return text;
         }
