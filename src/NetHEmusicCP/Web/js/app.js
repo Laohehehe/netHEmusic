@@ -14,10 +14,20 @@
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
   function setPlayer(ns) { if(!ns) return; $('#pl-title').textContent = ns.Title; $('#pl-artist').textContent = ns.Artist; const c=$('#pl-cover'); if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); } else c.removeAttribute('src'); $('#pb-play').innerHTML = '<i>&#xE769;</i>'; }
 
+  // 图标全部用圆角几何（rx / 圆弧），配合 css 里的无底色大图标
   var SVG = {
-    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
-    add:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 10H3v2h11v-2zM14 6H3v2h11V6zm-3 8H3v2h8v-2zm5-4v3h-3v2h3v3h2v-3h3v-2h-3v-3h-2z"/></svg>',
-    dl:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2zM17 8h-4V2H11v6H7l5 5 5-5z"/></svg>'
+    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 5.2c-1-.6-2.3.1-2.3 1.3v11c0 1.2 1.3 1.9 2.3 1.3l9.2-5.5c1-.6 1-2 0-2.6L9.1 5.2z"/></svg>',
+    add:  '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        + '<rect x="3" y="5.4" width="11" height="2.6" rx="1.3"/>'
+        + '<rect x="3" y="10.7" width="11" height="2.6" rx="1.3"/>'
+        + '<rect x="3" y="16" width="7.5" height="2.6" rx="1.3"/>'
+        + '<rect x="16.2" y="9.6" width="2.6" height="12" rx="1.3"/>'
+        + '<rect x="11.5" y="14.3" width="12" height="2.6" rx="1.3"/>'
+        + '</svg>',
+    dl:   '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        + '<path d="M12 3.2c.72 0 1.3.58 1.3 1.3v7.1l2.1-2.1c.5-.5 1.32-.5 1.83 0 .5.5.5 1.32 0 1.83l-4.3 4.3c-.5.5-1.32.5-1.83 0l-4.3-4.3c-.5-.5-.5-1.32 0-1.83.5-.5 1.32-.5 1.83 0l2.1 2.1V4.5c0-.72.58-1.3 1.3-1.3z"/>'
+        + '<rect x="5.5" y="18" width="13" height="2.6" rx="1.3"/>'
+        + '</svg>'
   };
   function songRow(ns, i) {
     const r = el('div','song-row');
@@ -171,7 +181,7 @@
     var html = el('div','page');
     html.appendChild(el('h2','page-title','设置'));
     function group(title, rows) { var g = el('div','set-group'); g.appendChild(el('h3','',title)); rows.forEach(function(r){ g.appendChild(r); }); return g; }
-    function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); if(key==='uiEffects' && window.FX) window.FX.setEnabled(on); }; r.appendChild(t); return r; }
+    function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); }; r.appendChild(t); return r; }
     // 原生 <select> 的弹层在 WebView2 里定位会飘，这里统一用自定义下拉
     function sel(label, key, val, opts) { return custSel(label, key, val, opts); }
     function txt(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var i=el('input'); i.type='text'; i.value=val||''; i.onchange=function(){ NE.setSetting(key, i.value); }; r.appendChild(i); return r; }
@@ -245,7 +255,7 @@
           cur = c;
           sw.querySelectorAll('.fx-swatch').forEach(function(x){ x.classList.remove('on'); });
           s.classList.add('on'); hex.value = c;
-          NE.setSetting('fxColor', c); fxApply({ color: c });
+          NE.setSetting('fx_color', c); fxApply({ color: c });
         };
         sw.appendChild(s);
       });
@@ -255,7 +265,7 @@
         var v = (hex.value || '').trim(); if (v.charAt(0) !== '#') v = '#' + v;
         if (!/^#[0-9a-fA-F]{6}$/.test(v)) { hex.value = cur; return; }
         cur = v.toLowerCase(); hex.value = cur;
-        NE.setSetting('fxColor', cur); fxApply({ color: cur });
+        NE.setSetting('fx_color', cur); fxApply({ color: cur });
         sw.querySelectorAll('.fx-swatch').forEach(function(x){ x.classList.remove('on'); });
       };
       wrap.appendChild(sw); wrap.appendChild(hex);
@@ -263,33 +273,37 @@
         var on = !auto.classList.contains('on'); auto.classList.toggle('on', on);
         wrap.classList.toggle('off', on); hex.disabled = on;
         hex.value = on ? '' : cur;
-        NE.setSetting('fxColor', on ? 'auto' : cur); fxApply({ color: on ? 'auto' : cur });
+        NE.setSetting('fx_color', on ? 'auto' : cur); fxApply({ color: on ? 'auto' : cur });
       };
       box.appendChild(tip); box.appendChild(auto); box.appendChild(wrap); r.appendChild(box); return r;
     }
+    // 自定义设置键（snake_case）统一从 C# 回传的 [App] 段里取，新增项无需改 C#
+    function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
+    function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
     function fxGroup(s) {
       var g = el('div','set-group');
       g.appendChild(el('h3','','鼠标特效'));
-      var on = s.uiEffects !== false && String(s.uiEffects) !== 'false';
+      var on = cfgBool(s, 'ui_effects', true);
       var master = el('div','set-row'); master.appendChild(el('label','','启用鼠标特效'));
       var mt = el('div','set-switch'+(on?' on':'')); master.appendChild(mt); g.appendChild(master);
       var d = el('div','fx-detail'+(on?'':' hidden'));
       // 拖尾
-      d.appendChild(fxSw('光标拖尾','fxTrail', s.fxTrail, 'trail'));
-      d.appendChild(fxRng('拖尾长度','fxTrailLen', s.fxTrailLen, 'trailLen'));
-      d.appendChild(fxRng('拖尾粗细','fxTrailWidth', s.fxTrailWidth, 'trailWidth'));
-      d.appendChild(fxSw('光标光晕','fxGlow', s.fxGlow, 'glow'));
+      d.appendChild(fxSw('光标拖尾','fx_trail', cfgBool(s,'fx_trail',true), 'trail'));
+      d.appendChild(fxRng('拖尾长度','fx_trail_len', cfgGet(s,'fx_trail_len',55), 'trailLen'));
+      d.appendChild(fxRng('拖尾粗细','fx_trail_width', cfgGet(s,'fx_trail_width',50), 'trailWidth'));
+      d.appendChild(fxSw('光标光晕','fx_glow', cfgBool(s,'fx_glow',true), 'glow'));
       // 点击
-      d.appendChild(fxSw('点击特效','fxClick', s.fxClick, 'click'));
-      d.appendChild(fxSel('点击样式','fxClickStyle', s.fxClickStyle, [ {v:'both',t:'波纹 + 火花'}, {v:'ring',t:'仅波纹'}, {v:'spark',t:'仅火花'} ], 'clickStyle'));
-      d.appendChild(fxRng('特效大小','fxClickSize', s.fxClickSize, 'clickSize'));
+      d.appendChild(fxSw('点击特效','fx_click', cfgBool(s,'fx_click',true), 'click'));
+      d.appendChild(fxSel('点击样式','fx_click_style', cfgGet(s,'fx_click_style','both'), [ {v:'both',t:'波纹 + 火花'}, {v:'ring',t:'仅波纹'}, {v:'spark',t:'仅火花'} ], 'clickStyle'));
+      d.appendChild(fxRng('特效大小','fx_click_size', cfgGet(s,'fx_click_size',50), 'clickSize'));
       // 抖动
-      d.appendChild(fxSw('按钮抖动','fxShake', s.fxShake, 'shake'));
-      d.appendChild(fxRng('抖动强度','fxShakePower', s.fxShakePower, 'shakePower'));
+      d.appendChild(fxSw('按钮抖动','fx_shake', cfgBool(s,'fx_shake',true), 'shake'));
+      d.appendChild(fxRng('抖动强度','fx_shake_power', cfgGet(s,'fx_shake_power',50), 'shakePower'));
       // 颜色
-      d.appendChild(fxColorRow(s.fxColor, s.fxColor === 'auto' || s.fxColor === undefined));
+      var col = cfgGet(s, 'fx_color', 'auto');
+      d.appendChild(fxColorRow(col, col === 'auto'));
       g.appendChild(d);
-      mt.onclick = function(){ var v=!mt.classList.contains('on'); mt.classList.toggle('on',v); d.classList.toggle('hidden',!v); NE.setSetting('uiEffects', v?'true':'false'); fxApply({ enabled: v }); };
+      mt.onclick = function(){ var v=!mt.classList.contains('on'); mt.classList.toggle('on',v); d.classList.toggle('hidden',!v); NE.setSetting('ui_effects', v?'true':'false'); fxApply({ enabled: v }); };
       return g;
     }
 
