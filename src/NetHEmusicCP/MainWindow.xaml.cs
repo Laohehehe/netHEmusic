@@ -117,12 +117,32 @@ public sealed partial class MainWindow : Window
             try { await core.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}"); } catch (Exception ce) { LogManager.Debug("禁用缓存失败: " + ce.Message); }
             SetupHotReload(webFolder);
             core.WebMessageReceived += OnWebMessage;
-            core.NavigationCompleted += (s, e) => { PushTheme(); PostToWeb(new { type = "nav", view = "home" }); };
+            core.NavigationCompleted += (s, e) => { PushTheme(); PostToWeb(new { type = "nav", view = "home" }); CheckVersionNotice(); };
             WebView.Source = new Uri("https://appassets/index.html");
             LogManager.Log("WebView2 已加载: " + webFolder);
         }
         catch (Exception e) { LogManager.Error("WebView2 初始化失败: " + e.Message); }
     }
+    /// <summary>config 里的版本比当前版本旧 → 通知前端弹更新公告（关闭后再回写版本号）。</summary>
+    private void CheckVersionNotice()
+    {
+        try
+        {
+            var seen = (AppServices.Config.VersionSeen ?? "").Trim();
+            if (!IsVersionOlder(seen, AppServices.Version)) { LogManager.Debug("版本已是最新记录: " + seen); return; }
+            LogManager.Log("检测到版本变化: config=" + (string.IsNullOrEmpty(seen) ? "(空)" : seen) + " → 当前 " + AppServices.Version + "，弹出更新公告");
+            PostToWeb(new { type = "update_notice", from = string.IsNullOrEmpty(seen) ? "" : seen, to = AppServices.Version });
+        }
+        catch (Exception e) { LogManager.Debug("版本检测失败: " + e.Message); }
+    }
+
+    private static bool IsVersionOlder(string? seen, string current)
+    {
+        static Version Parse(string s)
+            => Version.TryParse((s ?? "").Trim(), out var v) ? v : new Version(0, 0, 0, 0);
+        return Parse(seen) < Parse(current);
+    }
+
     private string FindWebFolder()
     {
         // 开发期优先使用“源码 Web 目录”：改 HTML/CSS/JS 后无需重新构建，热重载即可看到效果
@@ -198,6 +218,7 @@ public sealed partial class MainWindow : Window
                 case "playnext": { if (doc.TryGetProperty("song", out var s)) { var song = SongFromWeb(s); if (song != null) { var q = AppServices.Player.Queue.ToList(); int idx = q.FindIndex(x => x.Id == song.Id); if (idx < 0) { var nxt = AppServices.Player.Index + 1; q.Insert(Math.Min(nxt, q.Count), song); _ = AppServices.Player.LoadQueueAsync(q, AppServices.Player.Index); } } } break; }
                 case "open_settings": AppServices.RunOnUi(() => { try { new SettingsWindow().Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }); break;
                 case "get_settings": HandleGetSettings(); break;
+                case "notice_seen": AppServices.Config.VersionSeen = AppServices.Version; LogManager.Log("[Version] version 已更新为 " + AppServices.Version); break;
                 case "set_setting": HandleSetSetting(doc); break;
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;
             }

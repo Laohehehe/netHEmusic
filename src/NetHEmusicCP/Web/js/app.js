@@ -434,19 +434,37 @@
   });
 
 
-  // ---------- 公告弹窗 ----------
+  // ---------- 更新公告弹窗（由 C# 比对 config [Version] 后触发）----------
   (function notice() {
     var mask = document.getElementById('notice'); if (!mask) return;
     var mute = document.getElementById('notice-mute');
-    try { if (sessionStorage.getItem('nethem_notice_muted') === '1') return; } catch (e) { }
+    var verEl = document.getElementById('notice-ver');
+    var leadEl = document.getElementById('notice-lead');
+    var pending = null;   // 待回写的版本号（看完公告才写入 config）
+    var closed = false;
+
     function close() {
+      if (closed) return;
+      closed = true;
       if (mute && mute.checked) { try { sessionStorage.setItem('nethem_notice_muted', '1'); } catch (e) { } }
       mask.classList.remove('show'); mask.setAttribute('aria-hidden', 'true');
+      if (pending) { NE.post({ type: 'notice_seen', version: pending }); pending = null; }
     }
     mask.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = close; });
     mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && mask.classList.contains('show')) close(); });
-    setTimeout(function () { mask.classList.add('show'); mask.setAttribute('aria-hidden', 'false'); }, 700);
+
+    // C# 检测到 config 里的版本比当前版本旧 → 弹更新公告
+    NE.on('update_notice', function (d) {
+      if (!d) return;
+      var from = d.from ? d.from : '首次运行';
+      pending = d.to;
+      closed = false;
+      if (leadEl) leadEl.innerHTML = '软件已更新到 <b>netHEmusic ' + esc(d.to) + '</b>。<span class="modal-dim">（本次更新说明留空，下次发版在 index.html 的公告正文注释里填写）</span>';
+      if (verEl) verEl.textContent = '版本：' + from + ' → ' + d.to;
+      mask.classList.add('show');
+      mask.setAttribute('aria-hidden', 'false');
+    });
   })();
 
   window.addEventListener('load', ()=>{ NE.post({type:'discover'}); go('home'); });
