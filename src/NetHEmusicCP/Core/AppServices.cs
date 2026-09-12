@@ -21,7 +21,7 @@ namespace netHEmusic.Core;
 /// </summary>
 public static class AppServices
 {
-    public const string Version = "26.9.12.48";   // 版本号 = 26.M.D.X，X 为当日修改次数（每次改动 +1）
+    public const string Version = "26.9.12.49";   // 版本号 = 26.M.D.X，X 为当日修改次数（每次改动 +1）
     public static AppConfig Config { get; private set; } = null!;
     public static NetEaseClient Netease { get; private set; } = null!;
     public static DownloadManager Download { get; private set; } = null!;

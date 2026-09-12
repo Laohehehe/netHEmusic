@@ -32,7 +32,7 @@ public class DownloadItem
 /// </summary>
 public class DownloadManager
 {
-    public const string Version = "26.9.12.48";
+    public const string Version = "26.9.12.49";
     private readonly NetEaseClient _client;
     private readonly AppConfig _config;
     private readonly HttpClient _http = new();

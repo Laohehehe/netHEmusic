@@ -22,11 +22,11 @@
     <PublishSingleFile>false</PublishSingleFile>
     <ApplicationIcon>..\..\resources\icon.ico</ApplicationIcon>
 
-    <Version>26.9.12.48</Version>
-    <AssemblyVersion>26.9.12.48</AssemblyVersion>
-    <FileVersion>26.9.12.48</FileVersion>
+    <Version>26.9.12.49</Version>
+    <AssemblyVersion>26.9.12.49</AssemblyVersion>
+    <FileVersion>26.9.12.49</FileVersion>
     <Product>netHEmusic 网易云音乐下载器</Product>
-    <Description>netHEmusic - 网易云音乐第三方 WinUI3 + Fluent 下载/播放器（26.9.12.48）</Description>
+    <Description>netHEmusic - 网易云音乐第三方 WinUI3 + Fluent 下载/播放器（26.9.12.49）</Description>
     <Company>netHEmusic</Company>
     <Copyright>Copyright (C) 2026 netHEmusic</Copyright>
     <Authors>laohehehe</Authors>

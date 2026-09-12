@@ -9,8 +9,9 @@
                 <TextBlock Text="发现新版本" FontSize="24" FontWeight="Bold" Foreground="{ThemeResource AppTextBrush}"/>
             </StackPanel>
             <TextBlock x:Name="VerText" FontSize="15" Foreground="{ThemeResource AppMutedBrush}" HorizontalAlignment="Center"/>
-            <ScrollViewer MaxHeight="220" Padding="4">
-                <TextBlock x:Name="BodyText" TextWrapping="Wrap" FontSize="13" LineHeight="24" Foreground="{ThemeResource AppTextBrush}"/>
+            <ScrollViewer MaxHeight="300" Padding="4" VerticalScrollBarVisibility="Auto">
+                <!-- 更新日志按 Markdown 逐行渲染成 TextBlock（标题大小分级 / 列表加点 / 去掉 ** 等符号） -->
+                <StackPanel x:Name="BodyPanel" Spacing="2"/>
             </ScrollViewer>
             <TextBlock x:Name="StatusText" FontSize="13" Foreground="{ThemeResource AppAccentBrush}" HorizontalAlignment="Center"/>
             <ProgressBar x:Name="UpdateProgress" Height="8" Minimum="0" Maximum="100" Value="0" CornerRadius="4"/>
