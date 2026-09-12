@@ -55,6 +55,7 @@
 
   function frame() {
     var t = now(), TMS = trailMs(), WS = widthScale();
+    var t = now(), TMS = trailMs(), WS = widthScale();
     var RING_MS = 420 + num(cfg.clickSize, 50) * 3, SPARK_MS = 660;
     while (trail.length && t - trail[0].t > TMS) trail.shift();
     if (trail.length > 40) trail.splice(0, trail.length - 40);

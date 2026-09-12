@@ -103,12 +103,21 @@
     if (!m) return [200, 210, 255];
     return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
   }
-  function vzFrame() {
+  var VZ_FRAME_MS = 30;               // 约 33fps，够顺滑又省一半 CPU
+  var __vzLast = 0;
+  function vzFrame(ts) {
+    if (!VZ.on || !npOpen) { VZ.raf = 0; return; }     // 歌词页关着 → 完全停掉，不再排下一帧
     VZ.raf = requestAnimationFrame(vzFrame);
+    if (ts && ts - __vzLast < VZ_FRAME_MS) return;
+    __vzLast = ts || 0;
     var c = VZ.c2d; if (!c) return;
+    if (!c.offsetParent && c.style.display !== 'block') { VZ.raf = 0; return; }
     var fft = (window.AUFft && VZ.on && npOpen) ? window.AUFft() : null;
     c.clearRect(0, 0, VZ.w, VZ.h);
     if (!fft) return;
+    var mx0 = 0; for (var z = 0; z < fft.length; z++) { if (fft[z] > mx0) mx0 = fft[z]; }
+    if (mx0 < 3) { VZ._silent = true; return; }     // 静音：清屏后直接返回，不画
+    VZ._silent = false;
     var k = (VZ.strength / 100) * (VZ.sens / 100) * 2.2;
     var n = fft.length;
     if (VZ.style === 'ring') {
@@ -154,19 +163,19 @@
       c.stroke();
       c.shadowBlur = 0;
     } else {
-      // 柱状：底部一排
-      var bars = 48, gap = VZ.dpr * 4;
+      // 柱状：底部一排（渐变整帧只建一次，之前每根柱子建一次 gradient 非常费）
+      var bars = 40, gap = VZ.dpr * 4;
       var bw = (VZ.w - gap * (bars + 1)) / bars;
       var base = VZ.h - VZ.dpr * 6;
+      var gr = c.createLinearGradient(0, base - VZ.h * 0.34, 0, base);
+      gr.addColorStop(0, vzAccent(0.55));
+      gr.addColorStop(1, vzAccent(0.08));
+      c.fillStyle = gr;
       for (var b = 0; b < bars; b++) {
         var idx = Math.floor(Math.pow(b / bars, 1.5) * (n - 1));
         var val = fft[idx] / 255 * k;
         var bh = Math.max(2 * VZ.dpr, val * VZ.h * 0.34);
         var x2 = gap + b * (bw + gap);
-        var gr = c.createLinearGradient(0, base - bh, 0, base);
-        gr.addColorStop(0, vzAccent(0.55));
-        gr.addColorStop(1, vzAccent(0.08));
-        c.fillStyle = gr;
         var rr = Math.min(bw / 2, 4 * VZ.dpr);
         c.beginPath();
         c.moveTo(x2, base);
@@ -187,7 +196,7 @@
     VZ.sens = (lyStyles.vzSens == null) ? 100 : lyStyles.vzSens;
     VZ.on = on;
     var c = document.getElementById('np-bgfx');
-    if (c) c.style.display = on ? 'block' : 'none';
+    if (c) c.style.display = (on && npOpen) ? 'block' : 'none';
     if (on) { try { if (!VZ.c2d) vzSetup(); vzResize(); if (!VZ.raf) vzFrame(); } catch (e8) { try { NE.post({ type: 'log', msg: '[vz] start ERROR ' + e8.message }); } catch (e7) { } } }
     else if (VZ.raf) { cancelAnimationFrame(VZ.raf); VZ.raf = 0; if (VZ.c2d) VZ.c2d.clearRect(0, 0, VZ.w, VZ.h); }
   }
@@ -594,7 +603,12 @@
     var cover = npEl('np-cover'), bg = npEl('np-bg');
     var wrap = document.querySelector('#np .np-cover-wrap');
     var pic = ns.Pic ? ns.Pic.replace(/\^\d+\^/, '') : '';
-    if (pic) { cover.src = pic; bg.style.backgroundImage = 'url("' + pic + '")'; }
+    if (pic) {
+      cover.src = pic;
+      // 背景用 240px 缩略图放大 —— 比整屏 72px 高斯模糊便宜一个数量级
+      var small = pic + (pic.indexOf('?') >= 0 ? '&' : '?') + 'param=240y240';
+      bg.style.backgroundImage = 'url("' + small + '")';
+    }
     else { cover.removeAttribute('src'); bg.style.backgroundImage = 'none'; }
     // 有封面时隐藏占位音符（原来用 img ~ i 兄弟选择器，但 <i> 在 <img> 前面，根本没生效）
     if (wrap) wrap.classList.toggle('has-cover', !!pic);
@@ -695,6 +709,7 @@
   }
 
   var lyPrevIndex = 0;
+  var npGeom = { h: [], fs: 0 };      // 行高/字号缓存（只在重新渲染歌词或字号变化时重算）
   // 关键点：行与行之间的“滚动”交给容器的 translateY（可过渡），
   // 每行自己的 top 用【未缩放】的自然行高算一次即可（静态），
   // 缩放/模糊/透明/旋转/弧线位移全部放在 transform 里 —— 这样换行是连续滑动而不是瞬移。
@@ -705,10 +720,17 @@
     var cur = (npIndex < 0) ? 0 : Math.min(npIndex, nodes.length - 1);
     var curved = lyStyles.layout === 'curved';
     var curvature = Math.max(1, lyStyles.curve) * 0.9;
-    var fs = parseFloat(getComputedStyle(nodes[cur]).fontSize) || 18;
+    var fs = npGeom.fs || 22;
     var space = fs * 1.25;
     var h = [], s = [], b = [], o = [], base = [];
-    for (var i = 0; i < nodes.length; i++) h[i] = nodes[i].offsetHeight || fs * 1.5;
+    var needMeasure = npGeom.h.length !== nodes.length || npGeom.fs === 0;
+    if (needMeasure) {
+      fs = parseFloat(getComputedStyle(nodes[cur]).fontSize) || 22;
+      npGeom.fs = fs; space = fs * 1.25;
+      npGeom.h = [];
+      for (var i0 = 0; i0 < nodes.length; i0++) npGeom.h[i0] = nodes[i0].offsetHeight || fs * 1.5;
+    }
+    for (var i = 0; i < nodes.length; i++) h[i] = npGeom.h[i];
     // 静态基准位置（从未缩放行高累加）
     base[0] = 0;
     for (var i = 1; i < nodes.length; i++) base[i] = base[i - 1] + h[i - 1] + space;
@@ -722,6 +744,10 @@
     var off3, extraTop, left, deg, rel;
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i]; var off2 = i - cur;
+      // 只保留当前行附近的行参与绘制（73 行全画会明显吃 CPU/GPU）
+      var near = Math.abs(off2) <= 10;
+      if (!near) { n.style.display = 'none'; continue; }
+      if (n.style.display === 'none') n.style.display = '';
       n.style.top = base[i].toFixed(1) + 'px';
       extraTop = 0; left = 0; deg = 0;
       if (curved) {
@@ -732,7 +758,8 @@
         o[i] = Math.min(o[i], Math.max(1 - Math.pow(rel, 1.15) * 1.2, 0));
       }
       n.style.transform = 'translateY(' + extraTop.toFixed(1) + 'px) translateX(' + left.toFixed(1) + 'px) scale(' + s[i].toFixed(3) + ')' + (curved ? (' rotate(' + deg.toFixed(2) + 'deg)') : '');
-      n.style.filter = b[i] > 0.05 ? 'blur(' + b[i].toFixed(2) + 'px)' : '';
+      // 只给当前行附近的行加 filter（远处本来就透明看不见，还给 70 个元素加模糊层会很贵）
+      n.style.filter = (b[i] > 0.05 && Math.abs(off2) <= 4) ? 'blur(' + b[i].toFixed(2) + 'px)' : '';
       n.style.opacity = o[i].toFixed(3);
       n.style.zIndex = String(900 - Math.abs(off2));
       // 错落：离当前行越远，动得越晚一点（换行时形成波浪感）
@@ -747,6 +774,7 @@
 
   function npRenderLyric(lines) {
     var box = npEl('np-lyric-inner'); if (!box) return;
+    npGeom.h = []; npGeom.fs = 0;      // 重建歌词 → 行高缓存作废
     box.innerHTML = '';
     if (!lines.length) { box.innerHTML = '<div class="np-line on" style="top:45%">暂无歌词</div>'; return; }
     var chars = !!lyStyles.charAnim;
