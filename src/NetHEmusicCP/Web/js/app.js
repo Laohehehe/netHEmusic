@@ -61,9 +61,13 @@
     p.push(code);
     return p.join('+');
   }
+  var HK_OFF = 'none';                     // 存进 config 的“已关闭”标记
   function hotkeysFromSettings(s) {
     hotkeys = {};
-    for (var k in HK_DEFAULTS) hotkeys[k] = String(cfgGet(s, k, HK_DEFAULTS[k]) || HK_DEFAULTS[k]);
+    for (var k in HK_DEFAULTS) {
+      var v = String(cfgGet(s, k, HK_DEFAULTS[k]) || HK_DEFAULTS[k]);
+      hotkeys[k] = (v === HK_OFF) ? '' : v;   // 空串 = 不绑定
+    }
   }
   function isTyping(el) {
     return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
@@ -531,6 +535,7 @@
     if (hkRecording) {
       e.preventDefault(); e.stopPropagation();
       if (e.key === 'Escape') { stopRecord(false); return; }
+      if (e.key === 'Backspace') { stopRecord(true, HK_OFF); return; }   // Backspace = 关闭该快捷键
       var name = evKeyName(e);
       if (!name || name === 'Ctrl' || name === 'Alt' || name === 'Shift') return;   // 只按了修饰键，等真正的键
       stopRecord(true, name);
@@ -548,11 +553,15 @@
     var rec = hkRecording; hkRecording = null;
     rec.btn.classList.remove('rec');
     if (commit && name) {
-      hotkeys[rec.key] = name;
-      NE.setSetting(rec.key, name);
-      rec.btn.textContent = name;
+      var off = (name === HK_OFF);
+      hotkeys[rec.key] = off ? '' : name;
+      NE.setSetting(rec.key, off ? HK_OFF : name);
+      rec.btn.textContent = off ? '已关闭' : name;
+      rec.btn.classList.toggle('off', off);
     } else {
-      rec.btn.textContent = hotkeys[rec.key] || HK_DEFAULTS[rec.key];
+      var cur = hotkeys[rec.key];
+      rec.btn.textContent = cur ? cur : '已关闭';
+      rec.btn.classList.toggle('off', !cur);
     }
   }
 
@@ -995,7 +1004,7 @@
       Object.keys(HK_LABELS).forEach(function (key) {
         var r = el('div','set-row');
         r.appendChild(el('label','', HK_LABELS[key]));
-        var b = el('button','hk-btn', hotkeys[key] || HK_DEFAULTS[key]);
+        var b = el('button','hk-btn' + (hotkeys[key] ? '' : ' off'), hotkeys[key] || '已关闭');
         b.onclick = function (e) {
           e.stopPropagation();
           if (hkRecording) stopRecord(false);
@@ -1008,11 +1017,12 @@
           hotkeys[key] = HK_DEFAULTS[key];
           NE.setSetting(key, HK_DEFAULTS[key]);
           b.textContent = HK_DEFAULTS[key];
+          b.classList.remove('off');
         };
         r.appendChild(b); r.appendChild(rst);
         g.appendChild(r);
       });
-      g.appendChild(el('p','muted','点按键框后按下想要的组合键即可（Esc 取消录制）；播放/暂停默认是空格。'));
+      g.appendChild(el('p','muted','点按键框后按下组合键即可重新绑定；录制时按 Backspace = 关闭这一项，Esc = 取消录制，右侧「重置」恢复默认。'));
       return g;
     }
     html.appendChild(hotkeyGroup());
@@ -1168,9 +1178,10 @@
       d.innerHTML = '<span class="ctx-ic">' + SVG[it.ic] + '</span><span>' + it.t + '</span>';
       d.onclick = function (e) {
         e.stopPropagation();
+        var idx = plCtxIndex;              // 先取下标！hideQueueMenu 会把 plCtxIndex 置 -1
+        if (idx < 0 || !queue[idx]) { hideQueueMenu(); return; }
+        var ns = queue[idx];
         hideQueueMenu();
-        if (plCtxIndex < 0 || !queue[plCtxIndex]) return;
-        var ns = queue[plCtxIndex], idx = plCtxIndex;
         if (it.a === 'play') NE.post({ type: 'play_index', index: idx });
         else if (it.a === 'next') { NE.post({ type: 'queue_next', index: idx }); toast('已把《' + ns.Title + '》设为下一首播放'); }
         else if (it.a === 'remove') { NE.post({ type: 'queue_remove', index: idx }); toast('已从播放列表移除'); }
@@ -1318,7 +1329,6 @@
     if (dockBar) dockBar.onclick = function (e) { npApplySeek(e.clientX, true); };
   })();
 
-  // TEMP-SEEK-TEST：自动放歌 → 打开歌词页 → 合成“点击进度条 50%”
   NE.on('queue', function (d) {
     queue = (d.songs || []).map(normSong);
     playingIndex = (typeof d.index === 'number') ? d.index : -1;
