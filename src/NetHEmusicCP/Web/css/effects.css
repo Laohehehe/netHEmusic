@@ -337,7 +337,7 @@ html.no-fx .fx-shake{animation:none;}
 }
 .np-line{
   position:absolute;left:0;right:0;top:0;text-align:center;
-  padding:2px 0;font-size:22px;line-height:1.25;font-weight:600;
+  padding:2px 0;font-size:var(--ly-font-size,22px);line-height:1.25;font-weight:600;
   color:rgba(255,255,255,.42);
   transform-origin:left center;
   will-change:transform,filter,opacity;
@@ -511,3 +511,20 @@ html.no-fx .fx-shake{animation:none;}
   transform:translateY(6px) scale(.97);
 }
 .cust-select.drop-up.open .cs-list{transform:none;}
+/* ================= 歌词副行：罗马音 / 翻译 ================= */
+.np-line .np-orig{display:block;}
+.np-line .np-sub{
+  display:block;
+  margin-top:.16em;
+  line-height:1.28;
+  font-weight:500;
+  letter-spacing:.02em;
+  opacity:.78;
+}
+.np-line .np-ro{font-size:.6em;opacity:.62;letter-spacing:.04em;}
+.np-line .np-tr{font-size:.64em;opacity:.85;}
+.np-line.on .np-tr{opacity:.96;}
+.np-line.on .np-ro{opacity:.8;}
+/* 开关：不显示时直接不占位 */
+.np:not(.ly-tr) .np-tr{display:none;}
+.np:not(.ly-ro) .np-ro{display:none;}
