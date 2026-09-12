@@ -117,3 +117,40 @@ html.no-fx .fx-shake{animation:none;}
 .modal-foot{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 18px 16px;}
 .modal-check{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:rgba(var(--md-accent-color-grey-base-rgb),.6);}
 .modal-check input{accent-color:var(--md-accent-color);}.modal-dim{font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.45);}
+/* ================= Dock（播放条）图标与动画 ================= */
+/* 图标字体：dock 里的 <i> 之前漏了 .ic，才会显示成方块 */
+.ic-btn i, .ic-btn .ic{font-family:'Segoe Fluent Icons','Segoe UI Symbol';font-style:normal;line-height:1;}
+
+/* 整条 dock 入场 */
+@keyframes dock-in{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:none;}}
+#player{animation:dock-in .42s cubic-bezier(.2,.8,.3,1) both;}
+
+/* 按钮：悬停放大发光（底色保持无，风格与列表图标一致） */
+.ic-btn{background:transparent !important;border-radius:50% !important;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;}
+.ic-btn:hover{background:transparent !important;transform:scale(1.16);filter:drop-shadow(0 0 8px rgba(var(--md-accent-color-rgb),.5));}
+.ic-btn:active{transform:scale(.92);}
+.ic-btn.big{width:46px;height:46px;border-radius:50% !important;background:rgba(var(--md-accent-color-rgb),.18) !important;font-size:24px;}
+.ic-btn.big:hover{background:var(--md-accent-color) !important;color:#fff;}
+
+/* 播放/暂停切换时的“弹一下” */
+@keyframes fx-pop{0%{transform:scale(1);}35%{transform:scale(1.28) rotate(-6deg);}70%{transform:scale(.94) rotate(3deg);}100%{transform:scale(1) rotate(0);}}
+.fx-pop{animation:fx-pop .38s cubic-bezier(.2,.9,.3,1.2);}
+
+/* 播放中：主按钮呼吸 + 封面轻微起伏 + 进度条发光 */
+@keyframes btn-breathe{0%,100%{box-shadow:0 0 0 0 rgba(var(--md-accent-color-rgb),.35);}50%{box-shadow:0 0 0 8px rgba(var(--md-accent-color-rgb),0);}}
+#player.playing #pb-play{animation:btn-breathe 1.9s ease-out infinite;}
+@keyframes cover-float{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-2px) scale(1.035);}}
+#player.playing .pl-cover{animation:cover-float 2.6s ease-in-out infinite;}
+#player.playing #pl-fill{box-shadow:0 0 10px rgba(var(--md-accent-color-rgb),.75);}
+#pl-fill{transition:width .18s linear;}
+
+/* 封面占位：没有封面时显示音符，而不是破图 */
+.pl-cover-wrap{position:relative;width:52px;height:52px;flex:0 0 auto;border-radius:8px;background:rgba(var(--md-accent-color-grey-base-rgb),.09);}
+.pl-cover-wrap .pl-cover-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;color:rgba(var(--md-accent-color-grey-base-rgb),.38);}
+.pl-cover-wrap.has-cover .pl-cover-ph{display:none;}
+.pl-cover-wrap .pl-cover{width:100%;height:100%;margin:0;}
+.pl-cover-wrap:not(.has-cover) .pl-cover{opacity:0;}
+
+/* ================= 选项卡界面切换动画 ================= */
+@keyframes view-in{from{opacity:0;transform:translateY(14px) scale(.992);}to{opacity:1;transform:none;}}
+.page.view-in, .big-load.view-in{animation:view-in .3s cubic-bezier(.2,.8,.3,1) both;}

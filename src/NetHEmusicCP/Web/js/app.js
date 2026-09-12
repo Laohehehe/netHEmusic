@@ -12,7 +12,18 @@
   function loading() { view.innerHTML = '<div class="big-load">正在加载…</div>'; }
 
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
-  function setPlayer(ns) { if(!ns) return; $('#pl-title').textContent = ns.Title; $('#pl-artist').textContent = ns.Artist; const c=$('#pl-cover'); if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); } else c.removeAttribute('src'); $('#pb-play').innerHTML = '<i>&#xE769;</i>'; }
+  function pop(el) { if(!el) return; el.classList.remove('fx-pop'); void el.offsetWidth; el.classList.add('fx-pop'); }
+  function setPlaying(on) { var p = $('#player'); if(p) p.classList.toggle('playing', !!on); var pb = $('#pb-play'); if(pb) pb.innerHTML = '<i class="ic">' + (on ? '&#xE769;' : '&#xE768;') + '</i>'; }
+  function setPlayer(ns) {
+    if(!ns) return;
+    $('#pl-title').textContent = ns.Title;
+    $('#pl-artist').textContent = ns.Artist;
+    var c = $('#pl-cover'), wrap = $('#pl-cover-wrap');
+    if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); if(wrap) wrap.classList.add('has-cover'); }
+    else { c.removeAttribute('src'); if(wrap) wrap.classList.remove('has-cover'); }
+    setPlaying(true);
+    pop($('#pb-play'));
+  }
 
   // 图标全部用圆角几何（rx / 圆弧），配合 css 里的无底色大图标
   var SVG = {
@@ -55,18 +66,25 @@
   }
   function renderSongs(arr, container) { currentList = arr.map(normSong); container.innerHTML=''; container.classList.add('song-list'); currentList.forEach((ns,i)=>container.appendChild(songRow(ns, i))); return currentList; }
 
+  // 选项卡切换动画：新内容渲染完后播一次入场（淡入 + 轻微上移）
+  function animateView() {
+    var el = view.firstElementChild; if (!el) return;
+    el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
+  }
   async function go(viewName, data) {
     try {
-      if (viewName==='home') return goHome();
-      if (viewName==='recommend') return goRecommend();
-      if (viewName==='toplist') return goToplist();
-      if (viewName==='playlist') return data && data.id ? goPlaylist(data.id, data.name) : goPlaylists();
-      if (viewName==='search') return goSearch(data);
-      if (viewName==='lyric') return goLyric();
-      if (viewName==='account') return goAccount();
-      if (viewName==='settings') return goSettings();
-      if (viewName==='liked') return goLiked();
-    } catch(e) { view.innerHTML = '<div class="big-load">加载失败: '+esc(e.message)+'</div>'; }
+      var task = null;
+      if (viewName==='home') task = goHome();
+      else if (viewName==='recommend') task = goRecommend();
+      else if (viewName==='toplist') task = goToplist();
+      else if (viewName==='playlist') task = (data && data.id) ? goPlaylist(data.id, data.name) : goPlaylists();
+      else if (viewName==='search') task = goSearch(data);
+      else if (viewName==='lyric') task = goLyric();
+      else if (viewName==='account') task = goAccount();
+      else if (viewName==='settings') task = goSettings();
+      else if (viewName==='liked') task = goLiked();
+      if (task) { await task; animateView(); }
+    } catch(e) { view.innerHTML = '<div class="big-load">加载失败: '+esc(e.message)+'</div>'; animateView(); }
   }
 
   async function goHome() {
@@ -383,7 +401,7 @@
   NE.on('toast', function(d){ toast(d.text||''); });
   NE.on('nav', function(d){ if(d.view) go(d.view, d); });
 
-  $('#pb-play').onclick = () => NE.post({type:'toggle'});
+  $('#pb-play').onclick = () => { NE.post({type:'toggle'}); setPlaying(!$('#player').classList.contains('playing')); pop($('#pb-play')); };
   $('#pb-prev').onclick = () => NE.post({type:'prev'});
   $('#pb-next').onclick = () => NE.post({type:'next'});
   $('#pl-dl').onclick = () => { if(queue[playingIndex]) NE.post({type:'download', song:queue[playingIndex]}); };

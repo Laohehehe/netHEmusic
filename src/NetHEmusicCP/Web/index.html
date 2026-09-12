@@ -32,16 +32,19 @@
     <!-- 悬浮 dock：位于 #main 内部，随内容区宽度自适应 -->
     <footer id="player">
       <div class="pl-left">
-        <img id="pl-cover" class="pl-cover" src="" title="点击查看歌词">
+        <div class="pl-cover-wrap" id="pl-cover-wrap">
+          <i class="ic pl-cover-ph">&#xE8D6;</i>
+          <img id="pl-cover" class="pl-cover" src="" title="点击查看歌词">
+        </div>
         <div class="pl-meta"><div id="pl-title">未在播放</div><div id="pl-artist">—</div></div>
       </div>
       <div class="pl-center">
         <div class="pl-btns">
-          <button id="pb-shuffle" title="随机" class="ic-btn"><i>&#xE8B0;</i></button>
-          <button id="pb-prev" title="上一首" class="ic-btn"><i>&#xE892;</i></button>
-          <button id="pb-play" title="播放/暂停" class="ic-btn big"><i>&#xE768;</i></button>
-          <button id="pb-next" title="下一首" class="ic-btn"><i>&#xE893;</i></button>
-          <button id="pb-mode" title="循环" class="ic-btn"><i>&#xE8EE;</i></button>
+          <button id="pb-shuffle" title="随机" class="ic-btn"><i class="ic">&#xE8B0;</i></button>
+          <button id="pb-prev" title="上一首" class="ic-btn"><i class="ic">&#xE892;</i></button>
+          <button id="pb-play" title="播放/暂停" class="ic-btn big"><i class="ic">&#xE768;</i></button>
+          <button id="pb-next" title="下一首" class="ic-btn"><i class="ic">&#xE893;</i></button>
+          <button id="pb-mode" title="循环" class="ic-btn"><i class="ic">&#xE8EE;</i></button>
         </div>
         <div class="pl-prog">
           <span id="pl-cur">00:00</span>
@@ -52,8 +55,8 @@
       <div class="pl-right">
         <span class="pl-vol"><i class="ic">&#xE767;</i></span>
         <input id="pl-volume" type="range" min="0" max="100" value="80">
-        <button id="pl-like" title="收藏" class="ic-btn"><i>&#xE734;</i></button>
-        <button id="pl-dl" title="下载" class="ic-btn"><i>&#xE896;</i></button>
+        <button id="pl-like" title="收藏" class="ic-btn"><i class="ic">&#xE734;</i></button>
+        <button id="pl-dl" title="下载" class="ic-btn"><i class="ic">&#xE896;</i></button>
       </div>
     </footer>
   </div>

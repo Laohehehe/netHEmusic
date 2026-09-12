@@ -4,12 +4,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>netHEmusic_Setup_26.9.12.20</AssemblyName>
+    <AssemblyName>netHEmusic_Setup_26.9.12.21</AssemblyName>
     <ApplicationIcon>..\..\resources\icon.ico</ApplicationIcon>
-    <Version>26.9.12.20</Version>
+    <Version>26.9.12.21</Version>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="..\..\build\netHEmusic-26.9.12.20.zip" LogicalName="app.zip" />
+    <EmbeddedResource Include="..\..\build\netHEmusic-26.9.12.21.zip" LogicalName="app.zip" />
     <EmbeddedResource Include="..\..\build\LaoheTeam.cer" LogicalName="LaoheTeam.cer" />
   </ItemGroup>
 </Project>
