@@ -5,13 +5,14 @@
 (function () {
   var orig = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
   if (!orig) return;
-  var MIN = 1000 / 62, last = 0;
+  var MIN = 1000 / 62;
   window.requestAnimationFrame = function (cb) {
+    var last = 0;                       // 每条调用链各自计时，互不抢额度
     function step(ts) {
       var now = performance.now();
       if (now - last < MIN) { orig(step); return; }
       last = now;
-      try { cb(ts); } catch (e) { }
+      cb(ts);
     }
     return orig(step);
   };
