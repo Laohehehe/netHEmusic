@@ -266,11 +266,32 @@ html.no-fx .fx-shake{animation:none;}
 .pl-ctx .ctx-item:hover .ctx-ic{opacity:1;}
 /* ================= 全窗口歌词页（Now Playing） ================= */
 .np{
-  position:fixed;inset:0;z-index:4000;display:none;overflow:hidden;
+  position:fixed;inset:0;z-index:4000;overflow:hidden;
   background:var(--md-accent-color-bg-darken);
-  opacity:0;transition:opacity .3s ease;
+  opacity:0;visibility:hidden;pointer-events:none;transform:scale(1.03);
+  transition:opacity .3s ease, transform .42s cubic-bezier(.2,.8,.3,1), visibility 0s linear .42s;
 }
-.np.show{display:block;opacity:1;}
+.np.show{
+  opacity:1;visibility:visible;pointer-events:auto;transform:none;
+  transition:opacity .3s ease, transform .46s cubic-bezier(.2,.8,.3,1), visibility 0s;
+}
+/* 入场：内容分层上浮 + 背景缓慢推近 */
+.np-wrap{
+  opacity:0;transform:translateY(20px);
+  transition:opacity .34s ease .05s, transform .5s cubic-bezier(.2,.8,.3,1) .05s;
+}
+.np.show .np-wrap{opacity:1;transform:none;}
+.np-bar{
+  opacity:0;transform:translateY(14px);
+  transition:opacity .32s ease .12s, transform .46s cubic-bezier(.2,.8,.3,1) .12s;
+}
+.np.show .np-bar{opacity:1;transform:none;}
+.np-bg{transform:scale(1.05);transition:transform 1.1s cubic-bezier(.2,.8,.3,1), background-image .4s ease;}
+.np.show .np-bg{transform:scale(1.18);}
+.np-cover-wrap{
+  transition:transform .5s cubic-bezier(.2,.8,.3,1), box-shadow .4s ease;
+  will-change:transform;
+}
 /* 背景：模糊放大封面 + 暗色渐层 */
 .np-bg{
   position:absolute;inset:-8%;background-size:cover;background-position:center;

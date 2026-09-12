@@ -66,7 +66,14 @@ public sealed partial class MainWindow : Window
 
         // 把播放状态推给 Web 前端播放条
         AppServices.Player.SongChanged += s => { if (s is not null) { AppServices.RunOnUi(() => PostToWeb(new { type = "playing", song = ToSongDto(s) })); if (_lyricWin is not null) _ = PushLyricToWindowAsync(); } };
-        AppServices.Player.PositionChanged += pos => AppServices.RunOnUi(() => { var c = AppServices.Player.Current; PostToWeb(new { type = "position", pos = (long)pos.TotalMilliseconds, dur = c is null ? 0 : c.Duration }); try { _lyricWin?.OnPosition(pos); } catch { } });
+        AppServices.Player.PositionChanged += pos => AppServices.RunOnUi(() =>
+        {
+            var total = AppServices.Player.Duration;
+            var c = AppServices.Player.Current;
+            var dur = total > TimeSpan.Zero ? (long)total.TotalMilliseconds : (c is null ? 0 : c.Duration);
+            PostToWeb(new { type = "position", pos = (long)pos.TotalMilliseconds, dur = dur });
+            try { _lyricWin?.OnPosition(pos); } catch { }
+        });
         // 播放队列变化：写入 config（重启后恢复）+ 通知前端刷新播放列表
         AppServices.Player.QueueChanged += (idx, count) =>
         {
@@ -249,7 +256,24 @@ public sealed partial class MainWindow : Window
 
     private Song? SongFromWeb(JsonElement s)
     {
-        try { return new Song { Id = s.TryGetProperty("Id", out var id) ? id.GetInt64() : 0, Title = s.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "", Artists = new List<Artist> { new Artist { Name = s.TryGetProperty("Artist", out var a) ? a.GetString() ?? "" : "" } }, Album = new Album { Name = s.TryGetProperty("Album", out var al) ? al.GetString() ?? "" : "", PicUrl = s.TryGetProperty("Pic", out var p) ? p.GetString() : "" }, Pic = s.TryGetProperty("Pic", out var p2) ? p2.GetString() : "" }; } catch { return null; }
+        try
+        {
+            // 时长：前端 DTO 用 PascalCase 的 Duration，旧数据可能是 duration/dt，都要认
+            long dur = 0;
+            foreach (var key in new[] { "Duration", "duration", "dt", "DurationMs" })
+                if (s.TryGetProperty(key, out var dv) && dv.ValueKind == JsonValueKind.Number) { dur = dv.GetInt64(); break; }
+            var song = new Song
+            {
+                Id = s.TryGetProperty("Id", out var id) ? id.GetInt64() : 0,
+                Title = s.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : (s.TryGetProperty("name", out var t2) ? t2.GetString() ?? "" : ""),
+                Artists = new List<Artist> { new Artist { Name = s.TryGetProperty("Artist", out var a) ? a.GetString() ?? "" : "" } },
+                Album = new Album { Name = s.TryGetProperty("Album", out var al) ? al.GetString() ?? "" : "", PicUrl = s.TryGetProperty("Pic", out var p) ? p.GetString() : "" },
+                Pic = s.TryGetProperty("Pic", out var p2) ? p2.GetString() : "",
+                DurationMs = dur
+            };
+            return song;
+        }
+        catch { return null; }
     }
 
     private void OnWebMessage(CoreWebView2 sender, CoreWebView2WebMessageReceivedEventArgs e)
