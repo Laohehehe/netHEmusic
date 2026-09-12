@@ -226,3 +226,23 @@ html.no-fx .fx-shake{animation:none;}
 .ly-btn.locked{opacity:.5;}
 .ly-btn.locked:hover{opacity:.8;transform:scale(1.06);}
 .ly-btn.locked .ly-badge{display:none;}
+/* ================= 账号页：二维码登录卡片 ================= */
+.qr-card{
+  position:relative;width:236px;height:236px;margin:14px 0 10px;border-radius:16px;
+  background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+}
+.qr-img{width:212px;height:212px;display:block;}
+.qr-mask{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.74);color:#fff;font-size:13px;letter-spacing:1px;
+}
+.qr-mask.show{display:flex;}
+.qr-status{margin-bottom:12px;font-size:13px;color:rgba(var(--md-accent-color-grey-base-rgb),.75);}
+.account-info{
+  display:flex;align-items:center;gap:14px;padding:16px;border-radius:16px;
+  background:var(--nm-fill);margin:6px 0 14px;max-width:460px;
+}
+.account-info .acc-avatar{width:64px;height:64px;border-radius:50%;object-fit:cover;background:rgba(var(--md-accent-color-grey-base-rgb),.12);}
+.acc-nick{font-size:16px;font-weight:700;color:var(--md-accent-color-secondary);}
+.acc-sub{margin-top:4px;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);}

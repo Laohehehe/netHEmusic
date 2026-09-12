@@ -113,7 +113,8 @@
     loading();
     const [ r, st ] = await Promise.all([ NE.recommend(), NE.loginStatus().catch(function(){ return {}; }) ]);
     const songs = (r.data && r.data.dailySongs) || [];
-    var nick = (st && st.profile && st.profile.nickname) ? st.profile.nickname : '朋友';
+    var prof = (st && st.data && st.data.profile) || (st && st.profile) || {};
+    var nick = prof.nickname || '朋友';
     var h = new Date().getHours();
     var tw = h < 5 ? '凌晨' : h < 9 ? '早' : h < 12 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : '晚上';
     const html = el('div','page');
@@ -202,16 +203,78 @@
     loading();
     const html = el('div','page'); html.appendChild(el('h2','page-title','账号'));
     try {
-      const st = await NE.loginStatus(); const p = st.profile || {};
-      if(p.userId){ html.appendChild(el('div','account-info','<img src="'+(p.avatarUrl||'')+'?param=100y100"><div class="acc-nick">'+esc(p.nickname||'')+'</div><div class="acc-sub">已登录 · uid='+p.userId+'</div>')); const out=el('button','action-btn','退出登录'); out.onclick=async()=>{ try{await NE.logout(); toast('已退出'); go('account');}catch(e){} }; html.appendChild(out); }
-      else {
-        html.appendChild(el('p','muted','未登录，扫码登录'));
-        const btn = el('button','action-btn','扫码登录'); const img = el('img','qr'); img.style.display='none'; img.width=200; img.height=200;
-        btn.onclick = async ()=>{ try{ const k=await NE.loginQrKey(); const key=k.unikey; const c=await NE.loginQrCreate(key); if(c.qrimg){ img.src=c.qrimg; img.style.display='block'; } toast('请用网易云音乐扫码'); for(let i=0;i<120;i++){ await new Promise(r=>setTimeout(r,3000)); const ch=await NE.loginQrCheck(key); if(ch.code===803){ if(ch.cookie) NE.post({type:'save_cookie', cookie: ch.cookie}); toast('登录成功'); go('account'); return; } } } catch(e){ toast('登录失败: '+e.message); } };
-        html.appendChild(btn); html.appendChild(img);
+      const st = await NE.loginStatus();
+      const d = (st && st.data) || st || {};
+      const p = d.profile || {};
+      if (p.userId) {
+        html.appendChild(el('div','account-info',
+          '<img class="acc-avatar" src="' + (p.avatarUrl || '') + '?param=120y120" alt="">'
+          + '<div><div class="acc-nick">' + esc(p.nickname || '') + '</div>'
+          + '<div class="acc-sub">已登录 · uid=' + p.userId + '</div></div>'));
+        const out = el('button','action-btn','退出登录');
+        out.onclick = async () => {
+          try { await NE.logout(); } catch (e) { }
+          NE.post({ type:'save_cookie', cookie:'' });
+          toast('已退出登录'); go('account');
+        };
+        html.appendChild(out);
+      } else {
+        html.appendChild(el('p','muted','未登录 —— 用手机上的网易云音乐 App 扫描二维码登录'));
+        const card = el('div','qr-card');
+        const img = el('img','qr-img');
+        const mask = el('div','qr-mask');
+        const stat = el('div','qr-status','');
+        const btn = el('button','action-btn','获取二维码');
+        card.appendChild(img); card.appendChild(mask);
+        html.appendChild(card); html.appendChild(stat); html.appendChild(btn);
+
+        let polling = false, unikey = '';
+        function stop() { polling = false; }
+        async function poll() {
+          if (!polling) return;
+          try {
+            const ch = await NE.loginQrCheck(unikey);
+            const code = ch && ch.code;
+            if (code === 800) { stop(); stat.textContent = '二维码已过期，请点「刷新二维码」'; mask.className = 'qr-mask show'; mask.textContent = '已过期'; return; }
+            if (code === 801) stat.textContent = '等待扫码…';
+            else if (code === 802) stat.textContent = '已扫码，请在手机上确认登录';
+            else if (code === 803) {
+              stop();
+              if (ch.cookie) NE.post({ type: 'save_cookie', cookie: ch.cookie });
+              stat.textContent = '登录成功，正在加载…'; toast('登录成功');
+              setTimeout(function () { go('account'); }, 500);
+              return;
+            }
+          } catch (e) { }
+          setTimeout(poll, 2500);
+        }
+        async function start() {
+          stop();
+          img.removeAttribute('src');
+          mask.className = 'qr-mask show'; mask.textContent = '正在获取…';
+          stat.textContent = '正在获取二维码…';
+          try {
+            const k = await NE.loginQrKey();
+            unikey = (k && k.data && k.data.unikey) || (k && k.unikey) || '';
+            if (!unikey) throw new Error('未取到二维码 key');
+            const c = await NE.loginQrCreate(unikey);
+            const qrimg = (c && c.data && c.data.qrimg) || (c && c.qrimg) || '';
+            if (!qrimg) throw new Error('未取到二维码图片');
+            img.src = qrimg;
+            mask.className = 'qr-mask'; mask.textContent = '';
+            stat.textContent = '请用网易云音乐 App 扫码';
+            btn.textContent = '刷新二维码';
+            polling = true; poll();
+          } catch (e) {
+            mask.className = 'qr-mask show'; mask.textContent = '获取失败';
+            stat.textContent = '获取二维码失败：' + e.message;
+          }
+        }
+        btn.onclick = start;
+        start();
       }
-    } catch(e){ html.appendChild(el('div','big-load','获取登录状态失败')); }
-    view.innerHTML=''; view.appendChild(html);
+    } catch (e) { html.appendChild(el('div','big-load','获取登录状态失败')); }
+    view.innerHTML = ''; view.appendChild(html);
   }
 
   // ---------- 设置（内嵌主窗口的网页设置页） ----------
