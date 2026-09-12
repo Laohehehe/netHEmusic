@@ -1,4 +1,22 @@
 // app.js — YesPlayMusic-style full player
+
+// ---- 全局把 requestAnimationFrame 限到 60fps ----
+// 高刷屏（例如 180Hz）下浏览器按显示器刷新率出帧，界面里的 JS 动画没必要跑 180fps
+(function () {
+  var orig = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
+  if (!orig) return;
+  var MIN = 1000 / 62, last = 0;
+  window.requestAnimationFrame = function (cb) {
+    function step(ts) {
+      var now = performance.now();
+      if (now - last < MIN) { orig(step); return; }
+      last = now;
+      try { cb(ts); } catch (e) { }
+    }
+    return orig(step);
+  };
+})();
+
 (function () {
   const NE = window.NE; const $ = s => document.querySelector(s);
   const view = $('#view');
@@ -86,8 +104,9 @@
   }
   function vzResize() {
     var c = VZ.canvas; if (!c) return;
+    if (!c.clientWidth || !c.clientHeight) return;      // 还没显示出来就别量，避免量成 0 后画到可视区外
     var dpr = Math.min(2, window.devicePixelRatio || 1);
-    var w = c.clientWidth || window.innerWidth, h = c.clientHeight || window.innerHeight;
+    var w = c.clientWidth, h = c.clientHeight;
     c.width = Math.max(1, Math.round(w * dpr));
     c.height = Math.max(1, Math.round(h * dpr));
     VZ.w = c.width; VZ.h = c.height; VZ.dpr = dpr;
@@ -103,15 +122,16 @@
     if (!m) return [200, 210, 255];
     return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
   }
-  var VZ_FRAME_MS = 30;               // 约 33fps，够顺滑又省一半 CPU
+  var VZ_FRAME_MS = 30;               // 频谱帧率（可在设置里改，默认 33fps）
   var __vzLast = 0;
   function vzFrame(ts) {
-    if (!VZ.on || !npOpen) { VZ.raf = 0; return; }     // 歌词页关着 → 完全停掉，不再排下一帧
+    if (!VZ.on || !npOpen) { VZ.raf = 0; return; }
     VZ.raf = requestAnimationFrame(vzFrame);
     if (ts && ts - __vzLast < VZ_FRAME_MS) return;
     __vzLast = ts || 0;
     var c = VZ.c2d; if (!c) return;
-    if (!c.offsetParent && c.style.display !== 'block') { VZ.raf = 0; return; }
+    var el = VZ.canvas;
+    if (el && el.clientWidth && Math.abs(el.clientWidth * VZ.dpr - VZ.w) > 1) vzResize();   // 尺寸变了（或首次量到 0）就重算
     var fft = (window.AUFft && VZ.on && npOpen) ? window.AUFft() : null;
     c.clearRect(0, 0, VZ.w, VZ.h);
     if (!fft) return;
@@ -168,8 +188,9 @@
       var bw = (VZ.w - gap * (bars + 1)) / bars;
       var base = VZ.h - VZ.dpr * 6;
       var gr = c.createLinearGradient(0, base - VZ.h * 0.34, 0, base);
-      gr.addColorStop(0, vzAccent(0.55));
-      gr.addColorStop(1, vzAccent(0.08));
+      gr.addColorStop(0, vzAccent(0.95));
+      gr.addColorStop(0.55, vzAccent(0.62));
+      gr.addColorStop(1, vzAccent(0.22));
       c.fillStyle = gr;
       for (var b = 0; b < bars; b++) {
         var idx = Math.floor(Math.pow(b / bars, 1.5) * (n - 1));
@@ -196,7 +217,7 @@
     VZ.sens = (lyStyles.vzSens == null) ? 100 : lyStyles.vzSens;
     VZ.on = on;
     var c = document.getElementById('np-bgfx');
-    if (c) c.style.display = (on && npOpen) ? 'block' : 'none';
+    if (c) c.style.display = (on && npOpen) ? 'block' : 'none';   // 先显示，再量尺寸
     if (on) { try { if (!VZ.c2d) vzSetup(); vzResize(); if (!VZ.raf) vzFrame(); } catch (e8) { try { NE.post({ type: 'log', msg: '[vz] start ERROR ' + e8.message }); } catch (e7) { } } }
     else if (VZ.raf) { cancelAnimationFrame(VZ.raf); VZ.raf = 0; if (VZ.c2d) VZ.c2d.clearRect(0, 0, VZ.w, VZ.h); }
   }
@@ -647,6 +668,10 @@
     lyStyles.showTr = cfgBool(s, 'lyric_show_translation', true);
     lyStyles.showRo = cfgBool(s, 'lyric_show_romaji', true);
     lyStyles.fontSize = Math.max(12, Math.min(64, Number(cfgGet(s, 'lyric_font_size', 22)) || 22));
+    // 性能开关
+    lyStyles.bgBlur = cfgBool(s, 'perf_bg_blur', true);
+    lyStyles.playAnim = cfgBool(s, 'perf_play_anim', true);
+    lyStyles.vzFps = Math.max(10, Math.min(120, Number(cfgGet(s, 'perf_vz_fps', 33)) || 33));
     lyStyles.vz = cfgBool(s, 'vz_enabled', false);
     lyStyles.vzStyle = String(cfgGet(s, 'vz_style', 'bars'));
     lyStyles.vzStrength = Math.max(0, Math.min(100, Number(cfgGet(s, 'vz_strength', 60)) || 0));
@@ -666,6 +691,9 @@
     np.classList.toggle('ly-char', !!s.charAnim);
     np.classList.toggle('ly-tr', !!s.showTr);
     np.classList.toggle('ly-ro', !!s.showRo);
+    np.classList.toggle('no-bg-blur', !s.bgBlur);
+    document.documentElement.classList.toggle('no-play-anim', !s.playAnim);
+    VZ_FRAME_MS = Math.round(1000 / (s.vzFps || 33));
     np.style.setProperty('--ly-blur', (s.blurAmt / 100 * 5).toFixed(2) + 'px');
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
     np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 字号（行高与排版会跟着重算）
@@ -1370,6 +1398,13 @@
       return g;
     }
     html.appendChild(hotkeyGroup());
+    html.appendChild(group('性能', [
+      sw('歌词页背景模糊','perf_bg_blur', s.perf_bg_blur !== 'false'),
+      sw('播放态动画（呼吸/封面浮动）','perf_play_anim', s.perf_play_anim !== 'false'),
+      sel('频谱帧率','perf_vz_fps', String(s.perf_vz_fps || '33'), [
+        { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
+      ])
+    ]));
     html.appendChild(group('网络 / 代理', [ txt('代理地址','proxy', s.proxy) ]));
     html.appendChild(group('语言', [ sel('界面语言','language', s.language, ['zh_cn','en_US']) ]));
     html.appendChild(group('桌面歌词', [ sw('启用桌面歌词','desktopLyric', s.desktopLyric), sw('强制置顶 + 鼠标穿透','desktopLyricTopmost', s.desktopLyricTopmost), sw('桌面歌曲信息','desktopSongInfo', s.desktopSongInfo) ]));

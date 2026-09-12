@@ -476,7 +476,8 @@ public sealed partial class MainWindow : Window
                     || key.StartsWith("ui_", StringComparison.OrdinalIgnoreCase)
                     || key.StartsWith("lyric_", StringComparison.OrdinalIgnoreCase)
                     || key.StartsWith("hk_", StringComparison.OrdinalIgnoreCase)
-                    || key.StartsWith("vz_", StringComparison.OrdinalIgnoreCase))
+                    || key.StartsWith("vz_", StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith("perf_", StringComparison.OrdinalIgnoreCase))
                 { AppServices.Config.Set("App", key, value); LogManager.Debug("自定义设置: " + key + "=" + value); }
                 break;
             case "downloadDir": try { if (!string.IsNullOrWhiteSpace(value)) AppServices.Config.DownloadDir = value; } catch { } break;
