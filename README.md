@@ -1,4 +1,4 @@
-# netHEmusic 网易云音乐下载器（v26.9.12.22 — WinUI3 + Fluent 重写）
+# netHEmusic 网易云音乐下载器（v26.9.12.48 — WinUI3 + Fluent 重写）
 
 > 本版本为**完全重构**：将旧 Qt6 架构改为微软官方 **WinUI 3 + Fluent** 桌面应用（模块化元素架构）。
 

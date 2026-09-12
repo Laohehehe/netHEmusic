@@ -146,7 +146,7 @@ public sealed class AppConfig
         {
             ["repo"] = "Laohehehe/NET163download",
             ["mirrors"] = "gh-proxy.com;ghm.078465.xyz;ghfast.top",
-            ["current_version"] = "26.9.12.22"
+            ["current_version"] = "26.9.12.48"
         };
         d.SectionOrder.Add("Update");
         d.Data["Network"] = new(StringComparer.OrdinalIgnoreCase)
@@ -219,7 +219,7 @@ public sealed class AppConfig
 
     public int Volume { get { int.TryParse(Get("Player", "volume", "100"), out var v); return Math.Clamp(v, 0, 100); } set => Set("Player", "volume", Math.Clamp(value, 0, 100)); }
 
-    public string UpdateRepo => Get("Update", "repo", "Laohehehe/NET163download");
+    public string UpdateRepo => Get("Update", "repo", "Laohehehe/netHEmusic");
     public string[] UpdateMirrors => (Get("Update", "mirrors", "gh-proxy.com;ghm.078465.xyz;ghfast.top") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public string Proxy => Get("Network", "proxy", "");
