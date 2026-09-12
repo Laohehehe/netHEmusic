@@ -43,7 +43,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="..\..\resources\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\build\LaoheTeam.cer" Link="Assets\LaoheTeam.cer" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\resources\LaoheTeam.cer" Link="Assets\LaoheTeam.cer" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\lang\**\*" Link="lang\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
