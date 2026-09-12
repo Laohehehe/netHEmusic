@@ -553,3 +553,14 @@ html.no-fx .fx-shake{animation:none;}
 }
 .hk-reset:hover{color:var(--md-accent-color);border-color:var(--md-accent-color);}
 .hk-btn.off{color:rgba(var(--md-accent-color-grey-base-rgb),.45);border-style:dashed;}
+/* ================= 背景音乐律动（频谱画布） ================= */
+.np-bg-fx{
+  position:absolute;left:0;right:0;bottom:0;height:56%;width:100%;
+  pointer-events:none;z-index:1;display:none;
+  mask-image:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.85) 60%, #000 100%);
+  -webkit-mask-image:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.85) 60%, #000 100%);
+}
+.nps-title{
+  margin:14px 0 4px;font-size:12px;font-weight:700;letter-spacing:.06em;
+  color:rgba(255,255,255,.5);
+}

@@ -72,6 +72,127 @@
   function isTyping(el) {
     return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
   }
+  // ================= 背景音乐律动（Phase B，用真实频谱）=================
+  var VZ = {
+    on: false, style: 'bars', strength: 60, sens: 100,
+    canvas: null, c2d: null, raf: 0, w: 0, h: 0, dpr: 1, peak: 0
+  };
+  function vzSetup() {
+    var c = document.getElementById('np-bgfx');
+    if (!c) return;
+    VZ.canvas = c;
+    VZ.c2d = c.getContext('2d');
+    vzResize();
+  }
+  function vzResize() {
+    var c = VZ.canvas; if (!c) return;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var w = c.clientWidth || window.innerWidth, h = c.clientHeight || window.innerHeight;
+    c.width = Math.max(1, Math.round(w * dpr));
+    c.height = Math.max(1, Math.round(h * dpr));
+    VZ.w = c.width; VZ.h = c.height; VZ.dpr = dpr;
+  }
+  function vzAccent(alpha) {
+    try {
+      var v = getComputedStyle(document.documentElement).getPropertyValue('--md-accent-color').trim() || '#8ab4f8';
+      return 'rgba(' + hexToRgb(v).join(',') + ',' + alpha + ')';
+    } catch (e) { return 'rgba(255,255,255,' + alpha + ')'; }
+  }
+  function hexToRgb(hex) {
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec((hex || '').trim());
+    if (!m) return [200, 210, 255];
+    return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+  }
+  function vzFrame() {
+    VZ.raf = requestAnimationFrame(vzFrame);
+    var c = VZ.c2d; if (!c) return;
+    var fft = (window.AUFft && VZ.on && npOpen) ? window.AUFft() : null;
+    c.clearRect(0, 0, VZ.w, VZ.h);
+    if (!fft) return;
+    var k = (VZ.strength / 100) * (VZ.sens / 100) * 2.2;
+    var n = fft.length;
+    if (VZ.style === 'ring') {
+      // 环形：绕封面一圈
+      var cover = document.querySelector('#np .np-cover-wrap');
+      var cx = VZ.w * 0.5, cy = VZ.h * 0.5, R = Math.min(VZ.w, VZ.h) * 0.22;
+      if (cover) {
+        var r = cover.getBoundingClientRect();
+        cx = (r.left + r.width / 2) * VZ.dpr;
+        cy = (r.top + r.height / 2) * VZ.dpr;
+        R = (r.width / 2 + 10) * VZ.dpr;
+      }
+      c.save();
+      c.translate(cx, cy);
+      for (var i = 0; i < n; i++) {
+        var v = fft[i] / 255 * k;
+        if (v <= 0.01) continue;
+        var a = (i / n) * Math.PI * 2 - Math.PI / 2;
+        var len = 6 * VZ.dpr + v * 46 * VZ.dpr;
+        c.save();
+        c.rotate(a);
+        c.beginPath();
+        c.lineWidth = Math.max(2, VZ.dpr * 3);
+        c.lineCap = 'round';
+        c.strokeStyle = vzAccent(0.10 + 0.42 * Math.min(1, v));
+        c.moveTo(R, 0); c.lineTo(R + len, 0);
+        c.stroke();
+        c.restore();
+      }
+      c.restore();
+    } else if (VZ.style === 'wave') {
+      // 波形：一条横向波形带
+      var mid = VZ.h * 0.72, amp = VZ.h * 0.12 * (VZ.strength / 100) * (VZ.sens / 100);
+      c.beginPath();
+      for (var i2 = 0; i2 < n; i2++) {
+        var x = VZ.w * (i2 / (n - 1));
+        var y = mid - (fft[i2] / 255 - 0.35) * amp * 2;
+        if (i2 === 0) c.moveTo(x, y); else c.lineTo(x, y);
+      }
+      c.lineWidth = Math.max(2, VZ.dpr * 2.5);
+      c.strokeStyle = vzAccent(0.5);
+      c.shadowColor = vzAccent(0.45); c.shadowBlur = 18 * VZ.dpr;
+      c.stroke();
+      c.shadowBlur = 0;
+    } else {
+      // 柱状：底部一排
+      var bars = 48, gap = VZ.dpr * 4;
+      var bw = (VZ.w - gap * (bars + 1)) / bars;
+      var base = VZ.h - VZ.dpr * 6;
+      for (var b = 0; b < bars; b++) {
+        var idx = Math.floor(Math.pow(b / bars, 1.5) * (n - 1));
+        var val = fft[idx] / 255 * k;
+        var bh = Math.max(2 * VZ.dpr, val * VZ.h * 0.34);
+        var x2 = gap + b * (bw + gap);
+        var gr = c.createLinearGradient(0, base - bh, 0, base);
+        gr.addColorStop(0, vzAccent(0.55));
+        gr.addColorStop(1, vzAccent(0.08));
+        c.fillStyle = gr;
+        var rr = Math.min(bw / 2, 4 * VZ.dpr);
+        c.beginPath();
+        c.moveTo(x2, base);
+        c.lineTo(x2, base - bh + rr);
+        c.quadraticCurveTo(x2, base - bh, x2 + rr, base - bh);
+        c.lineTo(x2 + bw - rr, base - bh);
+        c.quadraticCurveTo(x2 + bw, base - bh, x2 + bw, base - bh + rr);
+        c.lineTo(x2 + bw, base);
+        c.closePath();
+        c.fill();
+      }
+    }
+  }
+  function vzApply() {
+    var on = !!lyStyles.vz;
+    VZ.style = lyStyles.vzStyle || 'bars';
+    VZ.strength = (lyStyles.vzStrength == null) ? 60 : lyStyles.vzStrength;
+    VZ.sens = (lyStyles.vzSens == null) ? 100 : lyStyles.vzSens;
+    VZ.on = on;
+    var c = document.getElementById('np-bgfx');
+    if (c) c.style.display = on ? 'block' : 'none';
+    if (on) { try { if (!VZ.c2d) vzSetup(); vzResize(); if (!VZ.raf) vzFrame(); } catch (e8) { try { NE.post({ type: 'log', msg: '[vz] start ERROR ' + e8.message }); } catch (e7) { } } }
+    else if (VZ.raf) { cancelAnimationFrame(VZ.raf); VZ.raf = 0; if (VZ.c2d) VZ.c2d.clearRect(0, 0, VZ.w, VZ.h); }
+  }
+  window.addEventListener('resize', function () { if (VZ.on) vzResize(); });
+
   // ================= 前端播放内核（Phase A）=================
   // 音频由本页的 <audio> 播放，接 Web Audio 的 Analyser 拿真实频谱（背景律动用）。
   // C# 侧只负责解析直链 / 队列与模式 / 持久化 / SMTC。
@@ -420,7 +541,8 @@
     layout: 'vertical', curve: 50, charAnim: false,
     blur: false, blurAmt: 40, ease: 'smooth',
     showTr: true, showRo: true,
-    fontSize: 22
+    fontSize: 22,
+    vz: false, vzStyle: 'bars', vzStrength: 60, vzSens: 100
   };
   // 曲线取值参考 refined-now-playing-netease
   var LY_EASE = {
@@ -443,6 +565,10 @@
     lyStyles.showTr = cfgBool(s, 'lyric_show_translation', true);
     lyStyles.showRo = cfgBool(s, 'lyric_show_romaji', true);
     lyStyles.fontSize = Math.max(12, Math.min(64, Number(cfgGet(s, 'lyric_font_size', 22)) || 22));
+    lyStyles.vz = cfgBool(s, 'vz_enabled', false);
+    lyStyles.vzStyle = String(cfgGet(s, 'vz_style', 'bars'));
+    lyStyles.vzStrength = Math.max(0, Math.min(100, Number(cfgGet(s, 'vz_strength', 60)) || 0));
+    lyStyles.vzSens = Math.max(10, Math.min(200, Number(cfgGet(s, 'vz_sens', 100)) || 100));
     npApplyStyleFromState();
     if (npLines.length) npRenderLyric(npLines);   // 逐字动画开关变了要重建 span
   }
@@ -462,6 +588,7 @@
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
     np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 字号（行高与排版会跟着重算）
     npLayout();
+    vzApply();                                                   // 背景音乐律动
   }
 
   // ===== 歌词排版引擎（照 refined-now-playing-netease 的思路重写）=====
@@ -587,6 +714,7 @@
     var wasOpen = npOpen;
     npOpen = true;
     np.classList.add('show'); np.setAttribute('aria-hidden', 'false');
+    if (lyStyles.vz) setTimeout(function () { vzApply(); }, 60);
     if (!wasOpen) requestAnimationFrame(npCoverFlip);
     var ns = nowPlaying || queue[playingIndex];
     if (!ns) { npEl('np-title').textContent = '未在播放'; npEl('np-artist').textContent = '—'; npEl('np-album').textContent = ''; npRenderLyric([]); return; }
@@ -748,6 +876,14 @@
     addSelect('动画曲线', 'lyric_ease', 'ease', [
       { v: 'smooth', t: '平滑' }, { v: 'sharp', t: '急促' }, { v: 'gentle', t: '温和' }, { v: 'easeout', t: '缓出' }
     ]);
+    // ---- 背景特效 ----
+    box.appendChild(el('div', 'nps-title', '背景特效'));
+    addSwitch('音乐律动（频谱）', 'vz_enabled', 'vz');
+    addSelect('律动样式', 'vz_style', 'vzStyle', [
+      { v: 'bars', t: '柱状' }, { v: 'ring', t: '环形（绕封面）' }, { v: 'wave', t: '波形' }
+    ]);
+    addRange('律动强度', 'vz_strength', 'vzStrength', 0, 100);
+    addRange('灵敏度', 'vz_sens', 'vzSens', 20, 200);
   }
   function npToggleSettings(force) {
     var p = npEl('np-settings'); if (!p) return;
