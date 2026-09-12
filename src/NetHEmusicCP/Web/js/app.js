@@ -201,6 +201,21 @@
   // ================= 全窗口歌词页（点封面进入） =================
   var npOpen = false, npLines = [], npIndex = -1, npSongId = 0;
   var npDurMs = 0, npPosMs = 0, npPlaying = false;   // 由 position / playing 消息维护
+  var npTr = [], npRo = [];                           // 翻译 / 罗马音（与 npLines 同时间轴）
+  // 把翻译与罗马音按时间戳挂到原词行上（允许 ±500ms 误差）
+  function npMergeSubLines() {
+    function pick(arr, t) {
+      for (var i = 0; i < arr.length; i++) if (arr[i].t === t) return arr[i].s;
+      var best = null, bestD = 501;
+      for (var j = 0; j < arr.length; j++) { var d = Math.abs(arr[j].t - t); if (d < bestD) { bestD = d; best = arr[j].s; } }
+      return best || '';
+    }
+    npLines.forEach(function (l) {
+      l.tr = npTr.length ? pick(npTr, l.t) : '';
+      l.ro = npRo.length ? pick(npRo, l.t) : '';
+      if (l.tr === l.s) l.tr = '';
+    });
+  }
   function npEl(id) { return document.getElementById(id); }
   function npSetPlaying(on) {
     npPlaying = !!on;
@@ -236,7 +251,9 @@
   var lyStyles = {
     glow: false, shadow: true, stroke: false,
     layout: 'vertical', curve: 50, charAnim: false,
-    blur: false, blurAmt: 40, ease: 'smooth'
+    blur: false, blurAmt: 40, ease: 'smooth',
+    showTr: true, showRo: true,
+    fontSize: 22
   };
   // 曲线取值参考 refined-now-playing-netease
   var LY_EASE = {
@@ -256,6 +273,9 @@
     lyStyles.blur = cfgBool(s, 'lyric_blur', false);
     lyStyles.blurAmt = Number(cfgGet(s, 'lyric_blur_amount', 40)) || 0;
     lyStyles.ease = String(cfgGet(s, 'lyric_ease', 'smooth'));
+    lyStyles.showTr = cfgBool(s, 'lyric_show_translation', true);
+    lyStyles.showRo = cfgBool(s, 'lyric_show_romaji', true);
+    lyStyles.fontSize = Math.max(12, Math.min(64, Number(cfgGet(s, 'lyric_font_size', 22)) || 22));
     npApplyStyleFromState();
     if (npLines.length) npRenderLyric(npLines);   // 逐字动画开关变了要重建 span
   }
@@ -269,8 +289,11 @@
     np.classList.toggle('ly-blur', !!s.blur);
     np.classList.toggle('ly-curved', s.layout === 'curved');
     np.classList.toggle('ly-char', !!s.charAnim);
+    np.classList.toggle('ly-tr', !!s.showTr);
+    np.classList.toggle('ly-ro', !!s.showRo);
     np.style.setProperty('--ly-blur', (s.blurAmt / 100 * 5).toFixed(2) + 'px');
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
+    np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 字号（行高与排版会跟着重算）
     npLayout();
   }
 
@@ -367,13 +390,17 @@
     var chars = !!lyStyles.charAnim;
     lines.forEach(function (l) {
       var div = el('div', 'np-line');
+      var main = el('div', 'np-orig');
       if (chars) {
         var txt = l.s, frag = '';
         for (var i = 0; i < txt.length; i++) frag += '<span class="ly-ch" style="--i:' + i + '">' + esc(txt.charAt(i)) + '</span>';
-        div.innerHTML = frag;
+        main.innerHTML = frag;
       } else {
-        div.textContent = l.s;
+        main.textContent = l.s;
       }
+      div.appendChild(main);
+      if (l.ro) div.appendChild(el('div', 'np-sub np-ro', esc(l.ro)));
+      if (l.tr) div.appendChild(el('div', 'np-sub np-tr', esc(l.tr)));
       box.appendChild(div);
     });
     npIndex = -1;
@@ -402,8 +429,12 @@
       npRenderLyric([]); npEl('np-lyric-inner').innerHTML = '<div class="np-line">歌词加载中…</div>';
       try {
         var r = await NE.lyric(ns.Id);
+        // 原词 / 翻译(tlyric) / 罗马音(romalrc) 三轨合并
+        npTr = parseLrc((r && r.tlyric && r.tlyric.lyric) || '');
+        npRo = parseLrc((r && r.romalrc && r.romalrc.lyric) || '');
         if (!npOpen || npSongId !== ns.Id) return;
         npLines = parseLrc((r && r.lrc && r.lrc.lyric) || '');
+        npMergeSubLines();
         npRenderLyric(npLines);
         npIndex = -1;
       } catch (e) { npRenderLyric([]); }
@@ -505,6 +536,9 @@
     addSwitch('字体描边', 'lyric_stroke', 'stroke');
     addSelect('歌词排列', 'lyric_layout', 'layout', [{ v: 'vertical', t: '竖向' }, { v: 'curved', t: '旋转弧形' }]);
     addRange('排列曲率', 'lyric_curve', 'curve', 0, 100);
+    addRange('字体大小', 'lyric_font_size', 'fontSize', 14, 56);
+    addSwitch('显示翻译', 'lyric_show_translation', 'showTr');
+    addSwitch('显示罗马音', 'lyric_show_romaji', 'showRo');
     addSwitch('逐字动画', 'lyric_char_anim', 'charAnim');
     addSwitch('非当前行模糊', 'lyric_blur', 'blur');
     addRange('模糊程度', 'lyric_blur_amount', 'blurAmt', 0, 100);
