@@ -196,49 +196,65 @@
   // ================= 前端播放内核（Phase A）=================
   // 音频由本页的 <audio> 播放，接 Web Audio 的 Analyser 拿真实频谱（背景律动用）。
   // C# 侧只负责解析直链 / 队列与模式 / 持久化 / SMTC。
+  // 双播放器：交叉淡化时两个 <audio> 各自接一个 GainNode，混流后进 Analyser
   var AU = {
-    el: null, ctx: null, srcNode: null, analyser: null, freq: null,
-    ready: false, playing: false, durMs: 0, posMs: 0, lastPost: 0, curIndex: -1
+    ps: [null, null], cur: 0,
+    ctx: null, analyser: null, freq: null,
+    playing: false, durMs: 0, posMs: 0, lastPost: 0, curIndex: -1,
+    xfade: 0, vol: 70, fading: 0
   };
-  function auInit() {
-    if (AU.el) return AU.el;
-    var a = document.createElement('audio');
-    a.id = 'np-audio';
-    a.crossOrigin = 'anonymous';     // 必须：否则 createMediaElementSource 后频谱被跨域污染
-    a.preload = 'auto';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    AU.el = a;
-
-    a.addEventListener('loadedmetadata', function () { AU.durMs = (a.duration || 0) * 1000; auPushUI(0); auPostState(true); });
-    a.addEventListener('durationchange', function () { AU.durMs = (a.duration || 0) * 1000; auPushUI(AU.posMs); });
-    a.addEventListener('timeupdate', function () { AU.posMs = (a.currentTime || 0) * 1000; auPushUI(AU.posMs); auPostState(false); });
-    a.addEventListener('play', function () { AU.playing = true; setPlaying(true); auPostState(true); });
-    a.addEventListener('pause', function () { AU.playing = false; setPlaying(false); auPostState(true); });
-    a.addEventListener('ended', function () { AU.playing = false; auPostState(true); NE.post({ type: 'audio_ended' }); });
-    a.addEventListener('error', function () {
-      var msg = (a.error && a.error.message) || 'unknown';
-      try { NE.post({ type: 'log', msg: '[au] error ' + (a.error && a.error.code) + ' ' + msg }); } catch (e) { }
-      NE.post({ type: 'audio_error', message: msg });
-    });
-    try { a.volume = Math.max(0, Math.min(1, (Number($('#pl-volume') && $('#pl-volume').value) || 70) / 100)); } catch (e) { }
-    return a;
-  }
   function auCtx() {
     if (AU.ctx) return AU.ctx;
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       AU.ctx = new AC();
-      AU.srcNode = AU.ctx.createMediaElementSource(AU.el);
       AU.analyser = AU.ctx.createAnalyser();
       AU.analyser.fftSize = 256;
       AU.analyser.smoothingTimeConstant = 0.8;
       AU.freq = new Uint8Array(AU.analyser.frequencyBinCount);
-      AU.srcNode.connect(AU.analyser);
       AU.analyser.connect(AU.ctx.destination);
       NE.post({ type: 'log', msg: '[au] AudioContext ready, bins=' + AU.analyser.frequencyBinCount });
     } catch (e) { NE.post({ type: 'log', msg: '[au] AudioContext FAILED: ' + e.message }); }
     return AU.ctx;
+  }
+  function auMaster() { return AU.vol / 100; }
+  function auMake(i) {
+    if (AU.ps[i]) return AU.ps[i];
+    var el = document.createElement('audio');
+    el.crossOrigin = 'anonymous';        // 必须：否则 createMediaElementSource 后频谱被跨域污染
+    el.preload = 'auto';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    var p = { el: el, src: null, gain: null, idx: i };
+    AU.ps[i] = p;
+    el.addEventListener('loadedmetadata', function () { if (p !== AU.ps[AU.cur]) return; AU.durMs = (el.duration || 0) * 1000; auPushUI(0); auPostState(true); });
+    el.addEventListener('durationchange', function () { if (p !== AU.ps[AU.cur]) return; AU.durMs = (el.duration || 0) * 1000; auPushUI(AU.posMs); });
+    el.addEventListener('timeupdate', function () { if (p !== AU.ps[AU.cur]) return; AU.posMs = (el.currentTime || 0) * 1000; auPushUI(AU.posMs); auPostState(false); });
+    el.addEventListener('play', function () { if (p !== AU.ps[AU.cur]) return; AU.playing = true; setPlaying(true); auPostState(true); });
+    el.addEventListener('pause', function () { if (p !== AU.ps[AU.cur]) return; AU.playing = false; setPlaying(false); auPostState(true); });
+    el.addEventListener('ended', function () { if (p !== AU.ps[AU.cur]) return; AU.playing = false; auPostState(true); NE.post({ type: 'audio_ended' }); });
+    el.addEventListener('error', function () {
+      if (p !== AU.ps[AU.cur]) return;
+      var msg = (el.error && el.error.message) || 'unknown';
+      try { NE.post({ type: 'log', msg: '[au] error ' + (el.error && el.error.code) + ' ' + msg }); } catch (e) { }
+      NE.post({ type: 'audio_error', message: msg });
+    });
+    return p;
+  }
+  function auWire(p) {
+    auCtx();
+    if (!AU.ctx || p.src) return;
+    try {
+      p.src = AU.ctx.createMediaElementSource(p.el);
+      p.gain = AU.ctx.createGain();
+      p.gain.gain.value = 1;
+      p.src.connect(p.gain);
+      p.gain.connect(AU.analyser);
+    } catch (e) { try { NE.post({ type: 'log', msg: '[au] wire failed: ' + e.message }); } catch (e2) { } }
+  }
+  function auCur() {
+    if (!AU.ps[AU.cur]) auMake(AU.cur);
+    return AU.ps[AU.cur];
   }
   function auFft() {
     if (!AU.analyser || !AU.freq) return null;
@@ -263,25 +279,75 @@
     AU.lastPost = now;
     NE.post({ type: 'audio_state', playing: AU.playing, pos: Math.round(AU.posMs), dur: Math.round(AU.durMs) });
   }
+  // 交叉淡化：新曲从 0 淡入、旧曲同步淡出，xfade 秒后关掉旧曲
+  function auCrossfadeTo(url, startMs) {
+    var old = auCur();
+    var ni = 1 - AU.cur;
+    var np2 = auMake(ni);
+    var el = np2.el;
+    el.src = url;
+    el.volume = auMaster();
+    auWire(np2);
+    try { el.load(); } catch (e) { }
+    if (startMs > 0) { try { el.currentTime = startMs / 1000; } catch (e) { } }
+    if (AU.ctx && AU.ctx.state === 'suspended') { try { AU.ctx.resume(); } catch (e) { } }
+    if (np2.gain) { np2.gain.gain.cancelScheduledValues(AU.ctx ? AU.ctx.currentTime : 0); np2.gain.gain.value = 0; }
+    var pr = el.play();
+    if (pr && pr.catch) pr.catch(function (e) { });
+    var t = AU.ctx ? AU.ctx.currentTime : 0;
+    var dur = AU.xfade;
+    if (np2.gain) { np2.gain.gain.setValueAtTime(0, t); np2.gain.gain.linearRampToValueAtTime(1, t + dur); }
+    if (old && old.gain) {
+      old.gain.gain.cancelScheduledValues(t);
+      old.gain.gain.setValueAtTime(old.gain.gain.value, t);
+      old.gain.gain.linearRampToValueAtTime(0, t + dur);
+    }
+    AU.cur = ni;
+    AU.fading = old ? 1 : 0;
+    var oldP = old;
+    setTimeout(function () {
+      try { if (oldP && oldP !== AU.ps[AU.cur]) { oldP.el.pause(); oldP.el.removeAttribute('src'); } } catch (e) { }
+      AU.fading = 0;
+    }, Math.round(dur * 1000) + 150);
+  }
   function auLoad(url, song, index, autoplay, startMs) {
-    auInit();
+    auCtx();
     AU.curIndex = (typeof index === 'number') ? index : -1;
     AU.posMs = startMs || 0;
     AU.playing = false;
-    AU.el.src = url;
-    try { AU.el.load(); } catch (e) { }
-    if (startMs > 0) { try { AU.el.currentTime = startMs / 1000; } catch (e) { } }
+    var canFade = AU.xfade > 0 && AU.ctx && AU.ps[AU.cur] && AU.ps[AU.cur].el.src && !AU.ps[AU.cur].el.paused;
+    if (canFade) { auCrossfadeTo(url, startMs); return; }
+    // 硬切：必要时先停掉另一个
+    var other = AU.ps[1 - AU.cur];
+    if (other) { try { other.el.pause(); other.el.removeAttribute('src'); if (other.gain) other.gain.gain.value = 1; } catch (e) { } }
+    var p = auCur();
+    try { p.el.pause(); } catch (e) { }
+    p.el.src = url;
+    p.el.volume = auMaster();
+    auWire(p);
+    if (p.gain) p.gain.gain.value = 1;
+    try { p.el.load(); } catch (e) { }
+    if (startMs > 0) { try { p.el.currentTime = startMs / 1000; } catch (e) { } }
     if (autoplay) auPlay();
   }
   function auPlay() {
-    auInit(); auCtx();
+    auCtx();
     if (AU.ctx && AU.ctx.state === 'suspended') { try { AU.ctx.resume(); } catch (e) { } }
-    var p = AU.el.play();
-    if (p && p.catch) p.catch(function (e) { try { NE.post({ type: 'log', msg: '[au] play rejected: ' + e.message }); } catch (e2) { } });
+    var p = auCur(); if (!p.el.src) return;
+    var pr = p.el.play();
+    if (pr && pr.catch) pr.catch(function (e) { try { NE.post({ type: 'log', msg: '[au] play rejected: ' + e.message }); } catch (e2) { } });
   }
-  function auPause() { if (AU.el) AU.el.pause(); }
-  function auSeek(ms) { if (!AU.el) return; try { AU.el.currentTime = ms / 1000; AU.posMs = ms; auPushUI(ms); } catch (e) { } }
-  function auSetVolume(v) { auInit(); try { AU.el.volume = Math.max(0, Math.min(1, v / 100)); } catch (e) { } }
+  function auPause() {
+    for (var i = 0; i < 2; i++) { if (AU.ps[i]) { try { AU.ps[i].el.pause(); } catch (e) { } } }
+  }
+  function auSeek(ms) {
+    var p = auCur(); if (!p.el.src) return;
+    try { p.el.currentTime = ms / 1000; AU.posMs = ms; auPushUI(ms); } catch (e) { }
+  }
+  function auSetVolume(v) {
+    AU.vol = v;
+    for (var i = 0; i < 2; i++) { if (AU.ps[i]) { try { AU.ps[i].el.volume = auMaster(); } catch (e) { } } }
+  }
 
   NE.on('audio_load', function (d) { auLoad(d.url, d.song, d.index, d.autoplay !== false, d.startMs || 0); });
   NE.on('audio_cmd', function (d) {
@@ -292,6 +358,8 @@
     else if (d.cmd === 'stop') { auPause(); auSeek(0); }
     else if (d.cmd === 'volume') auSetVolume(Number(d.value) || 0);
   });
+  window.AU = AU;                    // 供频谱/交叉淡化使用
+  window.AUFft = auFft;
   window.AU = AU;                    // 供频谱/交叉淡化使用
   window.AUFft = auFft;
 
@@ -1234,7 +1302,17 @@
     html.appendChild(group('主题 / 外观', [ custSel('配色方案','scheme', s.scheme, s.schemes||[]), sw('Mica 背景','mica', s.mica), sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray) ]));
     html.appendChild(fxGroup(s));
     html.appendChild(group('下载', [ txt('默认下载目录','downloadDir', s.downloadDir), sel('音质','quality', s.quality, ['standard','high','lossless']) ]));
-    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, ['order','list','single','random']) ]));
+    function rngXfade() {
+      var r = el('div','set-row'); var lb = el('label','','歌曲切换淡化 (秒)');
+      var cur = Math.max(0, Math.min(12, Number(s.crossfade || 0) || 0));
+      lb.textContent = '歌曲切换淡化 (' + cur + ')';
+      r.appendChild(lb);
+      var i = el('input'); i.type='range'; i.min=0; i.max=12; i.step=1; i.value=cur;
+      i.oninput = function(){ lb.textContent = '歌曲切换淡化 (' + i.value + ')'; AU.xfade = Number(i.value); };
+      i.onchange = function(){ NE.setSetting('crossfade', i.value); };
+      r.appendChild(i); return r;
+    }
+    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, ['order','list','single','random']), rngXfade() ]));
     // ---- 快捷键（可自定义）----
     function hotkeyGroup() {
       var g = el('div','set-group');
@@ -1509,7 +1587,7 @@
     v = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
     if (v > 0) lastVol = v;
     updateVolUI(v);
-    try { if (window.AU && AU.el) AU.el.volume = v / 100; } catch (e) { }
+    try { if (window.AU) { AU.vol = v; if (typeof auSetVolume === 'function') auSetVolume(v); } } catch (e) { }
     if (post) NE.post({ type: 'volume', v: v });
   }
   $('#pl-volume').oninput = e => applyVolume(e.target.value, true);
@@ -1588,6 +1666,8 @@
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
       npApplyLyricSettings(s);                                 // 歌词页外观设置
       hotkeysFromSettings(s);                                  // 快捷键绑定
+      AU.xfade = Math.max(0, Math.min(12, Number(s.crossfade || 0) || 0));   // 交叉淡化秒数
+      AU.vol = Number(s.volume != null ? s.volume : 70) || 0;
       if (!LYRIC_LOCKED) setLyricBtn(String(s.desktopLyric) !== 'false' && s.desktopLyric !== false);
     } catch (e) { }
   }).catch(function () { });
