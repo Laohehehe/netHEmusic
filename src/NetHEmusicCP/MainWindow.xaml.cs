@@ -282,6 +282,22 @@ public sealed partial class MainWindow : Window
                 case "notice_seen": AppServices.Config.VersionSeen = AppServices.Version; LogManager.Log("[Version] version 已更新为 " + AppServices.Version); break;
                 case "queue_get": PostToWeb(new { type = "queue", songs = AppServices.Player.Queue.Select(ToSongDto).ToList(), index = AppServices.Player.Index }); break;
                 case "play_index": { if (doc.TryGetProperty("index", out var qi) && qi.TryGetInt32(out var qn)) _ = AppServices.Player.PlayAtAsync(qn); break; }
+                case "queue_clear": AppServices.Player.ClearQueue(); LogManager.Log("已清空播放列表"); break;
+                case "queue_remove": { if (doc.TryGetProperty("index", out var ri) && ri.TryGetInt32(out var rn)) AppServices.Player.RemoveAt(rn); break; }
+                case "queue_next": { if (doc.TryGetProperty("index", out var ni) && ni.TryGetInt32(out var nn)) AppServices.Player.MoveToNext(nn); break; }
+                case "share":
+                    {
+                        var song = doc.TryGetProperty("song", out var ss) ? SongFromWeb(ss) : null;
+                        if (song is not null)
+                        {
+                            var text = "分享单曲《" + song.Title + "》- " + song.ArtistsName
+                                     + "：" + "https://music.163.com/song?id=" + song.Id + " (@网易云音乐)";
+                            var ok = ClipboardHelper.SetText(text);
+                            PostToWeb(new { type = "toast", text = ok ? "分享链接已复制到剪贴板" : "复制失败（剪贴板被占用）" });
+                            LogManager.Log("分享: " + (ok ? "已复制 " : "复制失败 ") + text);
+                        }
+                        break;
+                    }
                 case "desktop_lyric": SetDesktopLyric(doc.TryGetProperty("on", out var dlOn) && dlOn.ValueKind == JsonValueKind.True); break;
                 case "set_setting": HandleSetSetting(doc); break;
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;

@@ -147,6 +147,40 @@ public sealed class PlayerService
         }
     }
 
+    /// <summary>清空播放队列。</summary>
+    public void ClearQueue()
+    {
+        try { _player.Pause(); } catch { }
+        _queue.Clear();
+        _index = -1;
+        QueueChanged?.Invoke(_index, 0);
+    }
+
+    /// <summary>从队列里移除一首（正在播放的那首只调整下标，不打断当前播放）。</summary>
+    public void RemoveAt(int index)
+    {
+        if (index < 0 || index >= _queue.Count) return;
+        bool wasCurrent = index == _index;
+        _queue.RemoveAt(index);
+        if (_queue.Count == 0) { try { _player.Pause(); } catch { } _index = -1; }
+        else if (index < _index) _index--;
+        else if (wasCurrent && _index >= _queue.Count) _index = _queue.Count - 1;
+        QueueChanged?.Invoke(_index, _queue.Count);
+    }
+
+    /// <summary>把队列里的第 index 首挪到“下一首播放”的位置（即当前曲目之后）。</summary>
+    public void MoveToNext(int index)
+    {
+        if (index < 0 || index >= _queue.Count || _index < 0 || index == _index) return;
+        var s = _queue[index];
+        _queue.RemoveAt(index);
+        if (index < _index) _index--;                     // 移走的是前面的歌，当前下标左移
+        int at = Math.Min(_index + 1, _queue.Count);       // 插到当前之后
+        _queue.Insert(at, s);
+        QueueChanged?.Invoke(_index, _queue.Count);
+        LogManager.Log("已把《" + s.Title + "》设为下一首播放");
+    }
+
     public async Task PlayAtAsync(int index)
     {
         if (index < 0 || index >= _queue.Count) return;
