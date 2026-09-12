@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+using netHEmusic.Core.Model;
 using Microsoft.UI.Dispatching;
 using netHEmusic.Core.Api;
 using netHEmusic.Core.Cache;
@@ -61,6 +63,22 @@ public static class AppServices
         SelfRepair = new SelfRepair(Config);
         Theme = new ThemeManager(Config);
         Player = new PlayerService(Config, Cache);
+
+        // 恢复上次的播放列表（只装载不播放：重启后 dock 与播放列表仍是上次的内容）
+        try
+        {
+            var saved = Config.GetPlaylist();
+            if (!string.IsNullOrWhiteSpace(saved) && saved != "[]")
+            {
+                var list = JsonSerializer.Deserialize<List<Song>>(saved);
+                if (list is { Count: > 0 })
+                {
+                    Player.RestoreQueue(list, Config.PlaylistIndex);
+                    LogManager.Log("已恢复播放列表: " + list.Count + " 首，当前第 " + (Config.PlaylistIndex + 1) + " 首");
+                }
+            }
+        }
+        catch (Exception e) { LogManager.Debug("恢复播放列表失败: " + e.Message); }
 
         LogManager.Log("服务已初始化: 语言=" + Lang.CurrentLanguage + " theme=" + Config.Theme);
         LogManager.Log(Config.FirstRun ? "首次运行" : "非首次运行");

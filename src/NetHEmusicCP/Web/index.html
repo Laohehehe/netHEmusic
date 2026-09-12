@@ -29,6 +29,15 @@
     </header>
     <main id="view"><div class="big-load">加载中…</div></main>
 
+    <!-- 当前播放列表面板（点 dock 最右侧 list 按钮弹出） -->
+    <div id="plpanel" class="pl-panel">
+      <div class="pl-panel-head">
+        <span class="pl-panel-title">当前播放列表</span>
+        <span class="pl-panel-count" id="plpanel-count"></span>
+      </div>
+      <div class="pl-panel-list" id="plpanel-list"></div>
+    </div>
+
     <!-- 悬浮 dock：位于 #main 内部，随内容区宽度自适应 -->
     <footer id="player">
       <div class="pl-left">
@@ -40,11 +49,11 @@
       </div>
       <div class="pl-center">
         <div class="pl-btns">
-          <button id="pb-shuffle" title="随机" class="ic-btn"><i class="ic">&#xE8B0;</i></button>
-          <button id="pb-prev" title="上一首" class="ic-btn"><i class="ic">&#xE892;</i></button>
-          <button id="pb-play" title="播放/暂停" class="ic-btn big"><i class="ic">&#xE768;</i></button>
-          <button id="pb-next" title="下一首" class="ic-btn"><i class="ic">&#xE893;</i></button>
-          <button id="pb-mode" title="循环" class="ic-btn"><i class="ic">&#xE8EE;</i></button>
+          <button id="pb-mode" title="切换播放模式" class="ic-btn"></button>
+          <button id="pb-prev" title="上一首" class="ic-btn"></button>
+          <button id="pb-play" title="播放/暂停" class="ic-btn big"></button>
+          <button id="pb-next" title="下一首" class="ic-btn"></button>
+          <button id="pb-lyric" title="桌面歌词" class="ic-btn ly-btn"><span class="ly-txt">词</span><span class="ly-badge"></span></button>
         </div>
         <div class="pl-prog">
           <span id="pl-cur">00:00</span>
@@ -55,8 +64,9 @@
       <div class="pl-right">
         <span class="pl-vol"><i class="ic">&#xE767;</i></span>
         <input id="pl-volume" type="range" min="0" max="100" value="80">
-        <button id="pl-like" title="收藏" class="ic-btn"><i class="ic">&#xE734;</i></button>
-        <button id="pl-dl" title="下载" class="ic-btn"><i class="ic">&#xE896;</i></button>
+        <button id="pl-like" title="收藏" class="ic-btn"></button>
+        <button id="pl-dl" title="下载" class="ic-btn"></button>
+        <button id="pl-list" title="当前播放列表" class="ic-btn"></button>
       </div>
     </footer>
   </div>

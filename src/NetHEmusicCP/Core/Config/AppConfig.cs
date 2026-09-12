@@ -210,6 +210,9 @@ public sealed class AppConfig
     public string Proxy => Get("Network", "proxy", "");
 
     // ---------- 播放状态 ----------
+    /// <summary>上次播放列表播到的下标（重启后恢复用）。</summary>
+    public int PlaylistIndex { get => int.TryParse(Get("Player", "playlist_index", "0"), out var v) ? v : 0; set => Set("Player", "playlist_index", value); }
+
     public string GetPlaylist() => Get("Player", "playlist", "[]");
     public void SavePlaylist(string json) => Set("Player", "playlist", json);
     public string GetPlayback() => Get("Player", "playback", "");
