@@ -35,9 +35,11 @@
         + '<rect x="16.2" y="9.6" width="2.6" height="12" rx="1.3"/>'
         + '<rect x="11.5" y="14.3" width="12" height="2.6" rx="1.3"/>'
         + '</svg>',
-    dl:   '<svg viewBox="0 0 24 24" aria-hidden="true">'
-        + '<path d="M12 3.2c.72 0 1.3.58 1.3 1.3v7.1l2.1-2.1c.5-.5 1.32-.5 1.83 0 .5.5.5 1.32 0 1.83l-4.3 4.3c-.5.5-1.32.5-1.83 0l-4.3-4.3c-.5-.5-.5-1.32 0-1.83.5-.5 1.32-.5 1.83 0l2.1 2.1V4.5c0-.72.58-1.3 1.3-1.3z"/>'
-        + '<rect x="5.5" y="18" width="13" height="2.6" rx="1.3"/>'
+    // 描边风格：下载（用户提供的图标，fill:none 写在内联样式里，避免被 .row-btn svg 的 fill 覆盖）
+    dl:   '<svg viewBox="0 0 24 24" aria-hidden="true" style="fill:none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
+        + '<polyline points="7 10 12 15 17 10"/>'
+        + '<line x1="12" x2="12" y1="15" y2="3"/>'
         + '</svg>'
   };
   function songRow(ns, i) {
