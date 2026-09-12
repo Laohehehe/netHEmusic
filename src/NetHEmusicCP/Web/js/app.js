@@ -349,6 +349,8 @@
       n.style.transitionDelay = (goingDown ? dly : dly) + 'ms';
       n.classList.toggle('on', i === cur && npIndex >= 0);
     }
+    lyPrevIndex = cur;
+  }
 
   function npRenderLyric(lines) {
     var box = npEl('np-lyric-inner'); if (!box) return;
