@@ -565,8 +565,16 @@ html.no-fx .fx-shake{animation:none;}
 .np-bg-fx{
   position:absolute;left:0;right:0;bottom:0;height:56%;width:100%;
   pointer-events:none;z-index:1;display:none;
+  background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.18) 45%, rgba(0,0,0,.42) 100%);
 }
 .nps-title{
   margin:14px 0 4px;font-size:12px;font-weight:700;letter-spacing:.06em;
   color:rgba(255,255,255,.5);
 }
+/* ================= 性能开关 ================= */
+/* 关掉歌词页背景模糊（最省 GPU 的一档） */
+.np.no-bg-blur .np-bg{filter:none;}
+/* 关掉播放态无限动画（180Hz 屏上这些动画会一直让合成器出帧） */
+html.no-play-anim #player.playing #pb-play{animation:none !important;}
+html.no-play-anim #player.playing #pb-play::after{animation:none !important;opacity:0 !important;}
+html.no-play-anim #player.playing .pl-cover{animation:none !important;}
