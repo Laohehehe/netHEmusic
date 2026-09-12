@@ -414,7 +414,7 @@ public sealed partial class MainWindow : Window
                 break;
             case "downloadDir": try { if (!string.IsNullOrWhiteSpace(value)) AppServices.Config.DownloadDir = value; } catch { } break;
             case "quality": AppServices.Config.Quality = value; break;
-            case "volume": if (int.TryParse(value, out var vol)) AppServices.Player.SetVolume(vol); break;
+            case "volume": if (int.TryParse(value, out var vol)) { AppServices.Player.SetVolume(vol); PostToWeb(new { type = "volume_changed", v = AppServices.Player.GetVolume() }); } break;
             case "playMode": AppServices.Config.Set("Player", "mode", value); break;
             case "proxy": AppServices.Config.Set("Network", "proxy", value); break;
             case "language": AppServices.Lang.SetLanguage(value); AppServices.Config.Language = value; break;
