@@ -150,7 +150,8 @@ powershell -ExecutionPolicy Bypass -File tools/test.ps1        # 自测试
 ---
 
 ## 📄 开源协议
-本项目采用 **Apache License 2.0** 开源，详见 [LICENSE](LICENSE)。
+本项目采用 **[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)**：
+**允许非商业目的的使用、修改与分发**（需保留协议与版权声明），**禁止任何商业用途**。详见 [LICENSE](LICENSE)。
 
 ---
 
