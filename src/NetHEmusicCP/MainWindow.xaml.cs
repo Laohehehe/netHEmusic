@@ -65,8 +65,14 @@ public sealed partial class MainWindow : Window
         InitWebView();
 
         // 把播放状态推给 Web 前端播放条
-        AppServices.Player.SongChanged += s => { if (s is not null) AppServices.RunOnUi(() => PostToWeb(new { type = "playing", song = ToSongDto(s) })); };
-        AppServices.Player.PositionChanged += pos => AppServices.RunOnUi(() => { var c = AppServices.Player.Current; PostToWeb(new { type = "position", pos = (long)pos.TotalMilliseconds, dur = c is null ? 0 : c.Duration }); });
+        AppServices.Player.SongChanged += s => { if (s is not null) { AppServices.RunOnUi(() => PostToWeb(new { type = "playing", song = ToSongDto(s) })); if (_lyricWin is not null) _ = PushLyricToWindowAsync(); } };
+        AppServices.Player.PositionChanged += pos => AppServices.RunOnUi(() => { var c = AppServices.Player.Current; PostToWeb(new { type = "position", pos = (long)pos.TotalMilliseconds, dur = c is null ? 0 : c.Duration }); try { _lyricWin?.OnPosition(pos); } catch { } });
+        // 播放队列变化：写入 config（重启后恢复）+ 通知前端刷新播放列表
+        AppServices.Player.QueueChanged += (idx, count) =>
+        {
+            SavePlaylist(idx);
+            AppServices.RunOnUi(() => PostToWeb(new { type = "queue_changed", index = idx, count = count }));
+        };
         AppServices.Download.Completed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载完成: " + it.Display }));
         AppServices.Download.Failed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载失败: " + (it.Error ?? "") }));
 
@@ -123,6 +129,61 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception e) { LogManager.Error("WebView2 初始化失败: " + e.Message); }
     }
+    private DesktopLyricWindow? _lyricWin;
+
+    /// <summary>开关桌面歌词窗口（并记忆到设置）。</summary>
+    private void SetDesktopLyric(bool on)
+    {
+        AppServices.Config.Set("App", "desktop_lyric", on ? "true" : "false");
+        AppServices.RunOnUi(() =>
+        {
+            try
+            {
+                if (on)
+                {
+                    if (_lyricWin is null)
+                    {
+                        _lyricWin = new DesktopLyricWindow();
+                        _lyricWin.SetTopmost(AppServices.Config.DesktopLyricTopmost);
+                        _ = PushLyricToWindowAsync();
+                    }
+                    _lyricWin.Activate();
+                    _lyricWin.AppWindow.Show();
+                }
+                else { _lyricWin?.AppWindow.Hide(); }
+            }
+            catch (Exception e) { LogManager.Error("桌面歌词窗口失败: " + e.Message); }
+            PostToWeb(new { type = "desktop_lyric_state", on = on });
+            LogManager.Log("桌面歌词: " + (on ? "已开启" : "已关闭"));
+        });
+    }
+
+    /// <summary>把当前歌曲的歌词推给桌面歌词窗口。</summary>
+    private async Task PushLyricToWindowAsync()
+    {
+        try
+        {
+            var cur = AppServices.Player.Current; if (cur is null || _lyricWin is null) return;
+            var json = await AppServices.Netease.JsonLyric(cur.Id);
+            var (lrc, tl, ro) = AppServices.Netease.ParseLyric(json);
+            AppServices.RunOnUi(() => { try { _lyricWin?.SetLyric(lrc, tl, ro); } catch { } });
+        }
+        catch (Exception e) { LogManager.Debug("推送歌词失败: " + e.Message); }
+    }
+
+    /// <summary>把当前播放队列写进 config，重启后可以恢复。</summary>
+    private void SavePlaylist(int index)
+    {
+        try
+        {
+            var q = AppServices.Player.Queue;
+            AppServices.Config.SavePlaylist(JsonSerializer.Serialize(q));
+            AppServices.Config.PlaylistIndex = Math.Max(0, index);
+            LogManager.Debug("播放列表已保存: " + q.Count + " 首 @ " + index);
+        }
+        catch (Exception e) { LogManager.Debug("保存播放列表失败: " + e.Message); }
+    }
+
     /// <summary>config 里的版本比当前版本旧 → 通知前端弹更新公告（关闭后再回写版本号）。</summary>
     private void CheckVersionNotice()
     {
@@ -219,6 +280,9 @@ public sealed partial class MainWindow : Window
                 case "open_settings": AppServices.RunOnUi(() => { try { new SettingsWindow().Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }); break;
                 case "get_settings": HandleGetSettings(); break;
                 case "notice_seen": AppServices.Config.VersionSeen = AppServices.Version; LogManager.Log("[Version] version 已更新为 " + AppServices.Version); break;
+                case "queue_get": PostToWeb(new { type = "queue", songs = AppServices.Player.Queue.Select(ToSongDto).ToList(), index = AppServices.Player.Index }); break;
+                case "play_index": { if (doc.TryGetProperty("index", out var qi) && qi.TryGetInt32(out var qn)) _ = AppServices.Player.PlayAtAsync(qn); break; }
+                case "desktop_lyric": SetDesktopLyric(doc.TryGetProperty("on", out var dlOn) && dlOn.ValueKind == JsonValueKind.True); break;
                 case "set_setting": HandleSetSetting(doc); break;
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;
             }

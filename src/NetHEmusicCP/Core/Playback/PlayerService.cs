@@ -43,7 +43,7 @@ public sealed class PlayerService
         _player.Volume = config.Volume / 100.0;
         _player.PlaybackSession.PositionChanged += (s, e) => { if (s is MediaPlaybackSession mps) PositionChanged?.Invoke(mps.Position); };
         _player.PlaybackSession.PlaybackStateChanged += OnPlaybackStateChanged;
-        _player.MediaEnded += (s, e) => { LogManager.Log("播放结束，自动下一首"); _ = NextAsync(); };
+        _player.MediaEnded += (s, e) => { LogManager.Log("播放结束，按播放模式自动切歌（" + Mode + "）"); _ = AutoNextAsync(); };
         _player.MediaFailed += (s, e) => { LogManager.Error("播放失败: " + e.ErrorMessage); _ = NextAsync(); };
 
         _smtc = _player.SystemMediaTransportControls;
@@ -93,6 +93,14 @@ public sealed class PlayerService
         }
     }
 
+    /// <summary>恢复上次保存的播放队列（只装载、不自动播放），供软件重启后维持播放列表。</summary>
+    public void RestoreQueue(List<Song> songs, int index)
+    {
+        _queue = songs ?? new();
+        _index = _queue.Count > 0 ? Math.Clamp(index, 0, _queue.Count - 1) : -1;
+        QueueChanged?.Invoke(_index, _queue.Count);
+    }
+
     public async Task PlayAsync() => await PlayCurrentAsync();
     public void Play() => _player.Play();
     public void Pause() => _player.Pause();
@@ -101,12 +109,42 @@ public sealed class PlayerService
     public async Task NextAsync() => await StepAsync(1);
     public async Task PrevAsync() => await StepAsync(-1);
 
+    /// <summary>播放模式：order 顺序 / list 列表循环 / single 单曲循环 / random 随机。</summary>
+    public string Mode => (_config.Get("Player", "mode", "order") ?? "order").ToLowerInvariant();
+
+    private readonly Random _rand = new();
+
     private async Task StepAsync(int dir)
     {
         if (_queue.Count == 0 || _index < 0) return;
         _index = (_index + dir + _queue.Count) % _queue.Count;
         await PlayCurrentAsync();
         _ = PrefetchRingAsync();
+    }
+
+    /// <summary>一首播完后按当前模式决定下一首。</summary>
+    private async Task AutoNextAsync()
+    {
+        if (_queue.Count == 0 || _index < 0) return;
+        switch (Mode)
+        {
+            case "single":                                  // 单曲循环：重播当前
+                await PlayAtAsync(_index);
+                return;
+            case "random":                                  // 随机：随机挑一首（避免连续同一首）
+                if (_queue.Count == 1) { await PlayAtAsync(0); return; }
+                int next;
+                do { next = _rand.Next(_queue.Count); } while (next == _index);
+                await PlayAtAsync(next);
+                return;
+            case "order":                                   // 顺序：到最后一首就停
+                if (_index >= _queue.Count - 1) { LogManager.Log("顺序播放已到最后一首"); Pause(); return; }
+                await StepAsync(1);
+                return;
+            default:                                        // 列表循环
+                await StepAsync(1);
+                return;
+        }
     }
 
     public async Task PlayAtAsync(int index)

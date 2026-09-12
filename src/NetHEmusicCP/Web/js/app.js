@@ -7,40 +7,60 @@
   function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
   function fmt(ms) { if (!ms || ms <= 0) return '00:00'; const s = Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
   function esc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-  function normSong(s) { const artists=(s.ar||s.artists||[]).map(a=>a.name).join(' / '); const al=s.al||s.album||{}; return { Id:s.id, Title:s.name||'未知歌曲', Artist:artists, Album:al.name||'', Pic: s.al?al.picUrl:(s.album?al.picUrl:(s.pic||'')), Duration:s.dt||s.duration||0 }; }
+  // 兼容两种字段：网易云接口的 snake_case（name/ar/al）与 C# 队列 DTO 的 PascalCase（Title/Artist/...）
+  function normSong(s) {
+    if (!s) return null;
+    var artists = (s.ar || s.artists || []).map(function (a) { return a.name; }).join(' / ');
+    if (!artists && s.Artist) artists = s.Artist;
+    var al = s.al || s.album || {};
+    var pic = al.picUrl || al.pic || s.pic || s.Pic || '';
+    return {
+      Id: (s.id !== undefined && s.id !== null) ? s.id : (s.Id !== undefined ? s.Id : 0),
+      Title: s.name || s.Title || '未知歌曲',
+      Artist: artists || '未知',
+      Album: al.name || s.Album || '',
+      Pic: pic,
+      Duration: s.dt || s.duration || s.Duration || 0
+    };
+  }
   function toast(t) { const el=$('#toast'); el.textContent=t; el.style.display='block'; setTimeout(()=>el.style.display='none',2000); }
   function loading() { view.innerHTML = '<div class="big-load">正在加载…</div>'; }
 
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
   function pop(el) { if(!el) return; el.classList.remove('fx-pop'); void el.offsetWidth; el.classList.add('fx-pop'); }
-  function setPlaying(on) { var p = $('#player'); if(p) p.classList.toggle('playing', !!on); var pb = $('#pb-play'); if(pb) pb.innerHTML = '<i class="ic">' + (on ? '&#xE769;' : '&#xE768;') + '</i>'; }
-  function setPlayer(ns) {
+  function setPlaying(on) { var p = $('#player'); if(p) p.classList.toggle('playing', !!on); var pb = $('#pb-play'); if(pb) pb.innerHTML = on ? SVG.pause : SVG.play; }
+  // 只更新歌名/歌手/封面（恢复播放列表时用，不改播放状态）
+  function showSongMeta(ns) {
     if(!ns) return;
     $('#pl-title').textContent = ns.Title;
     $('#pl-artist').textContent = ns.Artist;
     var c = $('#pl-cover'), wrap = $('#pl-cover-wrap');
     if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); if(wrap) wrap.classList.add('has-cover'); }
     else { c.removeAttribute('src'); if(wrap) wrap.classList.remove('has-cover'); }
-    setPlaying(true);
-    pop($('#pb-play'));
   }
+  function setPlayer(ns) { if(!ns) return; showSongMeta(ns); setPlaying(true); pop($('#pb-play')); }
 
-  // 图标全部用圆角几何（rx / 圆弧），配合 css 里的无底色大图标
+  // ===== 统一图标集：全部描边风格（stroke 2 / round 端点），同一功能只用同一个图标 =====
+  function ico(inner) {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" '
+      + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+  }
   var SVG = {
-    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 5.2c-1-.6-2.3.1-2.3 1.3v11c0 1.2 1.3 1.9 2.3 1.3l9.2-5.5c1-.6 1-2 0-2.6L9.1 5.2z"/></svg>',
-    add:  '<svg viewBox="0 0 24 24" aria-hidden="true">'
-        + '<rect x="3" y="5.4" width="11" height="2.6" rx="1.3"/>'
-        + '<rect x="3" y="10.7" width="11" height="2.6" rx="1.3"/>'
-        + '<rect x="3" y="16" width="7.5" height="2.6" rx="1.3"/>'
-        + '<rect x="16.2" y="9.6" width="2.6" height="12" rx="1.3"/>'
-        + '<rect x="11.5" y="14.3" width="12" height="2.6" rx="1.3"/>'
-        + '</svg>',
-    // 描边风格：下载（用户提供的图标，fill:none 写在内联样式里，避免被 .row-btn svg 的 fill 覆盖）
-    dl:   '<svg viewBox="0 0 24 24" aria-hidden="true" style="fill:none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-        + '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
-        + '<polyline points="7 10 12 15 17 10"/>'
-        + '<line x1="12" x2="12" y1="15" y2="3"/>'
-        + '</svg>'
+    play:    ico('<path d="M8 5v14l11-7z"/>'),
+    pause:   ico('<rect x="7" y="4.5" width="3.6" height="15" rx="1.5"/><rect x="13.4" y="4.5" width="3.6" height="15" rx="1.5"/>'),
+    prev:    ico('<polyline points="19 20 9 12 19 4"/><line x1="5" x2="5" y1="19" y2="5"/>'),
+    next:    ico('<polyline points="5 4 15 12 5 20"/><line x1="19" x2="19" y1="5" y2="19"/>'),
+    // 列表基础图形（用户提供）→ 派生出“添加到列表”和“播放列表”
+    list:    ico('<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>'),
+    add:     ico('<line x1="3" x2="14" y1="6" y2="6"/><line x1="3" x2="14" y1="12" y2="12"/><line x1="3" x2="9" y1="18" y2="18"/><line x1="18" x2="18" y1="13.5" y2="22.5"/><line x1="13.5" x2="22.5" y1="18" y2="18"/>'),
+    playlist:ico('<line x1="3" x2="14" y1="6" y2="6"/><line x1="3" x2="14" y1="12" y2="12"/><line x1="3" x2="9" y1="18" y2="18"/><path d="M16.5 14.4l6 3.6-6 3.6z"/>'),
+    dl:      ico('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>'),
+    star:    ico('<path d="M12 3.6l2.7 5.4 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.9l6-.9z"/>'),
+    // 播放模式四态
+    modeOrder:  ico('<line x1="4" x2="19" y1="12" y2="12"/><polyline points="14 6 20 12 14 18"/>'),
+    modeList:   ico('<polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'),
+    modeSingle: ico('<polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="16" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" stroke="none">1</text>'),
+    modeRandom: ico('<polyline points="16 3 21 3 21 8"/><line x1="4" x2="21" y1="20" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" x2="21" y1="15" y2="21"/><line x1="4" x2="9" y1="4" y2="9"/>')
   };
   function songRow(ns, i) {
     const r = el('div','song-row');
@@ -403,14 +423,93 @@
   NE.on('toast', function(d){ toast(d.text||''); });
   NE.on('nav', function(d){ if(d.view) go(d.view, d); });
 
+  // ================= Dock：图标 / 播放模式 / 桌面歌词 / 当前播放列表 =================
+  var MODES = [
+    { v: 'order',  ic: 'modeOrder',  t: '顺序播放' },
+    { v: 'list',   ic: 'modeList',   t: '列表循环' },
+    { v: 'single', ic: 'modeSingle', t: '单曲循环' },
+    { v: 'random', ic: 'modeRandom', t: '随机播放' }
+  ];
+  var curMode = 'order';
+  function modeInfo(v) { for (var i = 0; i < MODES.length; i++) if (MODES[i].v === v) return MODES[i]; return MODES[0]; }
+  function applyMode(v, silent) {
+    var m = modeInfo(v); curMode = m.v;
+    var b = $('#pb-mode'); if (b) { b.innerHTML = SVG[m.ic]; b.title = '播放模式：' + m.t + '（点击切换）'; }
+    if (!silent) { NE.setSetting('playMode', curMode); toast(m.t); }
+  }
+  function setLyricBtn(on) {
+    var b = $('#pb-lyric'); if (!b) return;
+    b.classList.toggle('on', !!on);
+    b.title = on ? '桌面歌词：已开启（点击关闭）' : '桌面歌词：已关闭（点击开启）';
+  }
+  function initDockIcons() {
+    var map = { 'pb-prev': SVG.prev, 'pb-next': SVG.next, 'pl-like': SVG.star, 'pl-dl': SVG.dl, 'pl-list': SVG.playlist };
+    Object.keys(map).forEach(function (id) { var b = document.getElementById(id); if (b) b.innerHTML = map[id]; });
+    var pb = $('#pb-play'); if (pb && !pb.innerHTML.trim()) pb.innerHTML = SVG.play;
+    applyMode(curMode, true);
+  }
+
+  // ---- 当前播放列表面板 ----
+  var plOpen = false;
+  function renderQueue() {
+    var box = $('#plpanel-list'); if (!box) return;
+    var cnt = $('#plpanel-count'); if (cnt) cnt.textContent = queue.length ? (queue.length + ' 首') : '';
+    box.innerHTML = '';
+    if (!queue.length) { box.innerHTML = '<div class="pl-empty">播放列表是空的</div>'; return; }
+    queue.forEach(function (ns, i) {
+      var it = el('div', 'pl-item' + (i === playingIndex ? ' on' : ''));
+      it.innerHTML = '<span class="pl-item-idx">' + String(i + 1).padStart(2, '0') + '</span>'
+        + '<span class="pl-item-title">' + esc(ns.Title) + '</span>'
+        + '<span class="pl-item-artist">' + esc(ns.Artist) + '</span>';
+      it.onclick = function () { NE.post({ type: 'play_index', index: i }); };
+      box.appendChild(it);
+    });
+    var cur = box.querySelector('.pl-item.on'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+  }
+  function toggleQueuePanel(force) {
+    plOpen = (force === undefined) ? !plOpen : !!force;
+    var p = $('#plpanel'); if (!p) return;
+    p.classList.toggle('show', plOpen);
+    if (plOpen) NE.post({ type: 'queue_get' });
+  }
+
+  initDockIcons();
   $('#pb-play').onclick = () => { NE.post({type:'toggle'}); setPlaying(!$('#player').classList.contains('playing')); pop($('#pb-play')); };
   $('#pb-prev').onclick = () => NE.post({type:'prev'});
   $('#pb-next').onclick = () => NE.post({type:'next'});
+  $('#pb-mode').onclick = function () {
+    var vs = MODES.map(function (m) { return m.v; });
+    applyMode(vs[(vs.indexOf(curMode) + 1) % vs.length], false);
+  };
+  $('#pb-lyric').onclick = function () {
+    var on = !$('#pb-lyric').classList.contains('on');
+    setLyricBtn(on); NE.post({ type: 'desktop_lyric', on: on });
+  };
+  $('#pl-list').onclick = function (e) { e.stopPropagation(); toggleQueuePanel(); };
+  document.addEventListener('click', function (e) {
+    if (plOpen && !(e.target.closest && (e.target.closest('#plpanel') || e.target.closest('#pl-list')))) toggleQueuePanel(false);
+  });
   $('#pl-dl').onclick = () => { if(queue[playingIndex]) NE.post({type:'download', song:queue[playingIndex]}); };
   // 点击播放条封面 → 进入歌词页
   $('#pl-cover').onclick = () => { document.querySelectorAll('#nav a').forEach(x=>x.classList.remove('on')); go('lyric'); };
   $('#pl-like').onclick = () => toast('收藏开发中');
   $('#pl-volume').oninput = e => NE.post({type:'volume', v: e.target.value});
+
+  // 队列消息：C# 恢复/变更播放列表时刷新面板与 dock 显示
+  NE.on('queue', function (d) {
+    queue = (d.songs || []).map(normSong);
+    playingIndex = (typeof d.index === 'number') ? d.index : -1;
+    renderQueue();
+    var cur = queue[playingIndex];
+    if (cur && $('#pl-title').textContent === '未在播放') showSongMeta(cur);
+  });
+  NE.on('queue_changed', function () { if (plOpen) NE.post({ type: 'queue_get' }); });
+  NE.on('desktop_lyric_state', function (d) { setLyricBtn(!!d.on); });
+  // 启动时同步：播放模式 / 桌面歌词状态 / 上次的播放列表
+  NE.getSettings().then(function (s) {
+    try { applyMode(s.playMode || 'order', true); setLyricBtn(String(s.desktopLyric) !== 'false' && s.desktopLyric !== false); } catch (e) { }
+  }).catch(function () { });
+  setTimeout(function () { NE.post({ type: 'queue_get' }); }, 900);
 
   const navLinks = document.querySelectorAll('#sidebar a[data-nav]');
   navLinks.forEach(a => a.onclick = () => {
