@@ -136,9 +136,15 @@ html.no-fx .fx-shake{animation:none;}
 @keyframes fx-pop{0%{transform:scale(1);}35%{transform:scale(1.28) rotate(-6deg);}70%{transform:scale(.94) rotate(3deg);}100%{transform:scale(1) rotate(0);}}
 .fx-pop{animation:fx-pop .38s cubic-bezier(.2,.9,.3,1.2);}
 
-/* 播放中：主按钮呼吸 + 封面轻微起伏 + 进度条发光 */
-@keyframes btn-breathe{0%,100%{box-shadow:0 0 0 0 rgba(var(--md-accent-color-rgb),.35);}50%{box-shadow:0 0 0 8px rgba(var(--md-accent-color-rgb),0);}}
-#player.playing #pb-play{animation:btn-breathe 1.9s ease-out infinite;}
+/* 播放中：主按钮呼吸（用 transform+opacity，避免 box-shadow 每帧重绘 —— 高刷屏上很贵） */
+@keyframes btn-breathe{0%,100%{transform:scale(1);}50%{transform:scale(1.045);}}
+#player.playing #pb-play::after{
+  content:'';position:absolute;inset:-2px;border-radius:50%;
+  border:2px solid rgba(var(--md-accent-color-rgb),.5);
+  animation:ring-breathe 1.9s ease-out infinite;pointer-events:none;
+}
+@keyframes ring-breathe{0%{transform:scale(.92);opacity:.75;}100%{transform:scale(1.3);opacity:0;}}
+#player.playing #pb-play{animation:btn-breathe 1.9s ease-in-out infinite;position:relative;}
 @keyframes cover-float{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-2px) scale(1.035);}}
 #player.playing .pl-cover{animation:cover-float 2.6s ease-in-out infinite;}
 #player.playing #pl-fill{box-shadow:0 0 10px rgba(var(--md-accent-color-rgb),.75);}
@@ -295,7 +301,8 @@ html.no-fx .fx-shake{animation:none;}
 /* 背景：模糊放大封面 + 暗色渐层 */
 .np-bg{
   position:absolute;inset:-8%;background-size:cover;background-position:center;
-  filter:blur(72px) saturate(1.9) brightness(.95);transform:scale(1.18);
+  filter:blur(12px) saturate(1.7) brightness(.95);transform:scale(1.08);
+  will-change:transform;
   transition:background-image .4s ease;
 }
 .np-scrim{
@@ -342,7 +349,7 @@ html.no-fx .fx-shake{animation:none;}
   padding:2px 0;font-size:var(--ly-font-size,22px);line-height:1.25;font-weight:600;
   color:rgba(255,255,255,.42);
   transform-origin:left center;
-  will-change:transform,filter,opacity;
+  /* 注意：不要给每行加 will-change —— 73 行会各自提升为合成层，CPU/内存都会爆 */
   transition:transform .62s var(--ly-ease), filter .62s ease, opacity .62s ease, color .4s ease;
 }
 .np-line.on{color:#fff;}
@@ -423,6 +430,7 @@ html.no-fx .fx-shake{animation:none;}
 .np-gear.on{background:rgba(255,255,255,.26);color:#fff;}
 .np-settings{
   position:absolute;right:16px;top:16px;bottom:16px;width:320px;z-index:19;
+  display:none;                       /* 关闭时彻底不渲染（backdrop-filter 很贵） */
   background:rgba(16,17,24,.84);backdrop-filter:blur(20px) saturate(1.2);
   border:1px solid rgba(255,255,255,.10);
   border-radius:22px;                      /* 圆角 */
@@ -431,7 +439,7 @@ html.no-fx .fx-shake{animation:none;}
   transition:transform .34s cubic-bezier(.2,.8,.3,1), opacity .3s ease;
   display:flex;flex-direction:column;overflow:hidden;
 }
-.np-settings.show{transform:none;opacity:1;pointer-events:auto;}
+.np-settings.show{display:flex;transform:none;opacity:1;pointer-events:auto;}
 .np-settings-head{
   display:flex;align-items:baseline;gap:10px;
   padding:22px 20px 14px;font-size:15px;font-weight:700;color:#fff;
@@ -557,8 +565,6 @@ html.no-fx .fx-shake{animation:none;}
 .np-bg-fx{
   position:absolute;left:0;right:0;bottom:0;height:56%;width:100%;
   pointer-events:none;z-index:1;display:none;
-  mask-image:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.85) 60%, #000 100%);
-  -webkit-mask-image:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.85) 60%, #000 100%);
 }
 .nps-title{
   margin:14px 0 4px;font-size:12px;font-weight:700;letter-spacing:.06em;
