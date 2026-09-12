@@ -185,6 +185,7 @@ public sealed partial class MainWindow : Window
                 case "playlist": _ = HandleWebPlaylist(doc); break;
                 case "lyric": _ = HandleWebLyric(doc); break;
                 case "play": HandleWebPlay(doc); break;
+                case "play_list": HandleWebPlayList(doc); break;
                 case "download": HandleWebDownload(doc); break;
                 case "login": break; // 登录由 Web 前端 via /api 完成
                 case "api": _ = HandleWebApi(doc); break;
@@ -217,6 +218,19 @@ public sealed partial class MainWindow : Window
         }
         else if (doc.TryGetProperty("id", out var id) && id.GetInt64() > 0) { var q = AppServices.Player.Queue; int idx = q.FindIndex(x => x.Id == id.GetInt64()); if (idx >= 0) _ = AppServices.Player.PlayAtAsync(idx); }
     }
+    /// <summary>播放全部：整列表作为播放队列，并从 index 开始播放。</summary>
+    private void HandleWebPlayList(JsonElement doc)
+    {
+        if (!doc.TryGetProperty("songs", out var arr) || arr.ValueKind != JsonValueKind.Array) return;
+        var q = new List<Song>();
+        foreach (var it in arr.EnumerateArray()) { var s = SongFromWeb(it); if (s is not null && s.Id > 0) q.Add(s); }
+        if (q.Count == 0) return;
+        int idx = doc.TryGetProperty("index", out var i) && i.TryGetInt32(out var n) ? n : 0;
+        if (idx < 0 || idx >= q.Count) idx = 0;
+        LogManager.Log("播放全部: " + q.Count + " 首, 起始下标 " + idx);
+        _ = AppServices.Player.LoadQueueAsync(q, idx);
+    }
+
     private void HandleWebDownload(JsonElement doc) { if (doc.TryGetProperty("song", out var s)) { var song = new Song { Id = s.TryGetProperty("Id", out var id) ? id.GetInt64() : 0, Title = s.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "", Artists = new List<Artist> { new Artist { Name = s.TryGetProperty("Artist", out var a) ? a.GetString() ?? "" : "" } }, Album = new Album { Name = s.TryGetProperty("Album", out var al) ? al.GetString() ?? "" : "", PicUrl = s.TryGetProperty("Pic", out var p) ? p.GetString() : "" } }; if (song.Id > 0) _ = AppServices.Download.Download(song, AppServices.Config.DownloadDir, AppServices.Config.Quality); } }
 
     /// <summary>把当前设置推给前端设置页。</summary>
@@ -228,6 +242,7 @@ public sealed partial class MainWindow : Window
             ["schemes"] = AppServices.Theme.SchemeNames(),
             ["mica"] = AppServices.Config.Mica,
             ["closeToTray"] = AppServices.Config.Get("App", "close_to_tray", "false").Equals("true", StringComparison.OrdinalIgnoreCase),
+            ["uiEffects"] = AppServices.Config.Get("App", "ui_effects", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
             ["downloadDir"] = AppServices.Config.DownloadDir,
             ["quality"] = AppServices.Config.Quality,
             ["volume"] = AppServices.Config.Volume,
@@ -259,6 +274,7 @@ public sealed partial class MainWindow : Window
                 break;
             case "mica": AppServices.Config.Mica = b; WindowHelper.ApplyBackdrop(this, b); break;
             case "closeToTray": AppServices.Config.Set("App", "close_to_tray", b ? "true" : "false"); break;
+            case "uiEffects": AppServices.Config.Set("App", "ui_effects", b ? "true" : "false"); break;
             case "downloadDir": try { if (!string.IsNullOrWhiteSpace(value)) AppServices.Config.DownloadDir = value; } catch { } break;
             case "quality": AppServices.Config.Quality = value; break;
             case "volume": if (int.TryParse(value, out var vol)) AppServices.Player.SetVolume(vol); break;

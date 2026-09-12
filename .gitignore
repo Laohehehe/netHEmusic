@@ -33,18 +33,19 @@ node_modules/
 *~RF*.TMP
 
 # ---- 旧版本归档（Qt6 旧架构，不再使用）----
-归档/
+/归档/
 
 # ---- 只保留本项目（netHEmusic WinUI3 版）相关文件 ----
 # 旧 Qt / Python web 架构与中间原型、参考资料、恢复残留均不上传
-_outside/
-backend/
-web/
-winui3/
-winui3-cs/
-参考文档/
-网易云音乐sq/
-工作组交接记忆.md
+# 注意：必须以 / 开头锚定仓库根目录，否则会连 src/NetHEmusicCP/Web/ 一起忽略
+/_outside/
+/backend/
+/web/
+/winui3/
+/winui3-cs/
+/参考文档/
+/网易云音乐sq/
+/工作组交接记忆.md
 CMakeLists.txt
 version_info.txt
 /src/logger.cpp
