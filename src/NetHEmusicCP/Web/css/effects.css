@@ -420,24 +420,27 @@ html.no-fx .fx-shake{animation:none;}
 .np-gear:hover{background:rgba(255,255,255,.22);transform:scale(1.08) rotate(24deg);}
 .np-gear.on{background:rgba(255,255,255,.26);color:#fff;}
 .np-settings{
-  position:absolute;right:0;top:0;bottom:0;width:320px;z-index:19;
-  background:rgba(16,17,24,.82);backdrop-filter:blur(18px) saturate(1.2);
-  border-left:1px solid rgba(255,255,255,.08);
-  transform:translateX(100%);opacity:0;pointer-events:none;
+  position:absolute;right:16px;top:16px;bottom:16px;width:320px;z-index:19;
+  background:rgba(16,17,24,.84);backdrop-filter:blur(20px) saturate(1.2);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:22px;                      /* 圆角 */
+  box-shadow:0 24px 60px rgba(0,0,0,.5);
+  transform:translateX(calc(100% + 20px));opacity:0;pointer-events:none;
   transition:transform .34s cubic-bezier(.2,.8,.3,1), opacity .3s ease;
-  display:flex;flex-direction:column;
+  display:flex;flex-direction:column;overflow:hidden;
 }
 .np-settings.show{transform:none;opacity:1;pointer-events:auto;}
 .np-settings-head{
-  display:flex;align-items:center;justify-content:space-between;
+  display:flex;align-items:baseline;gap:10px;
   padding:22px 20px 14px;font-size:15px;font-weight:700;color:#fff;
 }
+.np-settings-hint{font-size:11px;font-weight:400;color:rgba(255,255,255,.42);}
 .np-settings-close{
   border:none;background:transparent;color:rgba(255,255,255,.7);font-size:15px;cursor:pointer;
   width:28px;height:28px;border-radius:50%;transition:background .2s ease,color .2s ease;
 }
 .np-settings-close:hover{background:rgba(255,255,255,.14);color:#fff;}
-.np-settings-body{overflow-y:auto;padding:0 20px 28px;}
+.np-settings-body{overflow-y:auto;padding:0 20px 56px;}
 .nps-row{display:flex;align-items:center;gap:10px;min-height:42px;}
 .nps-label{flex:1;font-size:13.5px;color:rgba(255,255,255,.88);}
 .nps-val{width:30px;text-align:right;font-size:12px;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums;}
@@ -464,3 +467,47 @@ html.no-fx .fx-shake{animation:none;}
   background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.14);outline:none;cursor:pointer;
 }
 .nps-select option{background:#1a1b24;color:#fff;}
+/* 歌词设置面板里的自绘下拉 */
+.nps-cust{flex:1;min-width:0;}
+.nps-cust .cs-value{
+  background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.16);
+  border-radius:9px;height:30px;padding:0 10px;font-size:13px;
+}
+.nps-cust .cs-value:hover{border-color:rgba(255,255,255,.4);}
+.nps-cust .cs-list{
+  background:#191a22;border:1px solid rgba(255,255,255,.14);border-radius:10px;
+  box-shadow:0 14px 34px rgba(0,0,0,.55);padding:5px;
+}
+.nps-cust .cs-item{padding:7px 10px;border-radius:7px;font-size:13px;color:rgba(255,255,255,.82);}
+.nps-cust .cs-item:hover{background:rgba(255,255,255,.12);color:#fff;}
+.nps-cust .cs-item.sel{color:#fff;background:rgba(255,255,255,.16);font-weight:600;}
+/* ================= 自绘下拉：过渡动画 + 贴紧触发器 ================= */
+.cust-select .cs-list{
+  display:block;
+  top:calc(100% + 4px);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translateY(-6px) scale(.97);
+  transform-origin:top right;
+  transition:opacity .16s ease, transform .22s cubic-bezier(.2,.8,.3,1.25), visibility 0s linear .2s;
+}
+.cust-select.open .cs-list{
+  opacity:1;visibility:visible;pointer-events:auto;
+  transform:none;
+  transition:opacity .18s ease, transform .24s cubic-bezier(.2,.8,.3,1.25), visibility 0s;
+}
+.cust-select .cs-value{
+  transition:border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.cust-select.open .cs-value{
+  border-color:var(--md-accent-color);
+  box-shadow:0 0 0 3px rgba(var(--md-accent-color-rgb),.18);
+}
+.cust-select .cs-value .ic{transition:transform .24s cubic-bezier(.2,.8,.3,1.3);}
+.cust-select.open .cs-value .ic{transform:rotate(180deg);}
+/* 下方空间不足时向上弹出（保持同样的过渡） */
+.cust-select.drop-up .cs-list{
+  top:auto;bottom:calc(100% + 4px);
+  transform-origin:bottom right;
+  transform:translateY(6px) scale(.97);
+}
+.cust-select.drop-up.open .cs-list{transform:none;}

@@ -465,14 +465,40 @@
     }
     function addSelect(label, key, field, opts) {
       var r = row(label);
-      var sel = el('select', 'nps-select');
+      var box = el('div', 'cust-select nps-cust');
+      var cur = opts[0];
+      opts.forEach(function (o) { if (o.v === lyStyles[field]) cur = o; });
+      var v = el('div', 'cs-value');
+      v.innerHTML = '<span>' + esc(cur.t) + '</span><i class="ic">&#xE70D;</i>';
+      var list = el('div', 'cs-list');
       opts.forEach(function (o) {
-        var op = document.createElement('option'); op.value = o.v; op.textContent = o.t;
-        if (lyStyles[field] === o.v) op.selected = true;
-        sel.appendChild(op);
+        var it = el('div', 'cs-item' + (o.v === lyStyles[field] ? ' sel' : ''), esc(o.t));
+        it.onclick = function (e) {
+          e.stopPropagation();
+          box.classList.remove('open');
+          lyStyles[field] = o.v;
+          v.querySelector('span').textContent = o.t;
+          Array.prototype.forEach.call(list.children, function (x) { x.classList.remove('sel'); });
+          it.classList.add('sel');
+          persist(key, o.v);
+        };
+        list.appendChild(it);
       });
-      sel.onchange = function () { lyStyles[field] = sel.value; persist(key, sel.value); };
-      r.appendChild(sel);
+      v.onclick = function (e) {
+        e.stopPropagation();
+        var wasOpen = box.classList.contains('open');
+        document.querySelectorAll('.cust-select.open').forEach(function (x) { x.classList.remove('open'); });
+        if (wasOpen) return;
+        // 下方空间不足就向上弹，避免被面板边缘裁掉
+        var bodyEl = npEl('np-settings-body');
+        var bb = box.getBoundingClientRect();
+        var limit = bodyEl ? bodyEl.getBoundingClientRect().bottom : window.innerHeight;
+        var need = Math.min(list.children.length, 6) * 34 + 16;
+        box.classList.toggle('drop-up', (limit - bb.bottom) < need);
+        box.classList.add('open');
+      };
+      document.addEventListener('click', function () { box.classList.remove('open'); });
+      box.appendChild(v); box.appendChild(list); r.appendChild(box);
     }
     addSwitch('字体辉光', 'lyric_glow', 'glow');
     addSwitch('字体阴影', 'lyric_shadow', 'shadow');
@@ -1131,8 +1157,6 @@
     var nx = npIcon('np-next', SVG.next); if (nx) nx.onclick = function () { NE.post({ type: 'next' }); };
     var gear = npIcon('np-gear', ico('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.9 8.9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9.4a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'));
     if (gear) gear.onclick = function (e) { e.stopPropagation(); npToggleSettings(); };
-    var gclose = document.getElementById('np-settings-close');
-    if (gclose) gclose.onclick = function () { npToggleSettings(false); };
     var pl = npIcon('np-play', npPlaying ? SVG.pause : SVG.play);
     if (pl) pl.onclick = function () { NE.post({ type: 'toggle' }); npSetPlaying(!npPlaying); };
     // dock 的进度条也支持点击跳转
