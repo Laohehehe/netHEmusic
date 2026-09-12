@@ -23,6 +23,64 @@
       Duration: s.dt || s.duration || s.Duration || 0
     };
   }
+  // ================= 快捷键 =================
+  var HK_DEFAULTS = {
+    hk_play:  'Space',                 // 播放 / 暂停
+    hk_next:  'Ctrl+Alt+ArrowRight',   // 下一首
+    hk_prev:  'Ctrl+Alt+ArrowLeft',    // 上一首
+    hk_volup: 'Ctrl+Alt+ArrowUp',      // 音量 +
+    hk_voldn: 'Ctrl+Alt+ArrowDown',    // 音量 -
+    hk_mute:  'M',                     // 静音
+    hk_lyric: 'F',                     // 全窗口歌词页
+    hk_close: 'Escape'                 // 收起歌词页
+  };
+  var HK_LABELS = {
+    hk_play: '播放 / 暂停', hk_next: '下一首', hk_prev: '上一首',
+    hk_volup: '音量 +', hk_voldn: '音量 -', hk_mute: '静音开关',
+    hk_lyric: '打开/收起歌词页', hk_close: '关闭歌词页'
+  };
+  var hotkeys = {};
+  function evKeyName(e) {
+    var p = [];
+    if (e.ctrlKey) p.push('Ctrl');
+    if (e.altKey) p.push('Alt');
+    if (e.shiftKey) p.push('Shift');
+    var code = e.code || '';
+    if (!code) {                                   // 某些输入源不带 code，退回到 key
+      var k = e.key || '';
+      if (k === ' ' || k === 'Spacebar') code = 'Space';
+      else if (k.length === 1) code = k.toUpperCase();
+      else code = k;
+    }
+    if (code.indexOf('Key') === 0) code = code.slice(3);
+    else if (code.indexOf('Digit') === 0) code = code.slice(5);
+    // 单独的修饰键不作为快捷键
+    if (!code || code === 'Control' || code === 'Alt' || code === 'Shift' || code === 'Meta' ||
+        code === 'ControlLeft' || code === 'ControlRight' || code === 'AltLeft' || code === 'AltRight' ||
+        code === 'ShiftLeft' || code === 'ShiftRight') return '';
+    p.push(code);
+    return p.join('+');
+  }
+  function hotkeysFromSettings(s) {
+    hotkeys = {};
+    for (var k in HK_DEFAULTS) hotkeys[k] = String(cfgGet(s, k, HK_DEFAULTS[k]) || HK_DEFAULTS[k]);
+  }
+  function isTyping(el) {
+    return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+  }
+  function runHotkey(action) {
+    switch (action) {
+      case 'hk_play':  NE.post({ type: 'toggle' }); break;
+      case 'hk_next':  NE.post({ type: 'next' }); break;
+      case 'hk_prev':  NE.post({ type: 'prev' }); break;
+      case 'hk_volup': applyVolume((Number($('#pl-volume') && $('#pl-volume').value) || 0) + 5, true); break;
+      case 'hk_voldn': applyVolume((Number($('#pl-volume') && $('#pl-volume').value) || 0) - 5, true); break;
+      case 'hk_mute': { var cur = Number($('#pl-volume') && $('#pl-volume').value) || 0; applyVolume(cur > 0 ? 0 : (lastVol || 60), true); break; }
+      case 'hk_lyric': if (npOpen) closeNowPlaying(); else openNowPlaying(); break;
+      case 'hk_close': if (npOpen) closeNowPlaying(); break;
+    }
+  }
+
   // 读取 [App] 段设置（s.app.*）：设置页与歌词页共用
   function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
   function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
@@ -239,9 +297,12 @@
   function npRenderSong(ns) {
     if (!ns) return;
     var cover = npEl('np-cover'), bg = npEl('np-bg');
+    var wrap = document.querySelector('#np .np-cover-wrap');
     var pic = ns.Pic ? ns.Pic.replace(/\^\d+\^/, '') : '';
     if (pic) { cover.src = pic; bg.style.backgroundImage = 'url("' + pic + '")'; }
     else { cover.removeAttribute('src'); bg.style.backgroundImage = 'none'; }
+    // 有封面时隐藏占位音符（原来用 img ~ i 兄弟选择器，但 <i> 在 <img> 前面，根本没生效）
+    if (wrap) wrap.classList.toggle('has-cover', !!pic);
     npEl('np-title').textContent = ns.Title || '';
     npEl('np-artist').textContent = ns.Artist || '';
     npEl('np-album').textContent = ns.Album || '';
@@ -463,6 +524,37 @@
   }
 
   window.addEventListener('resize', function () { if (npOpen) npLayout(); });
+
+  // 全局快捷键
+  var hkRecording = null;                 // { key, btn, cancelBtn } 录制中
+  document.addEventListener('keydown', function (e) {
+    if (hkRecording) {
+      e.preventDefault(); e.stopPropagation();
+      if (e.key === 'Escape') { stopRecord(false); return; }
+      var name = evKeyName(e);
+      if (!name || name === 'Ctrl' || name === 'Alt' || name === 'Shift') return;   // 只按了修饰键，等真正的键
+      stopRecord(true, name);
+      return;
+    }
+    if (isTyping(e.target)) return;
+    var name = evKeyName(e);
+    if (!name) return;
+    for (var action in hotkeys) {
+      if (hotkeys[action] && hotkeys[action] === name) { e.preventDefault(); runHotkey(action); return; }
+    }
+  }, true);
+  function stopRecord(commit, name) {
+    if (!hkRecording) return;
+    var rec = hkRecording; hkRecording = null;
+    rec.btn.classList.remove('rec');
+    if (commit && name) {
+      hotkeys[rec.key] = name;
+      NE.setSetting(rec.key, name);
+      rec.btn.textContent = name;
+    } else {
+      rec.btn.textContent = hotkeys[rec.key] || HK_DEFAULTS[rec.key];
+    }
+  }
 
   // ---- 歌词页内的“歌词显示设置”面板（可视化实时调整）----
   function npBuildSettings() {
@@ -896,6 +988,34 @@
     html.appendChild(fxGroup(s));
     html.appendChild(group('下载', [ txt('默认下载目录','downloadDir', s.downloadDir), sel('音质','quality', s.quality, ['standard','high','lossless']) ]));
     html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, ['order','list','single','random']) ]));
+    // ---- 快捷键（可自定义）----
+    function hotkeyGroup() {
+      var g = el('div','set-group');
+      g.appendChild(el('h3','','快捷键'));
+      Object.keys(HK_LABELS).forEach(function (key) {
+        var r = el('div','set-row');
+        r.appendChild(el('label','', HK_LABELS[key]));
+        var b = el('button','hk-btn', hotkeys[key] || HK_DEFAULTS[key]);
+        b.onclick = function (e) {
+          e.stopPropagation();
+          if (hkRecording) stopRecord(false);
+          hkRecording = { key: key, btn: b };
+          b.classList.add('rec'); b.textContent = '按下按键…（Esc 取消）';
+        };
+        var rst = el('button','hk-reset','重置');
+        rst.onclick = function (e) {
+          e.stopPropagation();
+          hotkeys[key] = HK_DEFAULTS[key];
+          NE.setSetting(key, HK_DEFAULTS[key]);
+          b.textContent = HK_DEFAULTS[key];
+        };
+        r.appendChild(b); r.appendChild(rst);
+        g.appendChild(r);
+      });
+      g.appendChild(el('p','muted','点按键框后按下想要的组合键即可（Esc 取消录制）；播放/暂停默认是空格。'));
+      return g;
+    }
+    html.appendChild(hotkeyGroup());
     html.appendChild(group('网络 / 代理', [ txt('代理地址','proxy', s.proxy) ]));
     html.appendChild(group('语言', [ sel('界面语言','language', s.language, ['zh_cn','en_US']) ]));
     html.appendChild(group('桌面歌词', [ sw('启用桌面歌词','desktopLyric', s.desktopLyric), sw('强制置顶 + 鼠标穿透','desktopLyricTopmost', s.desktopLyricTopmost), sw('桌面歌曲信息','desktopSongInfo', s.desktopSongInfo) ]));
@@ -1218,6 +1338,7 @@
       applyMode(s.playMode || 'order', true);
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
       npApplyLyricSettings(s);                                 // 歌词页外观设置
+      hotkeysFromSettings(s);                                  // 快捷键绑定
       if (!LYRIC_LOCKED) setLyricBtn(String(s.desktopLyric) !== 'false' && s.desktopLyric !== false);
     } catch (e) { }
   }).catch(function () { });
