@@ -284,8 +284,9 @@
   function lyBlurPx(off) {
     if (!lyStyles.blur) return 0;
     var a = Math.abs(off); if (a === 0) return 0;
-    var maxB = Math.max(0.6, lyStyles.blurAmt / 100 * 6);
-    return Math.min(0.5 + a, maxB);
+    var maxB = Math.max(0.5, lyStyles.blurAmt / 100 * 7);
+    // 平滑递增（原来是 0.5+|off| 起步，第一行就 1.5px，和当前行之间有明显分界）
+    return Math.min(Math.pow(a, 0.8) * 0.8, maxB);
   }
   function lyOpacity(off) {
     var a = Math.abs(off);
@@ -298,10 +299,13 @@
     var len = Math.sqrt(origin[0] * origin[0] + origin[1] * origin[1]) || 1;
     var rot = Math.min(yOffset / Math.max(1, window.innerHeight) * -curvature, 90);
     var deg = rot + Math.atan2(origin[1], origin[0]) * 180 / Math.PI;
+    var maxShift = 90;                     // 限制横向漂移，别把远行推到屏幕外
+    var left = Math.cos(deg * Math.PI / 180) * len - origin[0];
+    if (left < -maxShift) left = -maxShift;
     return {
       rotate: rot,
       extraTop: Math.sin(deg * Math.PI / 180) * len - origin[1],
-      left: Math.cos(deg * Math.PI / 180) * len - origin[0]
+      left: left
     };
   }
 
