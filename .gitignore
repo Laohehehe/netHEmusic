@@ -14,12 +14,12 @@ BundleArtifacts/
 .nuget/
 node_modules/
 
-# ---- 证书/私钥（不纳入版本库）----
+# ---- 证书/私钥（隐私文件，一律不纳入版本库）----
 *.pfx
 *.cer
 *.snk
-# 例外：公开的签名 CA 证书，随源码一起分发（私钥 .pfx 仍然不入库）
-!resources/LaoheTeam.cer
+*.p12
+*.key
 
 # ---- IDE ----
 .vs/
