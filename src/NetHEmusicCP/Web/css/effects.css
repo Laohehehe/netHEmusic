@@ -324,15 +324,15 @@ html.no-fx .fx-shake{animation:none;}
 .np-artist{margin-top:8px;font-size:15px;color:rgba(255,255,255,.78);}
 .np-album{margin-top:4px;font-size:13px;color:rgba(255,255,255,.5);}
 /* 右侧：歌词滚动区 */
-.np-right{height:100%;display:flex;align-items:center;min-width:0;}
+.np-right{height:100%;display:flex;align-items:center;min-width:0;padding-left:56px;}
 .np-lyric{
   position:relative;width:100%;height:min(560px,62vh);overflow:hidden;
-  mask-image:linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
-  -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  mask-image:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.55) 12%, #000 32%, #000 68%, rgba(0,0,0,.55) 88%, transparent 100%);
+  -webkit-mask-image:linear-gradient(180deg, transparent 0%, rgba(0,0,0,.55) 12%, #000 32%, #000 68%, rgba(0,0,0,.55) 88%, transparent 100%);
 }
 .np-lyric-inner{position:relative;width:100%;height:100%;}
 .np-line{
-  position:absolute;left:0;right:0;top:0;
+  position:absolute;left:0;right:0;top:0;text-align:center;
   padding:2px 0;font-size:22px;line-height:1.25;font-weight:600;
   color:rgba(255,255,255,.42);
   transform-origin:left center;
