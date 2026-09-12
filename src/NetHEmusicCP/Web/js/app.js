@@ -437,22 +437,19 @@
   // ---------- 更新公告弹窗（由 C# 比对 config [Version] 后触发）----------
   (function notice() {
     var mask = document.getElementById('notice'); if (!mask) return;
-    var mute = document.getElementById('notice-mute');
     var verEl = document.getElementById('notice-ver');
     var leadEl = document.getElementById('notice-lead');
     var pending = null;   // 待回写的版本号（看完公告才写入 config）
     var closed = false;
 
+    // 只有点「知道了」才算看过：已去掉右上角 ×、点遮罩关闭、Esc 关闭，避免用户没看到内容就关掉
     function close() {
       if (closed) return;
       closed = true;
-      if (mute && mute.checked) { try { sessionStorage.setItem('nethem_notice_muted', '1'); } catch (e) { } }
       mask.classList.remove('show'); mask.setAttribute('aria-hidden', 'true');
       if (pending) { NE.post({ type: 'notice_seen', version: pending }); pending = null; }
     }
     mask.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = close; });
-    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && mask.classList.contains('show')) close(); });
 
     // C# 检测到 config 里的版本比当前版本旧 → 弹更新公告
     NE.on('update_notice', function (d) {
