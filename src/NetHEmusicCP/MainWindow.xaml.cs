@@ -158,7 +158,11 @@ public sealed partial class MainWindow : Window
             try { await core.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}"); } catch (Exception ce) { LogManager.Debug("禁用缓存失败: " + ce.Message); }
             SetupHotReload(webFolder);
             core.WebMessageReceived += OnWebMessage;
-            core.NavigationCompleted += (s, e) => { PushTheme(); PostToWeb(new { type = "nav", view = "home" }); CheckVersionNotice(); };
+            core.NavigationCompleted += (s, e) =>
+            {
+                AppServices.Player.ResetFrontendAudio();   // 网页重载后 <audio> 是空的
+                PushTheme(); PostToWeb(new { type = "nav", view = "home" }); CheckVersionNotice();
+            };
             WebView.Source = new Uri("https://appassets/index.html");
             LogManager.Log("WebView2 已加载: " + webFolder);
         }
