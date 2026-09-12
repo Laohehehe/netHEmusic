@@ -69,5 +69,18 @@ html.no-fx .fx-shake{animation:none;}
 .fx-swatch:hover{transform:scale(1.15);}
 .fx-swatch.on{box-shadow:0 0 0 2px var(--md-accent-color), inset 0 0 0 1px rgba(var(--md-accent-color-grey-base-rgb),.3);}
 .fx-hex{width:96px;background:var(--md-accent-color-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.18);border-radius:7px;color:var(--md-accent-color-secondary);font-size:12px;padding:5px 8px;outline:none;}
-.fx-hex:focus{border-color:var(--md-accent-color);}
-.fx-hex:disabled{opacity:.5;}
+.fx-hex:focus{border-color:var(--md-accent-color);}/* ---------- 列表行图标按钮：无底色 + 大图标 + 全圆角 ---------- */
+.row-btn{
+  width:34px;height:34px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  border:none;border-radius:50%;background:transparent;
+  color:rgba(var(--md-accent-color-grey-base-rgb),.78);cursor:pointer;
+  transition:color .18s ease, transform .2s cubic-bezier(.2,.8,.3,1.3), filter .22s ease;
+}
+.row-btn:hover{
+  color:var(--md-accent-color);
+  transform:scale(1.12);
+  filter:drop-shadow(0 0 9px rgba(var(--md-accent-color-rgb),.55));
+}
+.row-btn:active{transform:scale(.94);}
+.row-btn svg{width:23px;height:23px;display:block;fill:currentColor;}
+.row-btn.primary{color:var(--md-accent-color);}

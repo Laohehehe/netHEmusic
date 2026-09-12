@@ -84,6 +84,7 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .sr-album{flex:1.4;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sr-dur{width:46px;font-size:11px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);}
 /* 歌曲行内的单图标 SVG 按钮 */
+/* 歌曲行内的单图标 SVG 按钮（外观在 effects.css 里统一覆盖） */
 .row-btn{width:30px;height:30px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:50%;background:transparent;color:rgba(var(--md-accent-color-grey-base-rgb),.7);cursor:pointer;transition:background .15s,color .15s;}
 .row-btn:hover{background:var(--nm-fill);color:var(--md-accent-color);}
 .row-btn svg{width:16px;height:16px;fill:currentColor;}

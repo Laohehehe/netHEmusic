@@ -181,13 +181,30 @@
     return cfg;
   }
 
+  // 从 C# 回传的 [App] 段读自定义设置（snake_case），旧 camelCase 键做兜底
+  function pick(s, snake, camel, def) {
+    if (s) {
+      var a = s.app ? s.app[snake] : undefined;
+      if (a !== undefined && a !== '' && a !== null) return a;
+      var b = s[camel];
+      if (b !== undefined && b !== '' && b !== null) return b;
+    }
+    return def;
+  }
   try {
     if (window.NE && NE.getSettings) NE.getSettings().then(function (s) {
       setConfig({
-        enabled: bool(s.uiEffects, true), trail: bool(s.fxTrail, true),
-        trailLen: num(s.fxTrailLen, 55), trailWidth: num(s.fxTrailWidth, 50), glow: bool(s.fxGlow, true),
-        click: bool(s.fxClick, true), clickStyle: s.fxClickStyle || 'both', clickSize: num(s.fxClickSize, 50),
-        shake: bool(s.fxShake, true), shakePower: num(s.fxShakePower, 50), color: s.fxColor || 'auto'
+        enabled: bool(pick(s, 'ui_effects', 'uiEffects', true), true),
+        trail: bool(pick(s, 'fx_trail', 'fxTrail', true), true),
+        trailLen: num(pick(s, 'fx_trail_len', 'fxTrailLen', 55), 55),
+        trailWidth: num(pick(s, 'fx_trail_width', 'fxTrailWidth', 50), 50),
+        glow: bool(pick(s, 'fx_glow', 'fxGlow', true), true),
+        click: bool(pick(s, 'fx_click', 'fxClick', true), true),
+        clickStyle: pick(s, 'fx_click_style', 'fxClickStyle', 'both'),
+        clickSize: num(pick(s, 'fx_click_size', 'fxClickSize', 50), 50),
+        shake: bool(pick(s, 'fx_shake', 'fxShake', true), true),
+        shakePower: num(pick(s, 'fx_shake_power', 'fxShakePower', 50), 50),
+        color: pick(s, 'fx_color', 'fxColor', 'auto')
       });
     }).catch(function () { setConfig({}); });
   } catch (e) { setConfig({}); }

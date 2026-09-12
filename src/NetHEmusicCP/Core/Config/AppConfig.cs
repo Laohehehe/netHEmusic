@@ -89,6 +89,19 @@ public sealed class AppConfig
         catch { return def; }
     }
 
+    /// <summary>取某分段的全部键值（供前端读取自定义设置，新增设置项无需改 C#）。</summary>
+    public Dictionary<string, string> GetSection(string section)
+    {
+        try
+        {
+            var d = Load();
+            return d.Data.TryGetValue(section, out var m)
+                ? new Dictionary<string, string>(m, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
+    }
+
     public void Set(string section, string key, object? value)
     {
         try
