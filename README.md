@@ -1,45 +1,161 @@
-# netHEmusic 网易云音乐下载器（v26.9.12.48 — WinUI3 + Fluent 重写）
+# netHEmusic
 
-> 本版本为**完全重构**：将旧 Qt6 架构改为微软官方 **WinUI 3 + Fluent** 桌面应用（模块化元素架构）。
+> **一个更好看的网易云音乐桌面客户端。** 外壳用 WinUI 3 + Fluent，播放器跑在 WebView2 里。
+> 支持在线播放、无损下载、全窗口歌词页、音乐律动频谱、扫码登录、自动更新。
 
-## 特性
-- **WinUI3 + Fluent / Material You**：基于 Windows App SDK 的现代化圆角、Mica 材质、深浅色与 40+ 套 Material You 配色方案（移植自 material-you-theme-netease）。
-- **模块化元素**：所有控件以「类别.位置.子位置」键名管理（`gui.main.index`、`button.main.headbar.search`、`dock.main.index` 等），支持「选定的元素窗口」鼠标悬停提示。
-- **本地化**：`lang/zh_cn.lang`、`lang/en_US.lang` 双语言，语言包可扩展。
-- **用户协议**：首次运行弹出协议，结尾显示随机 6 位启用密码，输入正确方可使用，否则退出。
-- **更新**：GitHub Release 检测（镜像多源多线程下载 + SHA-256 校验），更新界面 / 进展条 / 自动重启；主界面含更新日志。
-- **主界面 16:9**：顶栏（Logo/返回/前进/搜索/用户/VIP/主题/设置/最小化/最大化/关闭）、左侧边栏（搜索/发现/歌单/歌词/我喜欢/账号/设置）、浏览器（WebView2 材质化 UI）、底部 dock（封面/歌曲/进度/上一下一/播放/下载）。
-- **播放**：内建 MediaPlayer + **SMTC**（系统媒体控件），三首内存环 + 1GB 磁盘缓存。
-- **桌面歌词/歌曲信息**：强制置顶 + 鼠标穿透，可关闭置顶（黄色框可拖动）；横排/竖排；歌词含原文/中文翻译/罗马音切换。
-- **设置**：主题、语言、下载、播放、缓存、主题方案、Mica、登录、更新、日志、高级（控制台、选定元素窗口）、多方案等。
-- **日志**：5 份轮换（log.txt→log5.txt），详细记录 + 敏感信息脱敏（token→XlogintokenX）；`-debugger` 启动显示控制台。
-- **自运行/自测试/自更新/自修复/自我迭代**：`tools/*.ps1` 提供 bootstrap/build/test/sign/update/selfrepair/iterate 全链路。
-- **签名与启动证书校验**：软件由自签名证书 **Laohehehe**（签发机构 **LaoheTeam.top**，到期 **2100-06-17**）签名。程序启动时检测计算机是否存在该启动证书：若不存在则不启动主界面，弹出「安装证书」提示，安装并信任后方可继续。
+<p align="center"><img src="resources/logo.png" width="120" alt="netHEmusic"></p>
 
-## 构建
+---
+
+## ✨ 功能总览
+
+### 🎵 播放
+- **双播放内核**：默认由前端 `<audio>` + Web Audio 播放（可拿到真实频谱），可在设置里一键切回系统原生播放器
+- **交叉淡化**：切歌时新曲淡入、旧曲淡出，0–12 秒可调
+- **系统媒体控件（SMTC）**：支持键盘多媒体键 / Win11 媒体浮出卡片
+- 播放模式：顺序 / 列表循环 / 单曲循环 / 随机播放
+- 三首内存环预取 + 磁盘缓存（容量可配）
+- 音量记忆、静音开关、进度条点击 / 拖动跳转
+
+### 🌊 全窗口歌词页（点播放条封面进入）
+- 沉浸式界面：**模糊封面背景** + 大封面 + 歌名 / 歌手 / 专辑 + 逐行高亮歌词 + 底部进度与控制
+- 排版引擎按行距计算 **缩放 / 模糊 / 透明度 / 旋转**，支持「竖向」与「旋转弧形（曲率可调）」两种排列
+- **同时显示翻译 + 罗马音**，可各自开关
+- **背景音乐律动频谱**：柱状 / 环形绕封面 / 波形，强度和灵敏度可调（真实 FFT，非模拟）
+- 歌词显示设置面板（右上角齿轮，**改完即时生效**）：字体辉光 / 阴影（互斥）、描边、字体大小、逐字动画、非当前行模糊 + 程度、动画曲线 4 种（平滑 / 急促 / 温和 / 缓出）
+- 换行平滑滑动、进入 / 收起有过渡动画（封面从播放条飞入）
+
+### 📚 音乐库
+- **我的歌单**：拉取账号下创建与收藏的全部歌单，点开即看曲目列表
+- **当前播放列表**：dock 最右侧按钮弹出，支持右键 **播放 / 下一首播放 / 删除 / 分享（复制网易云分享链接）**、一键清空
+- **播放列表持久化**：关闭软件后再次打开仍是上次那份队列，并且停在上次播放的那一首
+
+### 🔐 账号
+- 扫码登录（账号页自动获取二维码，实时提示 等待扫码 / 已扫码待确认 / 已过期，可刷新）
+- **登录凭据非对称加密保存**：RSA-2048 密钥对（私钥经 Windows DPAPI 二次保护）+ AES-256-GCM 正文，RSA-OAEP 只包裹 AES 密钥；旧格式自动迁移
+
+### ⌨️ 快捷键（设置里可自定义）
+| 按键 | 功能 |
+|---|---|
+| `空格` | 播放 / 暂停 |
+| `Ctrl + Alt + →` / `←` | 下一首 / 上一首 |
+| `Ctrl + Alt + ↑` / `↓` | 音量 + / − |
+| `M` | 静音开关 |
+| `F` | 打开 / 收起歌词页 |
+| `Esc` | 收起歌词页 |
+
+录制时按 `Backspace` 可**关闭**某一项快捷键，`Esc` 取消录制。
+
+### 🎨 界面与交互
+- WinUI 3 + Fluent：圆角、Mica 材质、深浅色自适应
+- **40+ 套 Material You 配色**，切换时带水波纹扩散动画
+- 无底色描边风图标体系（同一功能全应用统一图标）
+- 鼠标特效：光标拖尾、光晕、点击波纹、火花、按钮抖动 —— 长度 / 粗细 / 大小 / 强度 / 颜色全部可调
+- 隐藏标题栏系统菜单（右键 / Alt+Space），界面更像原生应用
+- 设置项：主题外观 / 歌词页 / 性能 / 播放 / 下载 / 网络代理 / 语言
+
+### ⚡ 性能
+- 可调项：歌词页背景模糊开关、播放态动画开关、频谱帧率（15 / 24 / 33 / 60）
+- 空闲时几乎不占 CPU；歌词列表只渲染当前行附近内容
+
+### 🔄 自动更新
+- 启动时检测 GitHub Release，有新版弹出更新公告 + 更新日志
+- 下载安装包并做 **SHA-256 完整性校验**，校验通过后自动运行安装程序
+- GitHub 不可达时自动切换镜像源、多线程下载
+
+---
+
+## 🚀 安装
+
+1. 到 [Releases](https://github.com/Laohehehe/netHEmusic/releases/latest) 下载最新的 `netHEmusic_Setup_*.exe`
+2. 双击安装（默认装到 `D:\Program Files\netHEmusic`，可改路径）
+3. 首次运行会弹出**用户协议**，输入协议结尾处显示的 6 位启用密码后点「同意并继续」才能进入；点「不同意并退出」不会加载主界面
+4. 到账号页扫码登录，即可使用每日推荐 / 我的歌单等个性化内容
+
+> 卸载：开始菜单「卸载 netHEmusic」，或系统设置 → 应用 → netHEmusic
+
+---
+
+## 🧩 技术栈
+
+| 层 | 技术 |
+|---|---|
+| 外壳 / 窗口 | WinUI 3（Windows App SDK）+ Fluent，自包含 .NET 8 `net8.0-windows10.0.19041.0` |
+| 前端界面 | WebView2 + 原生 HTML / CSS / JavaScript（无框架），JS ⇄ C# 通过 `postMessage` 桥接 |
+| 播放 | 前端 `<audio>` + Web Audio（`AnalyserNode` 频谱）；可选原生 `MediaPlayer` + SMTC |
+| 音乐接口 | NeteaseCloudMusicApi 实例，地址可在 `config.ini` 的 `[Network] api_base` 修改 |
+| 打包 | Inno Setup（主用）、WiX Toolset（MSI） |
+| 热重载 | 开发模式下监听 `Web/` 目录，改动 HTML / CSS / JS 即时刷新，无需重新编译 |
+
+---
+
+## 📁 目录结构
 ```
-powershell -ExecutionPolicy Bypass -File tools/bootstrap.ps1   # 首次：本地安装 .NET SDK 8.0
-powershell -ExecutionPolicy Bypass -File tools/build.ps1       # 构建自包含 exe
+src/NetHEmusicCP       WinUI3 应用
+  Core/                服务层：配置 / 网络 / 缓存 / 下载 / 播放 / 主题 / 更新 / 安全
+  Windows/             窗口：主窗口、用户协议、证书、更新
+  Web/                 前端界面（index.html + css/ + js/）
+  Themes/              Material You 配色
+src/Setup              早期自解压安装器（已被 Inno 取代，保留）
+installer/             Inno Setup 脚本（.iss）与 WiX 脚本（.wxs）
+resources/             图标与 Logo
+lang/                  语言包（zh_cn / en_US）
+tools/                 自运行 / 自测试 / 自构建 / 自签名 / 自更新 / 自修复脚本
+config/                默认配置模板与版本号
+```
+
+---
+
+## 🔧 构建
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/bootstrap.ps1   # 首次：准备 .NET SDK
+powershell -ExecutionPolicy Bypass -File tools/build.ps1       # 编译自包含应用（Release）
+powershell -ExecutionPolicy Bypass -File tools/sign.ps1        # 生成自签名证书并签名 exe
 powershell -ExecutionPolicy Bypass -File tools/test.ps1        # 自测试
-powershell -ExecutionPolicy Bypass -File tools/sign.ps1        # 自签名：Laohehehe / 签发机构 LaoheTeam.top / 到期 2100-06-17
-powershell -ExecutionPolicy Bypass -File tools/iterate.ps1     # 自我迭代闭环
 ```
 
-### 工具链要求（生成 resources.pri / 打包）
-WinUI3 到最终 **打包 / 生成 resources.pri** 一步，依赖 Visual Studio 2022 Build Tools 的 **UWP / MSIX 打包组件**
-（提供 `Microsoft.Build.AppxPackage.dll`、`Microsoft.Build.Packaging.Pri.Tasks.dll` 两个 MSBuild 任务程序集）。
-- 本机若仅有 .NET SDK（缺该项），C# + XAML 编译可完整通过（生成 11 个 `.g.cs`、9 个 `.xbf`、编译 DLL），
-  但打包步骤会报 `MSB4062`。
-- 安装办法（管理员 PowerShell）：`powershell -ExecutionPolicy Bypass -File tools/install-msix-tooling.ps1`，然后重新 `tools/build.ps1`。
+打包安装程序：
+```powershell
+# 1) 准备待打包目录（Release 产物）
+# 2) 用 Inno Setup 编译 installer/netHEmusic.iss  → dist\netHEmusic_Setup_<版本>.exe
+# 3) 用 signtool 给安装包签名
+```
 
-> 状态：代码已通过 **C# + XAML 编译层校验**；仅「最终打包 / resources.pri」受上述 VS Build Tools 组件限制。
+---
 
-## 目录
-- `src/NetHEmusicCP`：WinUI3 应用（Core 服务 / Windows 窗口 / Web 前端 / Themes 主题）
-- `lang`：语言包
-- `resources`：Logo / 图标
-- `tools`：自运行 / 自测试 / 自更新 / 自修复 / 自我迭代脚本
-- `归档`：旧 Qt6 版本（不再使用）
+## 📌 常见问题
 
-## 免责声明
-本软件为第三方独立开发软件，与网易云音乐官方无关，仅供学习交流，禁止商用及用于任何侵权用途。
+**Q：数据存在哪里？**
+`%APPDATA%\netHEmusic` —— `config.ini`（全部设置）、`cookie.txt`（加密后的登录凭据）、`logs\`（5 份轮转日志，敏感信息脱敏）、`cache\`（音频缓存）、`webview\`（WebView2 数据）。
+
+**Q：能换音乐接口服务器吗？**
+可以。编辑 `config.ini` 的 `[Network] api_base`，填你自己的 NeteaseCloudMusicApi 实例地址即可。
+
+**Q：如何开启调试日志？**
+用 `NetHEmusicCP.exe -debugger` 启动，会分配控制台实时输出日志。
+
+**Q：怎么换主题配色？**
+设置 → 主题外观 → 配色方案，内置 40+ 套 Material You 方案，切换时有水波纹动画。
+
+---
+
+## 🙏 致谢
+- 感谢 **BetterNCM 插件**提供的思路
+- [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi) —— 音乐接口
+- [refined-now-playing-netease](https://github.com/solstice23/refined-now-playing-netease) —— 歌词排版思路参考
+- [LibFrontendPlay](https://github.com/BetterNCM/LibFrontendPlay) —— 前端播放内核思路参考
+- [SimpleAudioVisualizer](https://github.com/BetterNCM/SimpleAudioVisualizer) —— 频谱可视化思路参考
+
+---
+
+## 📄 开源协议
+本项目采用 **Apache License 2.0** 开源，详见 [LICENSE](LICENSE)。
+
+---
+
+## ⚠️ 免责声明
+本软件为第三方独立开发软件，与网易云音乐官方**无任何关系**，未获其授权或认可。
+仅供学习、交流与个人研究使用，禁止用于任何违法或侵权用途。
+软件通过公开接口获取音乐信息，歌曲版权归原权利人所有，请于 24 小时内删除下载内容。
+因使用本软件产生的一切后果由使用者自行承担，开发者不承担任何法律责任。
