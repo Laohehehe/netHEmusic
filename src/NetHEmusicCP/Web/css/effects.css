@@ -330,17 +330,16 @@ html.no-fx .fx-shake{animation:none;}
   mask-image:linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
   -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
 }
-.np-lyric-inner{transition:transform .45s cubic-bezier(.22,.8,.3,1);will-change:transform;}
+.np-lyric-inner{position:relative;width:100%;height:100%;}
 .np-line{
-  padding:9px 6px;font-size:18px;line-height:1.5;font-weight:600;
-  color:rgba(255,255,255,.34);transition:color .25s ease, font-size .25s ease, opacity .25s ease, transform .25s ease;
+  position:absolute;left:0;right:0;top:0;
+  padding:2px 0;font-size:22px;line-height:1.25;font-weight:600;
+  color:rgba(255,255,255,.42);
   transform-origin:left center;
+  will-change:transform,filter,opacity;
+  transition:transform .5s var(--ly-ease), filter .5s ease, opacity .5s ease, color .35s ease;
 }
-.np-line.on{
-  color:#fff;font-size:26px;
-  text-shadow:0 2px 20px rgba(0,0,0,.45);
-  transform:scale(1.02);
-}
+.np-line.on{color:#fff;}
 /* 底部控制条（两行：进度 + 控制，整体更靠下） */
 .np-bar{
   position:absolute;left:0;right:0;bottom:0;padding:26px 34px 14px;
@@ -379,3 +378,30 @@ html.no-fx .fx-shake{animation:none;}
 .pl-vol:hover{color:var(--md-accent-color);background:var(--nm-fill);transform:scale(1.12);}
 .pl-vol.muted{color:#e2564d;}
 .pl-vol.muted:hover{color:#ff6b60;}
+/* ================= 歌词页外观设置 ================= */
+/* 动画曲线：由设置写进 --ly-ease */
+.np{--ly-ease:cubic-bezier(.22,.8,.3,1);--ly-blur:2px;}
+
+/* 字体辉光 */
+.np.ly-glow .np-line.on{
+  text-shadow:0 0 6px rgba(255,255,255,.85), 0 0 18px rgba(255,255,255,.55), 0 0 42px rgba(255,255,255,.32);
+}
+/* 字体阴影（与辉光互斥） */
+.np.ly-shadow .np-line.on{ text-shadow:0 2px 10px rgba(0,0,0,.65), 0 1px 3px rgba(0,0,0,.55); }
+.np.ly-shadow .np-line{ text-shadow:0 1px 6px rgba(0,0,0,.45); }
+/* 字体描边 */
+.np.ly-stroke .np-line{ -webkit-text-stroke:1px rgba(0,0,0,.55); }
+.np.ly-stroke .np-line.on{ -webkit-text-stroke:1.2px rgba(0,0,0,.75); }
+/* 非当前行模糊：按与当前行的距离逐行计算，由 JS 写进内联 filter */
+/* 旋转弧形排列时的行变换由 JS 写进 style.transform，这里只给原点 */
+.np.ly-curved .np-line{transform-origin:left center;}
+/* 逐字动画 */
+.ly-ch{display:inline-block;white-space:pre;}
+.np.ly-char .np-line.on .ly-ch{
+  animation:ly-ch-in .42s var(--ly-ease) both;
+  animation-delay:calc(var(--i) * 26ms);
+}
+@keyframes ly-ch-in{
+  from{opacity:0;transform:translateY(8px) scale(.86);}
+  to{opacity:1;transform:none;}
+}

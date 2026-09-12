@@ -23,6 +23,9 @@
       Duration: s.dt || s.duration || s.Duration || 0
     };
   }
+  // 读取 [App] 段设置（s.app.*）：设置页与歌词页共用
+  function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
+  function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
   function toast(t) { const el=$('#toast'); el.textContent=t; el.style.display='block'; setTimeout(()=>el.style.display='none',2000); }
   function loading() { view.innerHTML = '<div class="big-load">正在加载…</div>'; }
 
@@ -229,13 +232,142 @@
     npEl('np-album').textContent = ns.Album || '';
   }
 
+  // ---- 歌词页外观设置（辉光/阴影/描边/排列/逐字/模糊/曲线）----
+  var lyStyles = {
+    glow: false, shadow: true, stroke: false,
+    layout: 'vertical', curve: 50, charAnim: false,
+    blur: false, blurAmt: 40, ease: 'smooth'
+  };
+  // 曲线取值参考 refined-now-playing-netease
+  var LY_EASE = {
+    smooth: 'cubic-bezier(.18,.77,.58,.99)',   // 平滑
+    sharp:  'cubic-bezier(.45,0,.07,1)',       // 急促
+    gentle: 'cubic-bezier(.25,.46,.45,.94)',   // 温和
+    easeout:'cubic-bezier(.15,.6,.35,1)'       // 缓出
+  };
+
+  function npApplyLyricSettings(s) {
+    lyStyles.glow = cfgBool(s, 'lyric_glow', false);
+    lyStyles.shadow = cfgBool(s, 'lyric_shadow', true);
+    lyStyles.stroke = cfgBool(s, 'lyric_stroke', false);
+    lyStyles.layout = String(cfgGet(s, 'lyric_layout', 'vertical'));
+    lyStyles.curve = Number(cfgGet(s, 'lyric_curve', 50)) || 0;
+    lyStyles.charAnim = cfgBool(s, 'lyric_char_anim', false);
+    lyStyles.blur = cfgBool(s, 'lyric_blur', false);
+    lyStyles.blurAmt = Number(cfgGet(s, 'lyric_blur_amount', 40)) || 0;
+    lyStyles.ease = String(cfgGet(s, 'lyric_ease', 'smooth'));
+    npApplyStyleFromState();
+    if (npLines.length) npRenderLyric(npLines);   // 逐字动画开关变了要重建 span
+  }
+
+  function npApplyStyleFromState() {
+    var np = npEl('np'); if (!np) return;
+    var s = lyStyles;
+    np.classList.toggle('ly-glow', !!s.glow && !s.shadow);
+    np.classList.toggle('ly-shadow', !!s.shadow && !s.glow);
+    np.classList.toggle('ly-stroke', !!s.stroke);
+    np.classList.toggle('ly-blur', !!s.blur);
+    np.classList.toggle('ly-curved', s.layout === 'curved');
+    np.classList.toggle('ly-char', !!s.charAnim);
+    np.style.setProperty('--ly-blur', (s.blurAmt / 100 * 5).toFixed(2) + 'px');
+    np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
+    npLayout();
+  }
+
+  // ===== 歌词排版引擎（照 refined-now-playing-netease 的思路重写）=====
+  // 每行绝对定位；按与当前行的“行距 offset”分别算 缩放/模糊/透明度 与位置，
+  // 旋转时把各行放到以左侧远处为圆心的大圆弧上（而不是简单地按行号叠加角度）。
+  function lyScale(off) {
+    var t = Math.max(1 - Math.abs(off) * 0.2, 0);
+    return t * t * t * 0.3 + 0.7;          // 0→1.0  ±1→0.854  ±2→0.765  ±5 以外→0.7
+  }
+  function lyBlurPx(off) {
+    if (!lyStyles.blur) return 0;
+    var a = Math.abs(off); if (a === 0) return 0;
+    var maxB = Math.max(0.6, lyStyles.blurAmt / 100 * 6);
+    return Math.min(0.5 + a, maxB);
+  }
+  function lyOpacity(off) {
+    var a = Math.abs(off);
+    if (a <= 1) return 1;                  // 相邻行保持清晰
+    return Math.max(1 - 0.4 * (a - 1), 0);
+  }
+  // 圆弧排列：圆心在左侧，半径随曲率变化
+  function lyArc(yOffset, height, curvature) {
+    var origin = [-120 + (curvature - 25), -(yOffset + height / 2)];
+    var len = Math.sqrt(origin[0] * origin[0] + origin[1] * origin[1]) || 1;
+    var rot = Math.min(yOffset / Math.max(1, window.innerHeight) * -curvature, 90);
+    var deg = rot + Math.atan2(origin[1], origin[0]) * 180 / Math.PI;
+    return {
+      rotate: rot,
+      extraTop: Math.sin(deg * Math.PI / 180) * len - origin[1],
+      left: Math.cos(deg * Math.PI / 180) * len - origin[0]
+    };
+  }
+
+  var lyPrevIndex = 0;
+  function npLayout() {
+    var wrap = npEl('np-lyric'), box = npEl('np-lyric-inner');
+    if (!wrap || !box) return;
+    var nodes = box.children; if (!nodes.length) return;
+    var cur = (npIndex < 0) ? 0 : Math.min(npIndex, nodes.length - 1);
+    var curved = lyStyles.layout === 'curved';
+    var curvature = Math.max(1, lyStyles.curve) * 0.9;
+    var fs = parseFloat(getComputedStyle(nodes[cur]).fontSize) || 18;
+    var space = fs * 1.2;
+    var h = [], s = [], b = [], o = [], top = [];
+    for (var i = 0; i < nodes.length; i++) h[i] = nodes[i].offsetHeight || fs * 1.5;
+    top[cur] = wrap.clientHeight * 0.5 - h[cur] / 2;     // 当前行垂直居中
+    s[cur] = 1; b[cur] = 0; o[cur] = 1;
+    for (var i = cur - 1; i >= 0; i--) {
+      var off = i - cur;
+      s[i] = lyScale(off); b[i] = lyBlurPx(off); o[i] = lyOpacity(off);
+      top[i] = top[i + 1] - h[i] * s[i] - space;
+    }
+    for (var i = cur + 1; i < nodes.length; i++) {
+      var off2 = i - cur;
+      s[i] = lyScale(off2); b[i] = lyBlurPx(off2); o[i] = lyOpacity(off2);
+      top[i] = top[i - 1] + h[i - 1] * s[i - 1] + space;
+    }
+    var goingDown = cur >= lyPrevIndex;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i], off3 = i - cur, extraTop = 0, left = 0, deg = 0;
+      if (curved) {
+        var a = lyArc(top[cur] - top[i], h[i] * s[i], curvature);
+        deg = a.rotate; extraTop = a.extraTop; left = a.left;
+        // 越靠外越透明，避免弧形排到屏幕外还亮着
+        var rel = Math.abs((top[cur] - top[i]) * 2 / Math.max(1, window.innerHeight));
+        o[i] = Math.min(o[i], Math.max(1 - Math.pow(rel, 1.15) * 1.2, 0));
+      }
+      n.style.top = (top[i] + extraTop).toFixed(1) + 'px';
+      n.style.transform = 'translateX(' + left.toFixed(1) + 'px) scale(' + s[i].toFixed(3) + ')' + (curved ? ' rotate(' + deg.toFixed(2) + 'deg)' : '');
+      n.style.filter = b[i] > 0.05 ? 'blur(' + b[i].toFixed(2) + 'px)' : '';
+      n.style.opacity = o[i].toFixed(3);
+      n.style.zIndex = String(900 - Math.abs(off3));
+      // 错落：离当前行越远，动得越晚一点
+      var dly = off3 === 0 ? 0 : Math.min(Math.abs(off3), 4) * 28 + 20;
+      n.style.transitionDelay = (goingDown ? dly : dly) + 'ms';
+      n.classList.toggle('on', i === cur && npIndex >= 0);
+    }
+
   function npRenderLyric(lines) {
     var box = npEl('np-lyric-inner'); if (!box) return;
     box.innerHTML = '';
-    if (!lines.length) { box.innerHTML = '<div class="np-line on">暂无歌词</div>'; return; }
+    if (!lines.length) { box.innerHTML = '<div class="np-line on" style="top:45%">暂无歌词</div>'; return; }
+    var chars = !!lyStyles.charAnim;
     lines.forEach(function (l) {
-      box.appendChild(el('div', 'np-line', esc(l.s)));
+      var div = el('div', 'np-line');
+      if (chars) {
+        var txt = l.s, frag = '';
+        for (var i = 0; i < txt.length; i++) frag += '<span class="ly-ch" style="--i:' + i + '">' + esc(txt.charAt(i)) + '</span>';
+        div.innerHTML = frag;
+      } else {
+        div.textContent = l.s;
+      }
+      box.appendChild(div);
     });
+    npIndex = -1;
+    npLayout();
   }
 
   function npSync(pos) {
@@ -244,16 +376,8 @@
     for (var k = 0; k < npLines.length; k++) { if (npLines[k].t <= pos) i = k; else break; }
     if (i === npIndex) return;
     npIndex = i;
-    var box = npEl('np-lyric-inner'); if (!box) return;
-    var nodes = box.children;
-    for (var j = 0; j < nodes.length; j++) nodes[j].classList.toggle('on', j === i);
-    if (i >= 0 && nodes[i]) {
-      var wrap = npEl('np-lyric');
-      var target = nodes[i].offsetTop + nodes[i].offsetHeight / 2 - wrap.clientHeight / 2;
-      box.style.transform = 'translateY(' + (-Math.max(0, target)) + 'px)';
-    }
+    npLayout();
   }
-
   async function openNowPlaying() {
     var np = npEl('np'); if (!np) return;
     var wasOpen = npOpen;
@@ -296,6 +420,8 @@
       wrap.style.opacity = '1';
     });
   }
+
+  window.addEventListener('resize', function () { if (npOpen) npLayout(); });
 
   function closeNowPlaying() {
     var np = npEl('np'); if (!np) return;
@@ -531,8 +657,6 @@
       box.appendChild(tip); box.appendChild(auto); box.appendChild(wrap); r.appendChild(box); return r;
     }
     // 自定义设置键（snake_case）统一从 C# 回传的 [App] 段里取，新增项无需改 C#
-    function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
-    function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
     function fxGroup(s) {
       var g = el('div','set-group');
       g.appendChild(el('h3','','鼠标特效'));
@@ -560,7 +684,83 @@
       return g;
     }
 
+    // ---- 歌词页外观（改动即时生效并落 config）----
+    function lyricGroup(s) {
+      var g = el('div','set-group');
+      g.appendChild(el('h3','','歌词页（全窗口歌词）'));
+      function persist(k, v) { NE.setSetting(k, v); npApplyStyleFromState(); if (npLines.length) npRenderLyric(npLines); }
+      // 开关
+      function lSw(label, key, field, def) {
+        var r = el('div','set-row'); r.appendChild(el('label','',label));
+        var v = cfgBool(s, key, def);
+        var t = el('div','set-switch'+(v?' on':'')); t.title = label; r.appendChild(t);
+        t.onclick = function(){
+          var on = !t.classList.contains('on'); t.classList.toggle('on', on);
+          lyStyles[field] = on;
+          if (field === 'glow' && on) { lyStyles.shadow = false; shadowSw.classList.remove('on'); NE.setSetting('lyric_shadow','false'); }
+          if (field === 'shadow' && on) { lyStyles.glow = false; glowSw.classList.remove('on'); NE.setSetting('lyric_glow','false'); }
+          persist(key, on ? 'true' : 'false');
+        };
+        r.__sw = t;
+        return r;
+      }
+      var rowGlow = lSw('字体辉光','lyric_glow','glow', false);
+      var rowShadow = lSw('字体阴影','lyric_shadow','shadow', true);
+      var glowSw = rowGlow.__sw, shadowSw = rowShadow.__sw;
+      g.appendChild(rowGlow); g.appendChild(rowShadow);
+      g.appendChild(lSw('字体描边','lyric_stroke','stroke', false));
+      // 排列
+      var rowLayout = el('div','set-row'); rowLayout.appendChild(el('label','','歌词排列'));
+      var selLayout = el('div','cust-select'); selLayout.innerHTML = '<div class="cust-value"></div><div class="cust-list"></div>';
+      var curLayout = String(cfgGet(s, 'lyric_layout', 'vertical'));
+      var LAY = [{v:'vertical',t:'竖向（默认）'},{v:'curved',t:'旋转弧形'}];
+      selLayout.querySelector('.cust-value').textContent = (LAY.filter(function(x){return x.v===curLayout;})[0]||LAY[0]).t;
+      var llist = selLayout.querySelector('.cust-list');
+      LAY.forEach(function(o){
+        var it = el('div','cust-item'+(o.v===curLayout?' on':''), o.t);
+        it.onclick = function(e){ e.stopPropagation(); selLayout.querySelector('.cust-value').textContent = o.t;
+          Array.prototype.forEach.call(llist.children, function(x){ x.classList.remove('on'); }); it.classList.add('on');
+          selLayout.classList.remove('open'); lyStyles.layout = o.v; persist('lyric_layout', o.v); };
+        llist.appendChild(it);
+      });
+      selLayout.querySelector('.cust-value').onclick = function(e){ e.stopPropagation(); selLayout.classList.toggle('open'); };
+      document.addEventListener('click', function(){ selLayout.classList.remove('open'); });
+      rowLayout.appendChild(selLayout); g.appendChild(rowLayout);
+      // 曲率
+      function lRng(label, key, field, lo, hi, def) {
+        var r = el('div','set-row'); var v = Number(cfgGet(s, key, def)) || def;
+        var lb = el('label','', label + ' (' + v + ')'); r.appendChild(lb);
+        var i = el('input'); i.type = 'range'; i.min = lo; i.max = hi; i.value = v;
+        i.oninput = function(){ lb.textContent = label + ' (' + i.value + ')'; lyStyles[field] = Number(i.value); npApplyStyleFromState(); };
+        i.onchange = function(){ persist(key, i.value); };
+        r.appendChild(i); return r;
+      }
+      g.appendChild(lRng('排列弯曲曲率','lyric_curve','curve', 0, 100, 50));
+      g.appendChild(lSw('逐字动画','lyric_char_anim','charAnim', false));
+      g.appendChild(lSw('非当前行模糊','lyric_blur','blur', false));
+      g.appendChild(lRng('模糊程度','lyric_blur_amount','blurAmt', 0, 100, 40));
+      // 动画曲线
+      var rowEase = el('div','set-row'); rowEase.appendChild(el('label','','动画曲线'));
+      var selEase = el('div','cust-select'); selEase.innerHTML = '<div class="cust-value"></div><div class="cust-list"></div>';
+      var EASE = [{v:'smooth',t:'平滑'},{v:'sharp',t:'急促'},{v:'gentle',t:'温和'},{v:'easeout',t:'缓出'}];
+      var curEase = String(cfgGet(s, 'lyric_ease', 'smooth'));
+      selEase.querySelector('.cust-value').textContent = (EASE.filter(function(x){return x.v===curEase;})[0]||EASE[0]).t;
+      var elist = selEase.querySelector('.cust-list');
+      EASE.forEach(function(o){
+        var it = el('div','cust-item'+(o.v===curEase?' on':''), o.t);
+        it.onclick = function(e){ e.stopPropagation(); selEase.querySelector('.cust-value').textContent = o.t;
+          Array.prototype.forEach.call(elist.children, function(x){ x.classList.remove('on'); }); it.classList.add('on');
+          selEase.classList.remove('open'); lyStyles.ease = o.v; persist('lyric_ease', o.v); };
+        elist.appendChild(it);
+      });
+      selEase.querySelector('.cust-value').onclick = function(e){ e.stopPropagation(); selEase.classList.toggle('open'); };
+      document.addEventListener('click', function(){ selEase.classList.remove('open'); });
+      rowEase.appendChild(selEase); g.appendChild(rowEase);
+      return g;
+    }
+
     html.appendChild(group('主题 / 外观', [ custSel('配色方案','scheme', s.scheme, s.schemes||[]), sw('Mica 背景','mica', s.mica), sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray) ]));
+    html.appendChild(lyricGroup(s));
     html.appendChild(fxGroup(s));
     html.appendChild(group('下载', [ txt('默认下载目录','downloadDir', s.downloadDir), sel('音质','quality', s.quality, ['standard','high','lossless']) ]));
     html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, ['order','list','single','random']) ]));
@@ -861,6 +1061,7 @@
     if (pl) pl.onclick = function () { NE.post({ type: 'toggle' }); npSetPlaying(!npPlaying); };
     // dock 的进度条也支持点击跳转
     var dockBar = document.getElementById('pl-bar');
+    if (dockBar) dockBar.onclick = function (e) { npApplySeek(e.clientX, true); };
   })();
 
   // TEMP-SEEK-TEST：自动放歌 → 打开歌词页 → 合成“点击进度条 50%”
@@ -881,6 +1082,7 @@
     try {
       applyMode(s.playMode || 'order', true);
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
+      npApplyLyricSettings(s);                                 // 歌词页外观设置
       if (!LYRIC_LOCKED) setLyricBtn(String(s.desktopLyric) !== 'false' && s.desktopLyric !== false);
     } catch (e) { }
   }).catch(function () { });
