@@ -37,7 +37,7 @@ public sealed class PlayerService
     public event Action<int, int>? QueueChanged; // (index, count)
 
     /// <summary>前端播放模式：音频交给网页 <audio> 播（可拿 Web Audio 频谱）。</summary>
-    public bool FrontendAudio => string.Equals(_config.Get("Player", "frontend_audio", "false"), "true", StringComparison.OrdinalIgnoreCase);
+    public bool FrontendAudio => !string.Equals(_config.Get("Player", "frontend_audio", "true"), "false", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>请求前端播放某条直链。</summary>
     public event Action<FrontendAudioLoad>? FrontendLoad;
