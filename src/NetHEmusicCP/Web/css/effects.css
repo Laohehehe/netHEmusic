@@ -21,3 +21,36 @@
 /* 关闭特效时的兜底 */
 html.no-fx #fx-canvas{display:none;}
 html.no-fx .fx-shake{animation:none;}
+/* ---------- 侧边栏选项卡：鼠标移入的过渡动画 ---------- */
+#nav a, a.nav-bottom{
+  position:relative;
+  transition:background .22s ease, color .18s ease, transform .22s cubic-bezier(.2,.8,.3,1.1), box-shadow .22s ease;
+}
+#nav a .ic, a.nav-bottom .ic{
+  display:inline-block;
+  transition:transform .26s cubic-bezier(.2,.8,.3,1.3), color .18s ease, filter .26s ease;
+  will-change:transform;
+}
+/* 悬停时左侧探出的小指示条（选中态用的是 ::before，这里用 ::after 不冲突） */
+#nav a::after, a.nav-bottom::after{
+  content:'';position:absolute;left:-5px;top:50%;width:3px;height:18px;border-radius:3px;
+  background:var(--md-accent-color);opacity:0;transform:translateY(-50%) scaleY(.15);
+  transition:opacity .2s ease, transform .26s cubic-bezier(.2,.8,.3,1.1);
+  pointer-events:none;
+}
+#nav a:hover:not(.on){background:var(--nm-fill);transform:translateX(2px);}
+#nav a:hover:not(.on) .ic, a.nav-bottom:hover:not(.on) .ic{
+  transform:scale(1.18);color:var(--md-accent-color);
+  filter:drop-shadow(0 0 7px rgba(var(--md-accent-color-rgb),.6));
+}
+#nav a:hover:not(.on)::after, a.nav-bottom:hover:not(.on)::after{opacity:.7;transform:translateY(-50%) scaleY(1);}
+#nav a:active:not(.on), a.nav-bottom:active:not(.on){transform:translateX(2px) scale(.97);}
+/* 选中项本身也带一点呼吸式的过渡，切换时更顺滑 */
+#nav a.on, a.nav-bottom.on{transition:background .26s ease, color .18s ease, transform .26s ease;}
+
+/* 系统开启“减少动态效果”时不做位移/缩放 */
+@media (prefers-reduced-motion: reduce){
+  #nav a, a.nav-bottom, #nav a .ic, a.nav-bottom .ic{transition:background .12s ease, color .12s ease;}
+  #nav a:hover:not(.on), a.nav-bottom:hover:not(.on),
+  #nav a:hover:not(.on) .ic, a.nav-bottom:hover:not(.on) .ic{transform:none;}
+}
