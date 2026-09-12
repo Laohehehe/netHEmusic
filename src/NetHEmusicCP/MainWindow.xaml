@@ -1,0 +1,23 @@
+<Window
+    x:Class="netHEmusic.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid x:Name="Root" Background="{ThemeResource AppBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== 顶栏（窗口边框 Chrome）：logo + 主题 + 窗口控制 ===== -->
+        <Grid x:Name="Headbar" Grid.Row="0" Background="{ThemeResource AppSurfaceDarkenBrush}">
+            <!-- 仅品牌标识，无交互控件（标题栏区域为拖拽区，按钮无法点击）；搜索/设置均移入 HTML -->
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Padding="14,0" IsHitTestVisible="False">
+                <Image x:Name="LogoImg" Width="22" Height="22" Source="Assets/logo.png"/>
+                <TextBlock Text="netHEmusic" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" Foreground="{ThemeResource AppTextBrush}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ===== WebView2 完整播放器（YesPlayMusic 风格） ===== -->
+        <WebView2 x:Name="WebView" Grid.Row="1"/>
+    </Grid>
+</Window>

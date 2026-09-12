@@ -1,0 +1,16 @@
+<Window
+    x:Class="netHEmusic.Windows.DesktopSongInfoWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Background="Transparent">
+        <Border CornerRadius="14" Padding="16" Background="{ThemeResource AppSurfaceDarkenBrush}" Opacity="0.96">
+            <StackPanel Orientation="Horizontal" Spacing="14">
+                <Image x:Name="Cover" Width="96" Height="96" Stretch="UniformToFill"/>
+                <StackPanel VerticalAlignment="Center" Spacing="4">
+                    <TextBlock x:Name="SongTitle" FontSize="17" FontWeight="Bold" Foreground="{ThemeResource AppTextBrush}"/>
+                    <TextBlock x:Name="Artist" FontSize="13" Foreground="{ThemeResource AppMutedBrush}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

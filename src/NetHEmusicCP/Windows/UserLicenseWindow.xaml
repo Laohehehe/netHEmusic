@@ -1,0 +1,23 @@
+<Window
+    x:Class="netHEmusic.Windows.UserLicenseWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Background="{ThemeResource AppBackgroundBrush}">
+        <ScrollViewer Padding="40,28" VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="860" Spacing="12" HorizontalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                    <Image Width="40" Height="40" Source="Assets/logo.png"/>
+                    <TextBlock Text="netHEmusic 用户协议与免责声明" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" Foreground="{ThemeResource AppTextBrush}"/>
+                </StackPanel>
+                <TextBlock x:Name="LicenseText" TextWrapping="Wrap" FontSize="14" LineHeight="26" Foreground="{ThemeResource AppTextBrush}"/>
+                <TextBlock x:Name="PasswordLine" FontSize="16" FontWeight="SemiBold" Foreground="#FF6D00" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                <TextBox x:Name="PassInput" HorizontalAlignment="Center" Width="260" PlaceholderText="请输入 6 位数字密码" MaxLength="6"/>
+                <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+                    <Button x:Name="AgreeBtn" Click="OnAgree" Content="同意并继续" Style="{StaticResource AccentButtonStyle}" Width="150" Height="40"/>
+                    <Button x:Name="DisagreeBtn" Click="OnDisagree" Content="不同意并退出" Width="150" Height="40"/>
+                </StackPanel>
+                <TextBlock Text="本软件与网易云音乐官方无关，仅供学习交流，禁止商用、禁止用于任何违法或侵犯网易云音乐官方及用户权益的行为。" FontSize="11" Foreground="{ThemeResource AppMutedBrush}" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

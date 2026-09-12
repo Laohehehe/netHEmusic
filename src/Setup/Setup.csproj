@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>netHEmusic_Setup_26.8.28</AssemblyName>
+    <ApplicationIcon>..\..\resources\icon.ico</ApplicationIcon>
+    <Version>26.8.28</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\build\netHEmusic-26.8.28.zip" LogicalName="app.zip" />
+    <EmbeddedResource Include="..\..\build\LaoheTeam.cer" LogicalName="LaoheTeam.cer" />
+  </ItemGroup>
+</Project>
