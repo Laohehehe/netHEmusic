@@ -89,6 +89,17 @@ public sealed partial class MainWindow : Window
             SavePlaylist(idx);
             AppServices.RunOnUi(() => PostToWeb(new { type = "queue_changed", index = idx, count = count }));
         };
+        // 前端播放模式：把直链/命令交给网页
+        AppServices.Player.FrontendLoad += load => AppServices.RunOnUi(() => PostToWeb(new
+        {
+            type = "audio_load",
+            url = load.Url,
+            index = load.Index,
+            autoplay = true,
+            song = ToSongDto(load.Song)
+        }));
+        AppServices.Player.FrontendCommand += (cmd, val) => AppServices.RunOnUi(() => PostToWeb(new { type = "audio_cmd", cmd = cmd, value = val }));
+
         // 关闭窗口时再存一次当前曲目下标（双保险）
         try { AppWindow.Closing += (s, e) => SavePlaylistIndex(AppServices.Player.Index); } catch (Exception ex) { LogManager.Debug("挂 Closing 失败: " + ex.Message); }
         AppServices.Download.Completed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载完成: " + it.Display }));
@@ -133,7 +144,13 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            await WebView.EnsureCoreWebView2Async();
+            // 允许网页 <audio> 在无用户手势时也能播放（前端播放内核需要：自动下一首 / SMTC 触发）
+            var envOptions = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required"
+            };
+            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, null, envOptions);
+            await WebView.EnsureCoreWebView2Async(env);
             var core = WebView.CoreWebView2;
             var webFolder = FindWebFolder();
             core.SetVirtualHostNameToFolderMapping("appassets", webFolder, CoreWebView2HostResourceAccessKind.Allow);
@@ -335,6 +352,19 @@ public sealed partial class MainWindow : Window
                 case "queue_get": PostToWeb(new { type = "queue", songs = AppServices.Player.Queue.Select(ToSongDto).ToList(), index = AppServices.Player.Index }); break;
                 case "play_index": { if (doc.TryGetProperty("index", out var qi) && qi.TryGetInt32(out var qn)) _ = AppServices.Player.PlayAtAsync(qn); break; }
                 case "queue_clear": AppServices.Player.ClearQueue(); LogManager.Log("已清空播放列表"); break;
+                case "audio_ended": _ = AppServices.Player.AutoNextAsync(); break;
+                case "audio_state":
+                    {
+                        bool playing = doc.TryGetProperty("playing", out var pl) && pl.ValueKind == JsonValueKind.True;
+                        long pos = doc.TryGetProperty("pos", out var pv) && pv.ValueKind == JsonValueKind.Number ? pv.GetInt64() : 0;
+                        long dur = doc.TryGetProperty("dur", out var dv) && dv.ValueKind == JsonValueKind.Number ? dv.GetInt64() : 0;
+                        AppServices.Player.SetFrontendState(playing, pos, dur);
+                        break;
+                    }
+                case "audio_error":
+                    LogManager.Warn("前端播放失败: " + (doc.TryGetProperty("message", out var em) ? em.GetString() : ""));
+                    _ = AppServices.Player.AutoNextAsync();
+                    break;
                 case "seek": { if (doc.TryGetProperty("pos", out var sk) && sk.TryGetInt64(out var skn)) AppServices.Player.Seek(TimeSpan.FromMilliseconds(skn)); break; }
                 case "queue_remove": { if (doc.TryGetProperty("index", out var ri) && ri.TryGetInt32(out var rn)) AppServices.Player.RemoveAt(rn); break; }
                 case "queue_next": { if (doc.TryGetProperty("index", out var ni) && ni.TryGetInt32(out var nn)) AppServices.Player.MoveToNext(nn); break; }
