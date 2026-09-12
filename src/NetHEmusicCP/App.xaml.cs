@@ -71,8 +71,13 @@ public partial class App : Application
         }
     }
 
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string appId);
+
     public App()
     {
+        // 显式 AppUserModelID：任务栏 / Windows 媒体卡片不再显示“未知应用”
+        try { SetCurrentProcessExplicitAppUserModelID("Laohehehe.netHEmusic"); } catch { }
         InitializeComponent();
         // 全局未处理异常：写日志并提示，避免静默崩溃（自修复）
         UnhandledException += OnUnhandledException;

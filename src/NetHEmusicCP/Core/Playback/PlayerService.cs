@@ -231,6 +231,7 @@ public sealed class PlayerService
         try
         {
             _smtc.DisplayUpdater.Type = MediaPlaybackType.Music;
+            try { _smtc.DisplayUpdater.AppMediaId = "netHEmusic"; } catch { }
             _smtc.DisplayUpdater.MusicProperties.Title = s.Title;
             _smtc.DisplayUpdater.MusicProperties.Artist = s.ArtistsName;
             _smtc.DisplayUpdater.MusicProperties.AlbumTitle = s.AlbumName;
