@@ -1129,36 +1129,6 @@ function applyPerfAnim(s) {
 
   // ---- 逐字填充（KTV 式）：没有逐字时间戳，就在行内按字符数均匀分配 ----
   var npFillCache = { line: -1, n: 0, sung: -1 };
-  // ---- 逐字歌词（yrc）：解析出每个字的开始时间与时长 ----
-  var yrcMap = {};                       // 行开始时间(ms) → [{ch,t,d}]
-  function parseYrc(txt) {
-    var map = {};
-    try {
-      String(txt || "").split("\n").forEach(function (raw) {
-        var s = raw.trim(); if (!s || s.charAt(0) !== "[") return;
-        var m = /^\[(\d+),(\d+)\]/.exec(s); if (!m) return;
-        var lt = parseInt(m[1], 10), rest = s.slice(m[0].length), chars = [], re = /\((\d+),(\d+),\d+\)([^()]*)/g, mm;
-        while ((mm = re.exec(rest))) { var t = mm[3]; if (!t) continue; chars.push({ ch: t, t: parseInt(mm[1], 10), d: parseInt(mm[2], 10) }); }
-        if (chars.length) map[lt] = chars;
-      });
-    } catch (e) { }
-    return map;
-  }
-  // 把 yrc 的字（可能是词/音节）摊平成"每个显示字符对应的时间"，与歌词行按顺序对齐
-  function alignCharTimes(spans, units) {
-    try {
-      var flat = [];
-      units.forEach(function (u) { var s = String(u.ch || ""); for (var i = 0; i < s.length; i++) flat.push({ c: s.charAt(i), t: u.t, d: u.d }); });
-      var out = [], fi = 0;
-      for (var i = 0; i < spans.length; i++) {
-        var c = spans[i].textContent || "";
-        if (c === " " || c === "\u3000") { out.push(null); continue; }
-        if (fi < flat.length && flat[fi].c === c) { out.push(flat[fi]); fi++; continue; }
-        return null;                       // 对不上就放弃，退回均匀分配
-      }
-      return out;
-    } catch (e) { return null; }
-  }
   function npCharFill() {
     try {
       if (!npOpen || !npLines.length || !lyStyles.charAnim) return;
@@ -1166,33 +1136,21 @@ function applyPerfAnim(s) {
       if (npFillCache.line !== npIndex) {
         npFillCache.line = npIndex;
         npFillCache.n = ln.querySelectorAll(".ly-ch").length;
-        npFillCache.sung = -1; npFillCache.times = null;
+        npFillCache.sung = -1;
       }
       var n = npFillCache.n; if (!n) return;
       var cur = npLines[npIndex]; if (!cur) return;
       var t0 = cur.t;
       var t1 = (npLines[npIndex + 1] && npLines[npIndex + 1].t > t0) ? npLines[npIndex + 1].t : (t0 + (cur.d || 4000));
       var pos = (typeof PC !== "undefined") ? pcNow() : npPosMs;
-      var spans = ln.querySelectorAll(".ly-ch");
-      var units = yrcMap[t0];
-      if (units && !npFillCache.times) npFillCache.times = alignCharTimes(spans, units);
-      var times = units ? npFillCache.times : null;
-      var sung = 0;
-      if (times && times.length === spans.length) {
-        for (var q = 0; q < times.length; q++) {
-          var e = times[q]; if (!e) { sung = q + 1; continue; }
-          if (pos >= e.t + e.d) sung = q + 1;              // 这个字已经唱完
-          else break;
-        }
-      } else {
-        var r = (pos - t0) / Math.max(1, t1 - t0);
-        r = Math.max(0, Math.min(1, r));
-        sung = Math.floor(r * n + 1e-6);                    // 没有逐字数据时按行内均匀分配
-      }
+      var r = (pos - t0) / Math.max(1, t1 - t0);
+      r = Math.max(0, Math.min(1, r));
+      var sung = Math.floor(r * n + 1e-6);
       if (sung === npFillCache.sung) return;
-      for (var i2 = 0; i2 < spans.length; i2++) {
-        var on = i2 < sung;
-        if (on !== spans[i2].classList.contains("sung")) spans[i2].classList.toggle("sung", on);
+      var spans = ln.querySelectorAll(".ly-ch");
+      for (var i = 0; i < spans.length; i++) {
+        var on = i < sung;
+        if (on !== spans[i].classList.contains("sung")) spans[i].classList.toggle("sung", on);
       }
       npFillCache.sung = sung;
     } catch (e) { }
@@ -1203,7 +1161,7 @@ function applyPerfAnim(s) {
     for (var k = 0; k < npLines.length; k++) { if (npLines[k].t <= pos) i = k; else break; }
     if (i === npIndex) return;
     npIndex = i;
-    npFillCache.line = -1; npFillCache.times = null;
+    npFillCache.line = -1;
     npLayout();
   }
   async function openNowPlaying() {
@@ -1228,7 +1186,6 @@ function applyPerfAnim(s) {
         npRo = parseLrc((r && r.romalrc && r.romalrc.lyric) || '');
         if (!npOpen || npSongId !== ns.Id) return;
         npLines = parseLrc((r && r.lrc && r.lrc.lyric) || '');
-    try { yrcMap = parseYrc(r && r.yrc && r.yrc.lyric);
         npMergeSubLines();
         npRenderLyric(npLines);
         npIndex = -1;
