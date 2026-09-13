@@ -650,8 +650,8 @@ html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
 #pl-qual,#np-qual{display:inline-flex;align-items:center;justify-content:center;color:inherit;}
 #pl-qual svg,#np-qual svg{display:block;}
 .qual-menu{position:fixed;z-index:9000;min-width:112px;padding:5px;border-radius:10px;visibility:hidden;opacity:0;
-  background:rgba(22,24,32,.96);border:1px solid rgba(var(--md-accent-color-rgb),.28);
-  box-shadow:0 12px 32px rgba(0,0,0,.5);backdrop-filter:blur(10px);transform:translateY(8px) scale(.94);transform-origin:bottom center;transition:opacity .16s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),transform .2s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),visibility .2s;}
+  background:rgba(18,20,26,.99);border:1px solid rgba(var(--md-accent-color-rgb),.28);
+  box-shadow:0 12px 32px rgba(0,0,0,.5);transform:translateY(8px) scale(.94);transform-origin:bottom center;transition:opacity .16s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),transform .2s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),visibility .2s;}
 .qual-menu.show{visibility:visible;opacity:1;transform:none;}
 .qual-item{opacity:0;transform:translateY(4px);transition:opacity .18s ease,transform .2s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),background .15s ease,color .15s ease;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:7px;cursor:pointer;
   font-size:13px;color:rgba(235,235,245,.88);white-space:nowrap;}
@@ -664,3 +664,6 @@ html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
 
 /* 设置页自定义强调色取色器 */
 .set-row input[type=color]{width:56px;height:28px;padding:0;border:1px solid rgba(var(--md-accent-color-rgb),.35);border-radius:8px;background:transparent;cursor:pointer;}
+
+/* 歌词页关闭时彻底不渲染（含整屏模糊背景），避免拖慢配色切换的全屏快照 */
+.np.hidden{display:none !important;}

@@ -882,6 +882,7 @@ function applyPerfAnim(s) {
   }
   // ================= 全窗口歌词页（点封面进入） =================
   var npOpen = false, npLines = [], npIndex = -1, npSongId = 0;
+  try { document.getElementById('np').classList.add('hidden'); } catch (e) { }
   var npDurMs = 0, npPosMs = 0, npPlaying = false;   // 由 position / playing 消息维护
   var npTr = [], npRo = [];                           // 翻译 / 罗马音（与 npLines 同时间轴）
   // 把翻译与罗马音按时间戳挂到原词行上（允许 ±500ms 误差）
@@ -1136,6 +1137,7 @@ function applyPerfAnim(s) {
     var np = npEl('np'); if (!np) return;
     var wasOpen = npOpen;
     npOpen = true;
+    np.classList.remove('hidden');          // 恢复渲染
     np.classList.add('show'); np.setAttribute('aria-hidden', 'false');
     if (lyStyles.vz) setTimeout(function () { vzApply(); }, 60);
     if (!wasOpen) requestAnimationFrame(npCoverFlip);
@@ -1342,6 +1344,7 @@ function applyPerfAnim(s) {
       var w = document.querySelector('#np .np-cover-wrap');
       if (w) { w.style.transition = 'none'; w.style.transform = 'none'; w.style.opacity = ''; }
     }, 460);
+    try { setTimeout(function () { if (!npOpen) document.getElementById('np').classList.add('hidden'); }, 420); } catch (e) { }
   }
 
   // 旧的 go('lyric') 也走全窗口歌词页
@@ -2218,5 +2221,11 @@ function applyPerfAnim(s) {
   })();
 
   // 启动：拉一次发现页并渲染首页
-  window.addEventListener('load', function () { try { NE.post({ type: 'discover' }); go('home'); } catch (e) { } });
+  window.addEventListener('load', function () {
+    try { NE.post({ type: 'discover' }); go('home'); } catch (e) { }
+    // TEMP-NPCHK
+    setTimeout(function () { try { var n = document.getElementById('np'); NE.post({ type: 'log', msg: '[npchk] 打开前 cls=' + n.className + ' h=' + n.offsetHeight }); openNowPlaying(); setTimeout(function () { NE.post({ type: 'log', msg: '[npchk] 打开后 cls=' + n.className + ' h=' + n.offsetHeight + ' npOpen=' + npOpen }); }, 900); } catch (e12) { } }, 5000);
+    setTimeout(function () { try { var n = document.getElementById('np'); closeNowPlaying(); setTimeout(function () { NE.post({ type: 'log', msg: '[npchk] 关闭后 cls=' + n.className + ' h=' + n.offsetHeight }); }, 700); } catch (e13) { } }, 8000);
+  });
+
 })();

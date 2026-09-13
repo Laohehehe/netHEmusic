@@ -150,7 +150,7 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 
 /* ---------- 配色方案切换：以点击的列表项为圆心，向外扩散覆盖新配色的"水波"过渡 ---------- */
 ::view-transition-old(root){animation:none;}
-::view-transition-new(root){animation:nm-ripple-reveal var(--nm-ripple-dur,.62s) cubic-bezier(.18,.76,.28,1) both;will-change:clip-path;backface-visibility:hidden;}
+::view-transition-new(root){animation:nm-ripple-reveal var(--nm-ripple-dur,.62s) cubic-bezier(.18,.76,.28,1) both;}
 @keyframes nm-ripple-reveal{
   0%{clip-path:circle(0px at var(--nm-ripple-x,50%) var(--nm-ripple-y,50%));}
   100%{clip-path:circle(var(--nm-ripple-r,150vmax) at var(--nm-ripple-x,50%) var(--nm-ripple-y,50%));}
