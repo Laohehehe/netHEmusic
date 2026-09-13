@@ -3,7 +3,7 @@
   <!-- netHEmusic 安装包（MSI）：用户级安装，不需要管理员 -->
   <Package Name="netHEmusic"
            Manufacturer="Laohehehe"
-           Version="26.9.12.49"
+           Version="26.9.13.1"
            UpgradeCode="8F3C1A24-6B7E-4C9D-9E15-2A7D5B4C1E01"
            Scope="perMachine"
            Language="2052"

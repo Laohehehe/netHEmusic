@@ -130,11 +130,8 @@
     </div>
     <div class="modal-body">
       <p id="notice-lead"></p>
-      <!-- ======== 更新公告正文（占位内容，已注释；下次发版时把下面这段取消注释并改写） ========
-      <p>· 新增：xxx 功能，可在 设置 → xxx 里调整<br>
-         · 优化：xxx 的交互与动画<br>
-         · 修复：xxx 问题</p>
-      ======== 更新公告正文结束 ======== -->
+      <!-- 更新公告正文：运行时从 GitHub Release 取，按 Markdown 渲染，不在程序里写死 -->
+      <div id="notice-body" class="notice-md"></div>
       <p class="modal-tip" id="notice-ver"></p>
     </div>
     <div class="modal-foot">

@@ -408,8 +408,53 @@
   }
 
   // 读取 [App] 段设置（s.app.*）：设置页与歌词页共用
-  function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
+  // 设置页改动后立刻在页内生效（否则要重开界面/重启才看得到）
+function applyLiveSetting(key, val) {
+  try {
+    if (!appSettings) appSettings = {};
+    if (!appSettings.app) appSettings.app = {};
+    appSettings.app[key] = String(val);
+    if (key === 'perf_gpu') { toast('GPU 加速将在重启软件后生效'); }
+    if (/^(perf_anim|perf_bg_blur|perf_play_anim|perf_vz_fps)/.test(key)) applyPerfAnim(appSettings);
+    if (/^(perf_|lyric_|vz_)/.test(key)) npApplyLyricSettings(appSettings);
+    else if (key === 'crossfade') AU.xfade = Math.max(0, Math.min(12, Number(val) || 0));
+    else if (key === 'volume') applyVolume(Number(val) || 0, false);
+    else if (key === 'playMode') applyMode(String(val), true);
+    else if (key.indexOf('hk_') === 0) hotkeysFromSettings(appSettings);
+  } catch (e) { }
+}
+function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
   function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
+
+// ---- 性能：动画总开关 / 分组开关 / 预设与自定义速率 ----
+var ANIM_PRESETS = {
+  smooth:  { ease: "cubic-bezier(.18,.77,.58,.99)", k: 1.00, name: "平滑" },
+  sharp:   { ease: "cubic-bezier(.45,0,.07,1)",     k: 0.70, name: "急促" },
+  gentle:  { ease: "cubic-bezier(.25,.46,.45,.94)", k: 1.35, name: "温和" },
+  easeout: { ease: "cubic-bezier(.15,.6,.35,1)",    k: 0.85, name: "缓出" }
+};
+function applyPerfAnim(s) {
+  try {
+    var on = cfgBool(s, "perf_anim", true);
+    var page = cfgBool(s, "perf_anim_page", true);
+    var np = cfgBool(s, "perf_anim_np", true);
+    var rip = cfgBool(s, "perf_anim_ripple", true);
+    var pre = String(cfgGet(s, "perf_anim_ease", "smooth"));
+    var isCustom = (pre === "custom");
+    var base = ANIM_PRESETS[pre] || ANIM_PRESETS.smooth;
+    var k = isCustom ? Math.max(0.3, Math.min(2.5, (Number(cfgGet(s, "perf_anim_speed", 100)) || 100) / 100)) : base.k;
+    var ease = isCustom ? String(cfgGet(s, "perf_anim_curve", ANIM_PRESETS.smooth.ease)) : base.ease;
+    var h = document.documentElement;
+    h.classList.toggle("anim-off", !on);
+    h.classList.toggle("no-anim-page", !on || !page);
+    h.classList.toggle("no-anim-np", !on || !np);
+    h.classList.toggle("no-anim-ripple", !on || !rip);
+    h.classList.toggle("anim-tuned", on && (isCustom || pre !== "smooth"));
+    h.style.setProperty("--anim-k", String(k));
+    h.style.setProperty("--anim-ease", ease);
+    h.style.setProperty("--nm-ripple-dur", (0.62 * k).toFixed(2) + "s");
+  } catch (e) { }
+}
   function toast(t) { const el=$('#toast'); el.textContent=t; el.style.display='block'; setTimeout(()=>el.style.display='none',2000); }
   function loading() { view.innerHTML = '<div class="big-load">正在加载…</div>'; }
 
@@ -692,9 +737,9 @@
     np.classList.toggle('ly-char', !!s.charAnim);
     np.classList.toggle('ly-tr', !!s.showTr);
     np.classList.toggle('ly-ro', !!s.showRo);
-    np.classList.toggle('no-bg-blur', !s.bgBlur);
-    document.documentElement.classList.toggle('no-play-anim', !s.playAnim);
-    VZ_FRAME_MS = Math.round(1000 / (s.vzFps || 33));
+    np.classList.toggle('no-bg-blur', !lyStyles.bgBlur);
+    document.documentElement.classList.toggle('no-play-anim', !lyStyles.playAnim);
+    VZ_FRAME_MS = Math.round(1000 / (lyStyles.vzFps || 33));
     np.style.setProperty('--ly-blur', (s.blurAmt / 100 * 5).toFixed(2) + 'px');
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
     np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 字号（行高与排版会跟着重算）
@@ -1157,11 +1202,19 @@
     var html = el('div','page');
     html.appendChild(el('h2','page-title','设置'));
     function group(title, rows) { var g = el('div','set-group'); g.appendChild(el('h3','',title)); rows.forEach(function(r){ g.appendChild(r); }); return g; }
-    function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); }; r.appendChild(t); return r; }
+    function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); }; r.appendChild(t); return r; }
     // 原生 <select> 的弹层在 WebView2 里定位会飘，这里统一用自定义下拉
     function sel(label, key, val, opts) { return custSel(label, key, val, opts); }
-    function txt(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var i=el('input'); i.type='text'; i.value=val||''; i.onchange=function(){ NE.setSetting(key, i.value); }; r.appendChild(i); return r; }
-    function rng(label, key, val) { var r = el('div','set-row'); var lb=el('label','',label+' ('+(val||80)+')'); r.appendChild(lb); var i=el('input'); i.type='range'; i.min=0; i.max=100; i.value=val||80; i.oninput=function(){ lb.textContent=label+' ('+i.value+')'; NE.setSetting(key, i.value); }; r.appendChild(i); return r; }
+    function txt(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var i=el('input'); i.type='text'; i.value=val||''; i.onchange=function(){ NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
+    // 自定义范围的滑条（用于动画速率这类非 0-100 的项）
+    function rng2(label, key, val, min, max, suffix) {
+      suffix = suffix || '';
+      var r = el('div','set-row'); var lb = el('label','',label+' ('+val+suffix+')'); r.appendChild(lb);
+      var i2 = el('input'); i2.type='range'; i2.min=min; i2.max=max; i2.step=5; i2.value=val;
+      i2.oninput = function(){ lb.textContent = label+' ('+i2.value+suffix+')'; NE.setSetting(key, i2.value); applyLiveSetting(key, i2.value); };
+      r.appendChild(i2); return r;
+    }
+    function rng(label, key, val) { var r = el('div','set-row'); var lb=el('label','',label+' ('+(val||80)+')'); r.appendChild(lb); var i=el('input'); i.type='range'; i.min=0; i.max=100; i.value=val||80; i.oninput=function(){ lb.textContent=label+' ('+i.value+')'; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
     function info(label) { var r = el('div','set-row'); r.appendChild(el('label','',label)); return r; }
     // 自定义下拉：opts 支持字符串数组或 [{v:值,t:显示名}]；onPick(值) 用于即时生效
     function custSel(label, key, val, opts, onPick) {
@@ -1188,6 +1241,7 @@
           it.classList.add('sel');
           if (key === 'scheme') { setTimeout(function(){ box.classList.remove('open'); }, 1200); }
           if (onPick) { try { onPick(valOf(o)); } catch (err) { } }
+          else { applyLiveSetting(key, valOf(o)); }
         };
         list.appendChild(it);
       });
@@ -1211,7 +1265,7 @@
       var v = (val===undefined||val===null||val==='') ? 50 : Number(val);
       var r = el('div','set-row'); var lb = el('label','',label+' ('+v+')'); r.appendChild(lb);
       var i = el('input'); i.type='range'; i.min=0; i.max=100; i.value=v;
-      i.oninput = function(){ lb.textContent = label+' ('+i.value+')'; NE.setSetting(key, i.value); var p={}; p[fk]=Number(i.value); fxApply(p); };
+      i.oninput = function(){ lb.textContent = label+' ('+i.value+')'; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); var p={}; p[fk]=Number(i.value); fxApply(p); };
       r.appendChild(i); return r;
     }
     function fxColorRow(colorVal, autoVal) {
@@ -1400,9 +1454,24 @@
     }
     html.appendChild(hotkeyGroup());
     html.appendChild(group('性能', [
-      sw('歌词页背景模糊','perf_bg_blur', s.perf_bg_blur !== 'false'),
-      sw('播放态动画（呼吸/封面浮动）','perf_play_anim', s.perf_play_anim !== 'false'),
-      sel('频谱帧率','perf_vz_fps', String(s.perf_vz_fps || '33'), [
+      sw('GPU 加速（硬件渲染，改动需重启）','perf_gpu', cfgBool(s, 'perf_gpu', true)),
+      sw('界面动画总开关','perf_anim', cfgBool(s, 'perf_anim', true)),
+      sel('动画速率','perf_anim_ease', String(cfgGet(s, 'perf_anim_ease', 'smooth')), [
+        { v: 'smooth', t: '平滑（默认）' }, { v: 'sharp', t: '急促' }, { v: 'gentle', t: '温和' },
+        { v: 'easeout', t: '缓出' }, { v: 'custom', t: '自定义…' }
+      ]),
+      rng2('自定义速率','perf_anim_speed', Number(cfgGet(s, 'perf_anim_speed', 100)) || 100, 30, 250, '%'),
+      sel('自定义曲线','perf_anim_curve', String(cfgGet(s, 'perf_anim_curve', 'cubic-bezier(.18,.77,.58,.99)')), [
+        { v: 'cubic-bezier(.18,.77,.58,.99)', t: '平滑' }, { v: 'cubic-bezier(.45,0,.07,1)', t: '急促' },
+        { v: 'cubic-bezier(.25,.46,.45,.94)', t: '温和' }, { v: 'cubic-bezier(.15,.6,.35,1)', t: '缓出' },
+        { v: 'linear', t: '匀速' }
+      ]),
+      sw('页面 / 列表过渡','perf_anim_page', cfgBool(s, 'perf_anim_page', true)),
+      sw('歌词页动画（进入·换行滑动）','perf_anim_np', cfgBool(s, 'perf_anim_np', true)),
+      sw('配色切换水波纹','perf_anim_ripple', cfgBool(s, 'perf_anim_ripple', true)),
+      sw('歌词页背景模糊','perf_bg_blur', cfgBool(s, 'perf_bg_blur', true)),
+      sw('播放态动画（呼吸 / 封面浮动）','perf_play_anim', cfgBool(s, 'perf_play_anim', true)),
+      sel('频谱帧率','perf_vz_fps', String(cfgGet(s, 'perf_vz_fps', 33)), [
         { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
       ])
     ]));
@@ -1729,6 +1798,7 @@
       applyMode(s.playMode || 'order', true);
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
       npApplyLyricSettings(s);                                 // 歌词页外观设置
+      applyPerfAnim(s);                                        // 性能：动画开关与速率
       hotkeysFromSettings(s);                                  // 快捷键绑定
       AU.xfade = Math.max(0, Math.min(12, Number(s.crossfade || 0) || 0));   // 交叉淡化秒数
       AU.vol = Number(s.volume != null ? s.volume : 70) || 0;
@@ -1796,18 +1866,74 @@
     }
     mask.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = close; });
 
+
+    var bodyEl = document.getElementById("notice-body");
+
+    // ---- 极简 Markdown 渲染：标题 / 加粗 / 斜体 / 行内代码 / 代码块 / 有序无序列表 / 分隔线 / 链接 ----
+    function mdToHtml(src) {
+      var lines = String(src || "").replace(/\r\n?/g, "\n").split("\n");
+      var out = [], para = [], list = "", code = false, buf = [];
+      function inl(t) {
+        t = esc(t);
+        t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+        t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+        t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<i>$2</i>");
+        t = t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, "<a href=\"$2\" target=\"_blank\" rel=\"noreferrer\">$1</a>");
+        return t;
+      }
+      function fp() { if (para.length) { out.push("<p>" + inl(para.join(" ")) + "</p>"); para = []; } }
+      function fl() { if (list) { out.push("</" + list + ">"); list = ""; } }
+      lines.forEach(function (raw) {
+        var s = raw.replace(/\s+$/, ""), t = s.trim();
+        if (/^```/.test(t)) {
+          if (code) { out.push("<pre><code>" + esc(buf.join("\n")) + "</code></pre>"); buf = []; code = false; }
+          else { fp(); fl(); code = true; }
+          return;
+        }
+        if (code) { buf.push(s); return; }
+        if (!t) { fp(); fl(); return; }
+        if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { fp(); fl(); out.push("<hr>"); return; }
+        var m;
+        if ((m = /^(#{1,4})\s+(.*)$/.exec(t))) {
+          fp(); fl();
+          var lv = m[1].length + 2;                       // 用 h3~h6，避免和弹窗自己的标题抢层级
+          out.push("<h" + lv + ">" + inl(m[2]) + "</h" + lv + ">");
+          return;
+        }
+        if ((m = /^[-*+]\s+(.*)$/.exec(t))) { fp(); if (list !== "ul") { fl(); out.push("<ul>"); list = "ul"; } out.push("<li>" + inl(m[1]) + "</li>"); return; }
+        if ((m = /^\d+[.)]\s+(.*)$/.exec(t))) { fp(); if (list !== "ol") { fl(); out.push("<ol>"); list = "ol"; } out.push("<li>" + inl(m[1]) + "</li>"); return; }
+        fl(); para.push(t);
+      });
+      fp(); fl();
+      if (code && buf.length) out.push("<pre><code>" + esc(buf.join("\n")) + "</code></pre>");
+      return out.join("");
+    }
+    // 请求更新日志（从 GitHub Release 取，不在程序里写死）
+    function loadNotes(ver) {
+      if (!bodyEl) return;
+      bodyEl.innerHTML = '<p class="notice-loading">正在获取本次更新日志…</p>';
+      try { NE.post({ type: "release_notes", version: ver }); } catch (e) { }
+    }
+
     // C# 检测到 config 里的版本比当前版本旧 → 弹更新公告
-    NE.on('update_notice', function (d) {
+    NE.on("update_notice", function (d) {
       if (!d) return;
-      var from = d.from ? d.from : '首次运行';
+      var from = d.from ? d.from : "首次运行";
       pending = d.to;
       closed = false;
-      if (leadEl) leadEl.innerHTML = '软件已更新到 <b>netHEmusic ' + esc(d.to) + '</b>。<span class="modal-dim">（本次更新说明留空，下次发版在 index.html 的公告正文注释里填写）</span>';
-      if (verEl) verEl.textContent = '版本：' + from + ' → ' + d.to;
-      mask.classList.add('show');
-      mask.setAttribute('aria-hidden', 'false');
+      if (leadEl) leadEl.innerHTML = "软件已更新到 <b>netHEmusic " + esc(d.to) + "</b>";
+      if (verEl) verEl.textContent = "版本：" + from + " → " + d.to;
+      mask.classList.add("show");
+      mask.setAttribute("aria-hidden", "false");
+      loadNotes(d.to);
+    });
+
+    // C# 取到 Release 正文 → 按 Markdown 渲染
+    NE.on("release_notes", function (d) {
+      if (!bodyEl || !d) return;
+      if (d.error) { bodyEl.innerHTML = '<p class="notice-loading">更新日志获取失败：' + esc(d.error) + "</p>"; return; }
+      var html = mdToHtml(d.body || "");
+      bodyEl.innerHTML = html || '<p class="notice-loading">本次没有更新说明。</p>';
     });
   })();
-
-  window.addEventListener('load', ()=>{ NE.post({type:'discover'}); go('home'); });
 })();
