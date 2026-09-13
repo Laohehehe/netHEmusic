@@ -1236,7 +1236,7 @@ function applyPerfAnim(s) {
         npRo = parseLrc((r && r.romalrc && r.romalrc.lyric) || '');
         if (!npOpen || npSongId !== ns.Id) return;
         npLines = parseLrc((r && r.lrc && r.lrc.lyric) || '');
-    try { yrcMap = parseYrc(r && r.yrc && r.yrc.lyric);
+    try { yrcMap = parseYrc(r && r.yrc && r.yrc.lyric); npFillCache.line = -1; npFillCache.times = null; } catch (e20) { }
         npMergeSubLines();
         npRenderLyric(npLines);
         npIndex = -1;
