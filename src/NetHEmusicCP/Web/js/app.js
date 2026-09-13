@@ -356,6 +356,35 @@ window.addEventListener('unhandledrejection', function (e) {
       if (b2) b2.style.width = pct;
     } catch (e) { }
   }
+  // ---- 听歌打卡：累计播放时长达到「一半或 4 分钟（取小）」时上报一次 ----
+  var scrob = { id: 0, acc: 0, last: -1, done: false, sent: false };
+  function scrobTick(pos, playing) {
+    try {
+      var on = cfgBool(appSettings, "scrobble", false);
+      var cur = queue[playingIndex];
+      var sid = (cur && cur.Id) || 0;
+      if (sid !== scrob.id) { scrob = { id: sid, acc: 0, last: -1, done: false, sent: false }; }
+      if (!on || !sid) { scrob.last = pos; return; }
+      if (!playing) { scrob.last = pos; return; }
+      if (scrob.last >= 0 && pos > scrob.last && (pos - scrob.last) < 5000) scrob.acc += (pos - scrob.last) / 1000;
+      scrob.last = pos;
+      var total = Math.round((AU.durMs || 0) / 1000);
+      var need = total > 0 ? Math.min(total * 0.5, 240) : 240;
+      need = Math.max(60, need);
+      if (scrob.done || scrob.acc < need) return;
+      scrob.done = true;
+      var secs = Math.round(Math.min(scrob.acc, total > 0 ? total : scrob.acc));
+      var p = { id: sid, time: secs, name: cur.Title || "", artist: cur.Artist || "" };
+      if (total > 0) p.total = total;
+      if (cur.AlbumId) p.sourceid = cur.AlbumId;
+      var lv = (appSettings && appSettings.quality) || "";
+      if (lv) p.level = lv;
+      if (NE.scrobbleV1) {
+        NE.scrobbleV1(p).then(function () { scrob.sent = true; try { toast("已听歌打卡：" + (cur.Title || "")); } catch (e) { } })
+          .catch(function () { scrob.done = false; });
+      }
+    } catch (e) { }
+  }
   function auPushUI(pos) {
     var d = AU.durMs || npDurMs || 0;
     npPosMs = pos; if (d) npDurMs = d;
@@ -1804,7 +1833,7 @@ function applyPerfAnim(s) {
       i.onchange = function(){ NE.setSetting('crossfade', i.value); };
       r.appendChild(i); return r;
     }
-    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), rng2('启停淡化','fade_start_stop', Number(cfgGet(s,'fade_start_stop',0)) || 0, 0, 3, ' 秒'), rngXfade() ]));
+    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), rng2('启停淡化','fade_start_stop', Number(cfgGet(s,'fade_start_stop',0)) || 0, 0, 3, ' 秒'), sw('听歌打卡（播放达标后上报）','scrobble', cfgBool(s,'scrobble',false)), rngXfade() ]));
     // ---- 快捷键（可自定义）----
     function hotkeyGroup() {
       var g = el('div','set-group');

@@ -34,7 +34,8 @@
     playlistTracks: function(id,limit,offset){ return api('playlist/track/all', { id:id, limit:limit||1000, offset:offset||0 }); },
     topPlaylist: function(cat,limit){ return api('top/playlist', { cat:cat||'全部', limit:limit||30 }); },
     songUrl: function(id){ return api('song/url', { id:id, br:320000 }); },
-  lyric: function(id){ return api('lyric/new', { id:id }); },   // 用 lyric/new 才能拿到逐字歌词 yrc
+  lyric: function(id){ return api('lyric/new', { id:id }); },
+  scrobbleV1: function(p){ return api('scrobble/v1', p); },   // 听歌打卡   // 用 lyric/new 才能拿到逐字歌词 yrc
     songDetail: function(ids){ return api('song/detail', { ids:ids }); },
     loginQrKey: function(){ return api('login/qr/key'); },
     loginQrCreate: function(key){ return api('login/qr/create', { key:key, qrimg:'true' }); },
