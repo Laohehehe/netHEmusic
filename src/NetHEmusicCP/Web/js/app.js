@@ -472,7 +472,11 @@ window.addEventListener('unhandledrejection', function (e) {
       g.setValueAtTime(Math.max(0.0001, g.value), AU.ctx.currentTime);
       g.linearRampToValueAtTime(0.0001, AU.ctx.currentTime + dur);
       clearTimeout(fadeTimer);
-      fadeTimer = setTimeout(function () { try { g.setValueAtTime(auMaster(), AU.ctx.currentTime); } catch (e) { } auPauseNow(); }, dur * 1000 + 30);
+      // 顺序很关键：必须先暂停再恢复增益；反过来的话，增益跳回满值时声音还在播 → 爆音
+      fadeTimer = setTimeout(function () {
+        auPauseNow();
+        try { g.cancelScheduledValues(AU.ctx.currentTime); g.setValueAtTime(1, AU.ctx.currentTime); } catch (e) { }
+      }, dur * 1000 + 30);
     } catch (e) { auPauseNow(); }
   }
   function auPlay() {
