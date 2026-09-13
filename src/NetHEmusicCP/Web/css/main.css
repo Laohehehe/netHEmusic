@@ -160,3 +160,7 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .nm-ripple-ring{position:fixed;left:0;top:0;border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%) scale(.03);opacity:.9;border:2px solid var(--md-accent-color);box-shadow:0 0 44px rgba(var(--md-accent-color-rgb),.45),inset 0 0 44px rgba(var(--md-accent-color-rgb),.22);animation:nm-ring-out .78s cubic-bezier(.2,.7,.3,1) forwards;}
 .nm-ripple-ring.soft{border:none;background:radial-gradient(circle,rgba(var(--md-accent-color-rgb),.22) 0%,rgba(var(--md-accent-color-rgb),.10) 55%,rgba(var(--md-accent-color-rgb),0) 72%);}
 @keyframes nm-ring-out{to{transform:translate(-50%,-50%) scale(1);opacity:0;}}
+
+/* ---- 播放全部 / 下载全部 按钮组 ---- */
+.action-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 2px;}
+.action-btn.armed{background:transparent;color:#ff7a7a;border:1px solid rgba(255,122,122,.55);}
