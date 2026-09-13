@@ -466,7 +466,7 @@ function applyLiveSetting(key, val) {
     if (!appSettings.app) appSettings.app = {};
     appSettings.app[key] = String(val);
     if (key === 'perf_gpu') { toast('GPU 加速将在重启软件后生效'); }
-    if (key === 'scheme' || key === 'custom_accent') { try { if (key === 'scheme') appSettings.scheme = String(val); appSettings.app = appSettings.app || {}; if (key === 'custom_accent') appSettings.app.custom_accent = val; applyCustomAccent(); } catch (e) { } }
+    if (key === 'scheme' || key === 'custom_accent') { try { if (key === 'scheme') appSettings.scheme = String(val); appSettings.app = appSettings.app || {}; if (key === 'custom_accent') appSettings.app.custom_accent = val; applyAccentOverrides(); } catch (e) { } }
     if (/^(perf_anim|perf_bg_blur|perf_play_anim|perf_vz_fps)/.test(key)) applyPerfAnim(appSettings);
     if (/^(perf_|lyric_|vz_)/.test(key)) npApplyLyricSettings(appSettings);
     else if (key === 'crossfade') AU.xfade = Math.max(0, Math.min(12, Number(val) || 0));
@@ -604,9 +604,12 @@ function applyPerfAnim(s) {
     return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
   }
   function shade(rgb, k) { return "rgb(" + rgb.map(function (n) { return Math.round(n * k); }).join(",") + ")"; }
-  function applyCustomAccent() {
+  function applyAccentOverrides() {
     try {
-      var on = String((appSettings && appSettings.scheme) || "") === "custom";
+      var sch = String((appSettings && appSettings.scheme) || "");
+    var onCustom = sch === "custom";
+    var onDynamic = sch === "dynamic-auto";
+    var on = onCustom || (onDynamic && !!dynamicAccent);
       var st = document.documentElement.style;
       var keys = ["--md-accent-color", "--md-accent-color-rgb", "--md-accent-color-secondary", "--md-accent-color-secondary-rgb",
                   "--md-accent-color-bg", "--md-accent-color-bg-rgb", "--md-accent-color-bg-darken", "--md-accent-color-bg-darken-rgb"];
@@ -619,7 +622,7 @@ function applyPerfAnim(s) {
         });
         return;
       }
-      var hex = String((appSettings && appSettings.custom_accent) || "#b5b9d6");
+      var hex = onCustom ? String((appSettings && appSettings.custom_accent) || "#b5b9d6") : dynamicAccent;
       var rgb = hexToRgbStr(hex); if (!rgb) return;
       st.setProperty("--md-accent-color", hex);
       st.setProperty("--md-accent-color-rgb", rgb.join(","));
@@ -630,6 +633,63 @@ function applyPerfAnim(s) {
       st.setProperty("--md-accent-color-bg-darken", shade(rgb, 0.13));
       st.setProperty("--md-accent-color-bg-darken-rgb", rgb.map(function (n) { return Math.round(n * 0.13); }).join(","));
     } catch (e) { }
+  }
+  // ---- 「跟随封面（自动）」：从当前封面采样主色，推导整套强调色 ----
+  var coverColorCache = {};
+  var dynamicAccent = null;
+  function boostColor(r, g, b) {
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    var l = (mx + mn) / 2 / 255;
+    var s = mx === mn ? 0 : (mx - mn) / (l > .5 ? (510 - mx - mn) : (mx + mn));
+    s = Math.min(1, s * 1.45 + .12);                 // 提高饱和度，避免灰扑扑
+    l = Math.min(.82, Math.max(.52, l * .95 + .18)); // 压到中亮度，深色底上更清楚
+    function hue2rgb(p2, q2, t) { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1/6) return p2 + (q2 - p2) * 6 * t; if (t < 1/2) return q2; if (t < 2/3) return p2 + (q2 - p2) * (2/3 - t) * 6; return p2; }
+    var r2, g2, b2;
+    if (s === 0) { r2 = g2 = b2 = l; }
+    else {
+      var q = l < .5 ? l * (1 + s) : l + s - l * s, p2 = 2 * l - q;
+      var h = 0;
+      var rr = r, gg = g, bb = b;                      // 统一用 0~255，别和归一化混用
+      if (mx === r) h = (gg - bb) / (mx - mn);
+      else if (mx === g) h = 2 + (bb - rr) / (mx - mn);
+      else h = 4 + (rr - gg) / (mx - mn);
+      h = (h / 6 + 1) % 1;
+      r2 = hue2rgb(p2, q, h + 1/3); g2 = hue2rgb(p2, q, h); b2 = hue2rgb(p2, q, h - 1/3);
+    }
+    return "#" + [r2, g2, b2].map(function (n) { return ("0" + Math.round(n * 255).toString(16)).slice(-2); }).join("");
+  }
+  function pickCoverColor(pic) {
+    if (!pic) return;
+    var url = pic.replace(/^d+^/, "");
+    var key = url.split("?")[0];
+    if (coverColorCache[key]) { dynamicAccent = coverColorCache[key]; applyAccentOverrides(); return; }
+    var img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = function () {
+      try {
+        var n = 24, cv = document.createElement("canvas"); cv.width = n; cv.height = n;
+        var g2 = cv.getContext("2d");
+        g2.drawImage(img, 0, 0, n, n);
+        var d = g2.getImageData(0, 0, n, n).data;
+        var R = 0, G = 0, B = 0, W = 0;
+        for (var i = 0; i < d.length; i += 4) {
+          if (d[i + 3] < 200) continue;
+          var r = d[i], gg = d[i + 1], b = d[i + 2];
+          var lum = r * .299 + gg * .587 + b * .114;
+          if (lum < 26 || lum > 238) continue;                 // 丢开纯黑纯白（通常是边框/文字）
+          var mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+          var sat = mx === 0 ? 0 : (mx - mn) / mx;
+          var w = .3 + sat * sat * 2.2 + (1 - Math.abs(lum - 128) / 128) * .4;
+          R += r * w; G += gg * w; B += b * w; W += w;
+        }
+        if (!W) { R = d[0]; G = d[1]; B = d[2]; W = 1; }
+        dynamicAccent = boostColor(R / W, G / W, B / W);
+        coverColorCache[key] = dynamicAccent;
+        applyAccentOverrides();
+      } catch (e) { try { NE.post({ type: 'log', msg: '[dyn] 取色失败(可能被 CORS 污染): ' + e.message }); } catch (e9) { } }
+    };
+    img.onerror = function () { try { NE.post({ type: 'log', msg: '[dyn] 封面加载失败' }); } catch (e10) { } };
+    img.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "param=48y48";
   }
   function allBtns(songs) {
     var wrap = el("div", "action-row");
@@ -660,7 +720,7 @@ function applyPerfAnim(s) {
     $('#pl-title').textContent = ns.Title;
     $('#pl-artist').textContent = ns.Artist;
     var c = $('#pl-cover'), wrap = $('#pl-cover-wrap');
-    if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); if(wrap) wrap.classList.add('has-cover'); }
+    if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); if(wrap) wrap.classList.add('has-cover'); try { if (String((appSettings && appSettings.scheme) || '') === 'dynamic-auto') pickCoverColor(ns.Pic); } catch (e7) { } }
     else { c.removeAttribute('src'); if(wrap) wrap.classList.remove('has-cover'); }
   }
   function setPlayer(ns) { if(!ns) return; showSongMeta(ns); setPlaying(true); pop($('#pb-play')); }
@@ -1613,7 +1673,7 @@ function applyPerfAnim(s) {
         if (!appSettings) appSettings = {};
         appSettings.app = appSettings.app || {};
         appSettings.app.custom_accent = ii.value;
-        applyCustomAccent();
+        applyAccentOverrides();
         toast('自定义强调色已应用');
       };
       rr.appendChild(ii); return rr;
@@ -1703,7 +1763,7 @@ function applyPerfAnim(s) {
       });
       window._themeVars = d.vars;
     }
-    applyCustomAccent();     // 主题变量之后再叠加自定义强调色，否则会被覆盖
+    applyAccentOverrides();     // 主题变量之后再叠加自定义强调色，否则会被覆盖
   }
 
   // ---------- 配色切换水波：以列表项为圆心向外扩散，用新配色覆盖旧界面 ----------
