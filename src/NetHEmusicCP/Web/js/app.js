@@ -450,7 +450,7 @@ window.addEventListener('unhandledrejection', function (e) {
     if (autoplay) auPlay();
   }
   // ---- 启停淡化：播放时淡入、暂停时淡出（秒数来自设置）----
-  function fadeNow() { var v = Number((appSettings && appSettings.app && appSettings.app.ui_fade_start_stop) || 0); return Math.max(0, Math.min(3, isNaN(v) ? 0 : v)); }
+  function fadeNow() { return cfgBool(appSettings, 'ui_fade_on', true) ? 0.5 : 0; }   // 开关控制，固定 0.5 秒
   var fadeTimer = null;
   function fadeIn() {
     try {
@@ -1855,7 +1855,7 @@ function applyPerfAnim(s) {
       i.onchange = function(){ NE.setSetting('crossfade', i.value); };
       r.appendChild(i); return r;
     }
-    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), rng2('启停淡化','ui_fade_start_stop', Number(cfgGet(s,'ui_fade_start_stop',0)) || 0, 0, 3, ' 秒'), sw('听歌打卡（播放达标后上报）','ui_scrobble', cfgBool(s,'ui_scrobble',false)), rngXfade() ]));
+    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), sw('启停淡化（播放淡入 / 暂停淡出 0.5 秒）','ui_fade_on', cfgBool(s,'ui_fade_on',true)), sw('听歌打卡（播放达标后上报）','ui_scrobble', cfgBool(s,'ui_scrobble',false)), rngXfade() ]));
     // ---- 快捷键（可自定义）----
     function hotkeyGroup() {
       var g = el('div','set-group');
