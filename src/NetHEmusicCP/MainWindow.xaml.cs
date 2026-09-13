@@ -85,6 +85,14 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) { LogManager.Debug("登记续播失败: " + ex.Message); }
 
+        // 上次开着桌面歌词就自动开回来
+        try
+        {
+            if (AppServices.Config.Get("App", "desktop_lyric", "false").Equals("true", StringComparison.OrdinalIgnoreCase))
+                SetDesktopLyric(true);
+        }
+        catch (Exception ex) { LogManager.Debug("恢复桌面歌词失败: " + ex.Message); }
+
         // 把播放状态推给 Web 前端播放条
         AppServices.Player.SongChanged += s =>
         {
@@ -428,6 +436,7 @@ public sealed partial class MainWindow : Window
                         long dur = doc.TryGetProperty("dur", out var dv) && dv.ValueKind == JsonValueKind.Number ? dv.GetInt64() : 0;
                         AppServices.Player.SetFrontendState(playing, pos, dur);
                         _lastFrontPos = pos; _lastFrontDur = dur;
+                        try { _lyricWin?.OnPosition(TimeSpan.FromMilliseconds(pos)); } catch { }   // 前端模式进度只从这里来
                         SaveResumeProgress(pos, dur, false);
                         break;
                     }
@@ -518,7 +527,7 @@ public sealed partial class MainWindow : Window
             ["playMode"] = AppServices.Config.Get("Player", "mode", "order"),
             ["proxy"] = AppServices.Config.Proxy,
             ["language"] = AppServices.Config.Language,
-            ["desktopLyric"] = AppServices.Config.Get("App", "desktop_lyric", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
+            ["desktopLyric"] = AppServices.Config.Get("App", "desktop_lyric", "false").Equals("true", StringComparison.OrdinalIgnoreCase),
             ["desktopLyricTopmost"] = AppServices.Config.DesktopLyricTopmost,
             ["desktopSongInfo"] = AppServices.Config.DesktopSongInfo,
             ["toast"] = AppServices.Config.Get("App", "toast", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
@@ -563,7 +572,10 @@ public sealed partial class MainWindow : Window
             case "proxy": AppServices.Config.Set("Network", "proxy", value); break;
             case "language": AppServices.Lang.SetLanguage(value); AppServices.Config.Language = value; break;
             case "desktopLyric": AppServices.Config.Set("App", "desktop_lyric", b ? "true" : "false"); break;
-            case "desktopLyricTopmost": AppServices.Config.DesktopLyricTopmost = b; break;
+            case "desktopLyricTopmost":
+                AppServices.Config.DesktopLyricTopmost = b;
+                try { _lyricWin?.SetTopmost(b); } catch { }
+                break;
             case "desktopSongInfo": AppServices.Config.DesktopSongInfo = b; break;
             case "toast": AppServices.Config.Set("App", "toast", b ? "true" : "false"); break;
         }

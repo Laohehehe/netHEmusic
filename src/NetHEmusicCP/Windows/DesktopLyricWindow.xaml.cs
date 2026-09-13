@@ -1,50 +1,233 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Microsoft.UI;
+using Microsoft.UI.Composition;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml.Hosting;
+using WinRT;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
+using Windows.UI.Text;
+using netHEmusic.Core;
 using netHEmusic.Core.Logging;
 using netHEmusic.Core.Native;
 
 namespace netHEmusic.Windows;
 
+/// <summary>
+/// 桌面歌词：整窗透明的悬浮窗，桌面上只有歌词本身（文字带描边，浅色壁纸也能看清）。
+/// 两行规则：有翻译的歌 → 上行原文、下行译文；没有翻译 → 上行当前句、下行下一句。
+/// 置顶时鼠标穿透（点不到、不抢焦点）；取消置顶后可拖动，位置记进 config。
+/// </summary>
 public sealed partial class DesktopLyricWindow : Window
 {
+    private const double MainFontSize = 34;
+    private const double SubFontSize = 20;
+
     private List<(TimeSpan t, string text)> _lines = new();
-    private List<(TimeSpan t, string text)> _tl = new();
-    private bool _vertical;
+    private List<(TimeSpan t, string text)> _trans = new();
+    private int _shownIdx = int.MinValue;
+    private string _shownMain = "\u0000", _shownSub = "\u0000";
+    private TimeSpan _lastPos = TimeSpan.Zero;
+
     private bool _topmost = true;
     private bool _dragging;
-    private PointInt32 _dragOffset;
+    private PointInt32 _dragGap;                 // 窗口左上角相对光标的偏移
+    private readonly StrokeText _main;
+    private readonly StrokeText _sub;
 
     public DesktopLyricWindow()
     {
         InitializeComponent();
         Title = "桌面歌词";
-        try { ExtendsContentIntoTitleBar = true; SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop(); } catch { }
-        try { AppWindow.Resize(new SizeInt32(560, 130)); } catch { }
-        try { AppWindow.Move(new PointInt32(200, 200)); } catch { }
-        Card.PointerPressed += OnDragStart;
-        Card.PointerMoved += OnDragMove;
-        Card.PointerReleased += OnDragEnd;
+        try { ExtendsContentIntoTitleBar = true; } catch { }
+        try { if (AppWindow.Presenter is OverlappedPresenter p) p.SetBorderAndTitleBar(false, false); } catch { }
+        try { AppWindow.IsShownInSwitchers = false; } catch { }
+        try { AppWindow.Resize(new SizeInt32(760, 110)); } catch { }
+        MakeBackgroundTransparent();
+
+        _main = new StrokeText(MainHost, MainFontSize, Microsoft.UI.Text.FontWeights.SemiBold,
+                               Colors.White, Color.FromArgb(0xE6, 0, 0, 0), 1.7);
+        _sub = new StrokeText(SubHost, SubFontSize, Microsoft.UI.Text.FontWeights.Normal,
+                              Color.FromArgb(0xF0, 0xFF, 0xFF, 0xFF), Color.FromArgb(0xD0, 0, 0, 0), 1.5);
+
+        Root.PointerPressed += OnDragStart;
+        Root.PointerMoved += OnDragMove;
+        Root.PointerReleased += OnDragEnd;
+        Root.PointerCaptureLost += (s, e) => { if (_dragging) { _dragging = false; SavePosition(); } };
         Activated += (s, e) => ApplyTopmost();
+
+        RestorePosition();
     }
+
+    /// <summary>
+    /// 让窗口背景真正透明：不给 SystemBackdrop 的话 WinUI3 会铺一层不透明黑底，
+    /// 这里塞一个 alpha=0 的 CompositionColorBrush 当背景，桌面上就只剩文字。
+    /// </summary>
+    private void MakeBackgroundTransparent()
+    {
+        try
+        {
+            // 注意：这个接口的 SystemBackdrop 形参是 Windows.UI.Composition 那套投影，
+            // 而 ElementCompositionPreview 给的是 Microsoft.UI.Composition 那套，两者不能互转，
+            // 所以这里直接用 Windows.UI.Composition 的 Compositor 造一个 alpha=0 的刷子。
+            var compositor = new global::Windows.UI.Composition.Compositor();
+            var brush = compositor.CreateColorBrush(global::Windows.UI.Color.FromArgb(0, 0, 0, 0));
+            var holder = this.As<Microsoft.UI.Composition.ICompositionSupportsSystemBackdrop>();
+            holder.SystemBackdrop = brush;
+            LogManager.Debug("桌面歌词: 透明背景已开启");
+        }
+        catch (Exception e) { LogManager.Debug("桌面歌词透明背景失败: " + e.Message); }
+    }
+
+    // ---------------- 对外接口 ----------------
 
     public void SetTopmost(bool top) { _topmost = top; ApplyTopmost(); }
 
-    public void SetVertical(bool vertical)
+    /// <summary>切歌时喂一次歌词（普通 lrc + 翻译 lrc）。</summary>
+    public void SetLyric(string lrc, string tlyric, string romalrc)
     {
-        _vertical = vertical;
-        HorizontalLyric.Visibility = vertical ? Visibility.Collapsed : Visibility.Visible;
-        VerticalLyric.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
-        var w = vertical ? 130 : 560;
-        var h = vertical ? 560 : 130;
-        try { AppWindow.Resize(new SizeInt32(w, h)); } catch { }
+        _lines = ParseLrc(lrc);
+        _trans = ParseLrc(tlyric);
+        _shownIdx = int.MinValue;
+        LogManager.Debug("桌面歌词: 原文 " + _lines.Count + " 行 / 译文 " + _trans.Count + " 行");
+        UpdateLine(_lastPos);
+        FitToContent(true);
     }
+
+    /// <summary>播放进度（前端模式和原生模式都会喂）。</summary>
+    public void OnPosition(TimeSpan pos)
+    {
+        _lastPos = pos;
+        UpdateLine(pos);
+    }
+
+    // ---------------- 两行内容 ----------------
+
+    private void UpdateLine(TimeSpan pos)
+    {
+        if (_lines.Count == 0)
+        {
+            if (_shownMain.Length == 0 && _shownSub.Length == 0) return;
+            _shownIdx = -1; _shownMain = ""; _shownSub = "";
+            _main.Text = ""; _sub.Text = "";
+            FitToContent(false);
+            return;
+        }
+
+        int idx = -1;
+        for (var i = 0; i < _lines.Count; i++) { if (_lines[i].t <= pos) idx = i; else break; }
+        if (idx < 0) idx = 0;
+
+        var mainText = _lines[idx].text;
+        // 有译文 → 下行显示这一句的译文；没有译文 → 下行显示下一句
+        var tr = NearestText(_trans, pos);
+        string subText = !string.IsNullOrWhiteSpace(tr)
+            ? tr
+            : (idx + 1 < _lines.Count ? _lines[idx + 1].text : "");
+
+        if (idx == _shownIdx && mainText == _shownMain && subText == _shownSub) return;
+        _shownIdx = idx; _shownMain = mainText; _shownSub = subText;
+        _main.Text = mainText;
+        _sub.Text = subText;
+        FitToContent(false);
+    }
+
+    private static string NearestText(List<(TimeSpan t, string text)> list, TimeSpan pos)
+    {
+        if (list.Count == 0) return "";
+        string found = "";
+        foreach (var (t, text) in list) { if (t <= pos) found = text; else break; }
+        return found;
+    }
+
+    // ---------------- 自适应大小（窗口贴着文字，桌面看着就「只有歌词」）----------------
+
+    private void FitToContent(bool force)
+    {
+        try
+        {
+            var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+            var work = area.WorkArea;
+            double maxW = Math.Max(360, work.Width * 0.72);
+            Lyric.MaxWidth = maxW;
+            Lyric.Measure(new Size(maxW, double.PositiveInfinity));
+            var d = Lyric.DesiredSize;
+            int w = (int)Math.Ceiling(Math.Min(d.Width, maxW)) + 6;
+            int h = (int)Math.Ceiling(d.Height) + 4;
+            w = Math.Clamp(w, 160, (int)maxW);
+            h = Math.Clamp(h, 40, (int)(work.Height * 0.4));
+
+            var cur = AppWindow.Size;
+            if (!force && Math.Abs(cur.Width - w) < 12 && Math.Abs(cur.Height - h) < 6) return;
+
+            var pos = AppWindow.Position;
+            int nx = pos.X + (cur.Width - w) / 2;
+            int ny = pos.Y + (cur.Height - h) / 2;
+            nx = Math.Clamp(nx, work.X, Math.Max(work.X, work.X + work.Width - w));
+            ny = Math.Clamp(ny, work.Y, Math.Max(work.Y, work.Y + work.Height - h));
+            AppWindow.MoveAndResize(new RectInt32(nx, ny, w, h));
+        }
+        catch (Exception e) { LogManager.Debug("桌面歌词自适应失败: " + e.Message); }
+    }
+
+    // ---------------- 位置 ----------------
+
+    private void RestorePosition()
+    {
+        try
+        {
+            var rawX = AppServices.Config.Get("App", "desktop_lyric_x", "");
+            var rawY = AppServices.Config.Get("App", "desktop_lyric_y", "");
+            if (int.TryParse(rawX, out var x) && int.TryParse(rawY, out var y))
+            {
+                var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+                var work = area.WorkArea;
+                // 屏幕数量/分辨率变了就当作失效，回到默认位置
+                if (x > work.X - 200 && x < work.X + work.Width && y > work.Y - 100 && y < work.Y + work.Height)
+                {
+                    AppWindow.Move(new PointInt32(x, y));
+                    return;
+                }
+            }
+        }
+        catch (Exception e) { LogManager.Debug("桌面歌词位置恢复失败: " + e.Message); }
+        MoveToDefaultSpot();
+    }
+
+    private void MoveToDefaultSpot()
+    {
+        try
+        {
+            var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+            var work = area.WorkArea;
+            var s = AppWindow.Size;
+            AppWindow.Move(new PointInt32(work.X + (work.Width - s.Width) / 2,
+                                          work.Y + work.Height - s.Height - 150));
+        }
+        catch (Exception e) { LogManager.Debug("桌面歌词默认位置失败: " + e.Message); }
+    }
+
+    private void SavePosition()
+    {
+        try
+        {
+            var p = AppWindow.Position;
+            AppServices.Config.Set("App", "desktop_lyric_x", p.X);
+            AppServices.Config.Set("App", "desktop_lyric_y", p.Y);
+            LogManager.Debug("桌面歌词位置已保存: " + p.X + "," + p.Y);
+        }
+        catch (Exception e) { LogManager.Debug("桌面歌词位置保存失败: " + e.Message); }
+    }
+
+    // ---------------- 置顶 / 拖动 ----------------
 
     private void ApplyTopmost()
     {
@@ -53,85 +236,128 @@ public sealed partial class DesktopLyricWindow : Window
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             if (_topmost)
             {
-                Card.BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+                EditFrame.Visibility = Visibility.Collapsed;
                 ClickThroughHelper.MakeTopmostClickThrough(hwnd, true);
             }
             else
             {
-                Card.BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Color.FromArgb(255, 255, 200, 0));
+                EditFrame.Visibility = Visibility.Visible;
                 try { ClickThroughHelper.SetClickThrough(hwnd, false); } catch { }
             }
-            LogManager.Debug("桌面歌词 topmost=" + _topmost);
         }
         catch (Exception e) { LogManager.Debug("桌面歌词置顶: " + e.Message); }
     }
 
-    public void SetLyric(string lrc, string tlyric, string romalrc)
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT p);
+
+    private void OnDragStart(object sender, PointerRoutedEventArgs e)
     {
-        _lines = ParseLrc(lrc);
-        _tl = ParseLrc(!string.IsNullOrEmpty(tlyric) ? tlyric : romalrc);
-        EmptyText.Visibility = _lines.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        UpdateLine(TimeSpan.Zero);
+        if (_topmost) return;
+        if (!GetCursorPos(out var c)) return;
+        var w = AppWindow.Position;
+        _dragGap = new PointInt32(w.X - c.X, w.Y - c.Y);
+        _dragging = true;
     }
 
-    public void OnPosition(TimeSpan pos) => UpdateLine(pos);
-
-    private void UpdateLine(TimeSpan pos)
+    private void OnDragMove(object sender, PointerRoutedEventArgs e)
     {
-        if (_lines.Count == 0) return;
-        var cur = _lines.LastOrDefault(x => x.t <= pos).text;
-        var tl = _tl.LastOrDefault(x => x.t <= pos).text;
-        if (_vertical)
-        {
-            VLineText.Text = cur;
-            VSubText.Text = tl;
-        }
-        else
-        {
-            LineText.Text = cur;
-            SubLineText.Text = string.IsNullOrEmpty(tl) ? _lines.SkipWhile(x => x.t <= pos).FirstOrDefault().text : tl;
-        }
+        if (!_dragging) return;
+        if (!GetCursorPos(out var c)) return;
+        AppWindow.Move(new PointInt32(c.X + _dragGap.X, c.Y + _dragGap.Y));
     }
+
+    private void OnDragEnd(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_dragging) return;
+        _dragging = false;
+        SavePosition();
+    }
+
+    // ---------------- 歌词解析 ----------------
+
+    private static readonly Regex TimeTag = new(@"\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]", RegexOptions.Compiled);
+
+    // 歌词文件开头的「作词 : xxx」这类制作信息，桌面上不该出现
+    private static readonly Regex CreditLine = new(
+        @"^\s*(作词|作曲|编曲|制作人|出品|监制|混音|母带|录音|和声|配唱|吉他|贝斯|鼓|键盘|弦乐|合声|统筹|企划|策划|封面|词|曲|OP|SP|发行|母带工程师|录音师)\s*[:：]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static List<(TimeSpan, string)> ParseLrc(string lrc)
     {
         var list = new List<(TimeSpan, string)>();
-        if (string.IsNullOrEmpty(lrc)) return list;
-        var re = new Regex(@"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]");
+        if (string.IsNullOrWhiteSpace(lrc)) return list;
         foreach (var raw in lrc.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
         {
-            var line = raw.Trim();
-            var m = re.Match(line);
-            if (!m.Success) continue;
-            var text = re.Replace(line, "").Trim();
-            if (string.IsNullOrEmpty(text)) continue;
-            int min = int.Parse(m.Groups[1].Value);
-            int sec = int.Parse(m.Groups[2].Value);
-            int ms = 0;
-            if (m.Groups[3].Success) { var s = m.Groups[3].Value; ms = int.Parse(s) * (s.Length == 3 ? 1 : s.Length == 2 ? 10 : 100); }
-            list.Add((new TimeSpan(0, 0, min, sec, ms), text));
+            var matches = TimeTag.Matches(raw);
+            if (matches.Count == 0) continue;
+            var text = TimeTag.Replace(raw, "").Trim();
+            if (text.Length == 0) continue;
+            if (CreditLine.IsMatch(text)) continue;
+            foreach (Match m in matches)
+            {
+                int min = int.Parse(m.Groups[1].Value);
+                int sec = int.Parse(m.Groups[2].Value);
+                int ms = 0;
+                if (m.Groups[3].Success)
+                {
+                    var s = m.Groups[3].Value;
+                    ms = int.Parse(s) * (s.Length == 3 ? 1 : s.Length == 2 ? 10 : 100);
+                }
+                list.Add((new TimeSpan(0, 0, min, sec, ms), text));
+            }
         }
         list.Sort((a, b) => a.Item1.CompareTo(b.Item1));
         return list;
     }
 
-    private void OnDragStart(object sender, PointerRoutedEventArgs e)
+    // ---------------- 带描边的文字（桌面上任何壁纸都能看清）----------------
+
+    private sealed class StrokeText
     {
-        if (_topmost) return;
-        _dragging = true;
-        var p = e.GetCurrentPoint(null).Position;
-        _dragOffset = new PointInt32((int)p.X, (int)p.Y);
-        try { ((UIElement)sender).CapturePointer(e.Pointer); } catch { }
-    }
-    private void OnDragMove(object sender, PointerRoutedEventArgs e)
-    {
-        if (!_dragging || _topmost) return;
-        try
+        private static readonly (double X, double Y)[] Ring =
         {
-            var pos = e.GetCurrentPoint(null).Position;
-            AppWindow.Move(new PointInt32((int)pos.X - _dragOffset.X, (int)pos.Y - _dragOffset.Y));
+            (-1, 0), (1, 0), (0, -1), (0, 1),
+            (-0.71, -0.71), (0.71, -0.71), (-0.71, 0.71), (0.71, 0.71)
+        };
+
+        private readonly List<TextBlock> _all = new();
+        private readonly TextBlock _front;
+
+        public StrokeText(Panel host, double fontSize, FontWeight weight,
+                          Color fill, Color stroke, double strokeWidth)
+        {
+            foreach (var (dx, dy) in Ring)
+            {
+                var t = NewBlock(fontSize, weight, stroke);
+                t.RenderTransform = new TranslateTransform { X = dx * strokeWidth, Y = dy * strokeWidth };
+                _all.Add(t);
+                host.Children.Add(t);
+            }
+            _front = NewBlock(fontSize, weight, fill);
+            _all.Add(_front);
+            host.Children.Add(_front);
         }
-        catch { }
+
+        public string Text
+        {
+            get => _front.Text;
+            set { var v = value ?? ""; foreach (var t in _all) t.Text = v; }
+        }
+
+        public string PlainText => _front.Text;
+
+        private static TextBlock NewBlock(double size, FontWeight weight, Color c) => new()
+        {
+            FontSize = size,
+            FontWeight = weight,
+            Foreground = new SolidColorBrush(c),
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Center,
+            IsTextScaleFactorEnabled = false
+        };
     }
-    private void OnDragEnd(object sender, PointerRoutedEventArgs e) { _dragging = false; }
 }
