@@ -472,23 +472,6 @@ window.addEventListener('unhandledrejection', function (e) {
       g.linearRampToValueAtTime(1, AU.ctx.currentTime + dur);
     } catch (e) { }
   }
-  function fadeOutThenPause() {
-    try {
-      var dur = fadeNow();
-      var p = auCur();
-      if (dur <= 0 || !p || !p.gain || !AU.ctx) { auPauseNow(); return; }
-      var g = p.gain.gain;
-      g.cancelScheduledValues(AU.ctx.currentTime);
-      g.setValueAtTime(Math.max(0.0001, g.value), AU.ctx.currentTime);
-      g.linearRampToValueAtTime(0.0001, AU.ctx.currentTime + dur);
-      clearTimeout(fadeTimer);
-      // 顺序很关键：必须先暂停再恢复增益；反过来的话，增益跳回满值时声音还在播 → 爆音
-      fadeTimer = setTimeout(function () {
-        auPauseNow();
-        try { g.cancelScheduledValues(AU.ctx.currentTime); g.setValueAtTime(1, AU.ctx.currentTime); } catch (e) { }
-      }, dur * 1000 + 30);
-    } catch (e) { auPauseNow(); }
-  }
   function auPlay() {
     auCtx();
     if (AU.ctx && AU.ctx.state === 'suspended') { try { AU.ctx.resume(); } catch (e) { } }
@@ -504,23 +487,30 @@ window.addEventListener('unhandledrejection', function (e) {
     for (var i = 0; i < 2; i++) { if (AU.ps[i]) { try { AU.ps[i].el.pause(); } catch (e) { } } }
   }
   var pausing = false;
-  function auPause() {   // 暂停：先淡出再停；防重入，避免多次调度把增益搅乱
+  function auPause() {   // 暂停：先淡出 → 停止 → 再恢复增益；防重入，避免多次调度把增益搅乱
     if (pausing) return;
     clearTimeout(fadeTimer);
     var dur = fadeNow(); var p = auCur();
     if (dur <= 0 || !p || !p.gain || !AU.ctx) { auPauseNow(); return; }
     pausing = true;
+    var g = p.gain.gain;
     try {
-      var g = p.gain.gain;
-      g.cancelScheduledValues(AU.ctx.currentTime);
-      g.setValueAtTime(Math.max(0.0001, g.value), AU.ctx.currentTime);
-      g.linearRampToValueAtTime(0.0001, AU.ctx.currentTime + dur);
+      var t0 = AU.ctx.currentTime;
+      g.cancelScheduledValues(t0);
+      g.setValueAtTime(Math.max(0.0001, g.value), t0);
+      g.linearRampToValueAtTime(0.0001, t0 + dur);    // 0.0001 = -80dB，等同静音
     } catch (e) { }
-    clearTimeout(fadeTimer);
     fadeTimer = setTimeout(function () {
-      pausing = false;
-      try { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(1, AU.ctx.currentTime); } catch (e) { }
+      // 顺序很关键：此时增益已经淡到 0.0001。若先把增益设回 1 再 pause，
+      // 元素还在放音 → 满音量的一瞬间 → 爆音。必须先停、后恢复增益。
+      var atStop = -1;
+      try { atStop = g.value; } catch (e2) { }
+      var st = [];
+      for (var i = 0; i < 2; i++) { try { st.push(AU.ps[i] && AU.ps[i].el.src ? (AU.ps[i].el.paused ? 'paused' : 'playing') : '-'); } catch (e3) { } }
       auPauseNow();
+      try { g.cancelScheduledValues(AU.ctx.currentTime); g.setValueAtTime(1, AU.ctx.currentTime); } catch (e4) { }
+      pausing = false;
+      try { NE.post({ type: 'log', msg: '[au] pause fade: gain@stop=' + atStop + ' els=' + st.join('/') + ' dur=' + dur }); } catch (e5) { }
     }, dur * 1000 + 40);
   }
   function auSeek(ms) {
