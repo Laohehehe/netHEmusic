@@ -1656,6 +1656,31 @@ function applyPerfAnim(s) {
     }
     // 设置组里的说明行：和快捷键那段的 .muted 同款
     function hint(text) { return el('p','muted', text); }
+    // 子项容器：visible=false 时整块收起（和「鼠标特效」的 fx-detail 一个做法）
+    function subBlock(rows, visible) {
+      var d = el('div','set-detail'+(visible ? '' : ' hidden'));
+      (rows || []).forEach(function (row) { if (row) d.appendChild(row); });
+      return d;
+    }
+    // 主开关 + 它的子项：关掉就收起子项，子项里放开关/滑条/下拉都行
+    function masterSw(label, key, val, subRows, onToggle) {
+      var box = el('div','set-block');
+      var row = el('div','set-row');
+      row.appendChild(el('label','',label));
+      var t = el('div','set-switch'+(val ? ' on' : '')); t.title = label;
+      row.appendChild(t);
+      var d = subBlock(subRows, val);
+      box.appendChild(row); box.appendChild(d);
+      t.onclick = function () {
+        var on = !t.classList.contains('on');
+        t.classList.toggle('on', on);
+        d.classList.toggle('hidden', !on);
+        NE.setSetting(key, on ? 'true' : 'false');
+        if (onToggle) { try { onToggle(on); } catch (e) { } }
+        else { applyLiveSetting(key, on ? 'true' : 'false'); }
+      };
+      return box;
+    }
     // 下载目录：路径显示框 + 「选择…」（C# 弹图形化文件夹选择器）+「打开文件夹」
     function dirRow() {
       var r = el('div','set-row');
@@ -1835,29 +1860,7 @@ function applyPerfAnim(s) {
         r.__sw = t;
         return r;
       }
-      var rowGlow = lSw('字体辉光','lyric_glow','glow', false);
-      var rowShadow = lSw('字体阴影','lyric_shadow','shadow', true);
-      var glowSw = rowGlow.__sw, shadowSw = rowShadow.__sw;
-      g.appendChild(rowGlow); g.appendChild(rowShadow);
-      g.appendChild(lSw('字体描边','lyric_stroke','stroke', false));
-      // 排列
-      var rowLayout = el('div','set-row'); rowLayout.appendChild(el('label','','歌词排列'));
-      var selLayout = el('div','cust-select'); selLayout.innerHTML = '<div class="cust-value"></div><div class="cust-list"></div>';
-      var curLayout = String(cfgGet(s, 'lyric_layout', 'vertical'));
-      var LAY = [{v:'vertical',t:'竖向（默认）'},{v:'curved',t:'旋转弧形'}];
-      selLayout.querySelector('.cust-value').textContent = (LAY.filter(function(x){return x.v===curLayout;})[0]||LAY[0]).t;
-      var llist = selLayout.querySelector('.cust-list');
-      LAY.forEach(function(o){
-        var it = el('div','cust-item'+(o.v===curLayout?' on':''), o.t);
-        it.onclick = function(e){ e.stopPropagation(); selLayout.querySelector('.cust-value').textContent = o.t;
-          Array.prototype.forEach.call(llist.children, function(x){ x.classList.remove('on'); }); it.classList.add('on');
-          selLayout.classList.remove('open'); lyStyles.layout = o.v; persist('lyric_layout', o.v); };
-        llist.appendChild(it);
-      });
-      selLayout.querySelector('.cust-value').onclick = function(e){ e.stopPropagation(); selLayout.classList.toggle('open'); };
-      document.addEventListener('click', function(){ selLayout.classList.remove('open'); });
-      rowLayout.appendChild(selLayout); g.appendChild(rowLayout);
-      // 曲率
+      // 曲率 / 模糊程度这类"附属值"滑条
       function lRng(label, key, field, lo, hi, def) {
         var r = el('div','set-row'); var v = Number(cfgGet(s, key, def)) || def;
         var lb = el('label','', label + ' (' + v + ')'); r.appendChild(lb);
@@ -1866,33 +1869,40 @@ function applyPerfAnim(s) {
         i.onchange = function(){ persist(key, i.value); };
         r.appendChild(i); return r;
       }
-      g.appendChild(lRng('排列弯曲曲率','lyric_curve','curve', 0, 100, 50));
-      g.appendChild(lSw('逐字动画','lyric_char_anim','charAnim', false));
-      g.appendChild(lSw('非当前行模糊','lyric_blur','blur', false));
-      g.appendChild(lRng('模糊程度','lyric_blur_amount','blurAmt', 0, 100, 40));
-      // 动画曲线
-      var rowEase = el('div','set-row'); rowEase.appendChild(el('label','','动画曲线'));
-      var selEase = el('div','cust-select'); selEase.innerHTML = '<div class="cust-value"></div><div class="cust-list"></div>';
-      var EASE = [{v:'smooth',t:'平滑'},{v:'sharp',t:'急促'},{v:'gentle',t:'温和'},{v:'easeout',t:'缓出'}];
-      var curEase = String(cfgGet(s, 'lyric_ease', 'smooth'));
-      selEase.querySelector('.cust-value').textContent = (EASE.filter(function(x){return x.v===curEase;})[0]||EASE[0]).t;
-      var elist = selEase.querySelector('.cust-list');
-      EASE.forEach(function(o){
-        var it = el('div','cust-item'+(o.v===curEase?' on':''), o.t);
-        it.onclick = function(e){ e.stopPropagation(); selEase.querySelector('.cust-value').textContent = o.t;
-          Array.prototype.forEach.call(elist.children, function(x){ x.classList.remove('on'); }); it.classList.add('on');
-          selEase.classList.remove('open'); lyStyles.ease = o.v; persist('lyric_ease', o.v); };
-        elist.appendChild(it);
-      });
-      selEase.querySelector('.cust-value').onclick = function(e){ e.stopPropagation(); selEase.classList.toggle('open'); };
-      document.addEventListener('click', function(){ selEase.classList.remove('open'); });
-      rowEase.appendChild(selEase); g.appendChild(rowEase);
+      var rowGlow = lSw('字体辉光','lyric_glow','glow', false);
+      var rowShadow = lSw('字体阴影','lyric_shadow','shadow', true);
+      var glowSw = rowGlow.__sw, shadowSw = rowShadow.__sw;
+      g.appendChild(rowGlow); g.appendChild(rowShadow);
+      g.appendChild(lSw('字体描边','lyric_stroke','stroke', false));
+
+      // 排列 → 曲率（只有选"旋转弧形"才需要曲率）
+      var layoutDetail = subBlock([lRng('排列弯曲曲率','lyric_curve','curve', 0, 100, 50)],
+                                  String(cfgGet(s,'lyric_layout','vertical')) === 'curved');
+      g.appendChild(custSel('歌词排列','lyric_layout', String(cfgGet(s,'lyric_layout','vertical')),
+        [{ v:'vertical', t:'竖向（默认）' }, { v:'curved', t:'旋转弧形' }], function (v) {
+          lyStyles.layout = v;
+          layoutDetail.classList.toggle('hidden', v !== 'curved');
+          persist('lyric_layout', v);
+        }));
+      g.appendChild(layoutDetail);
+
+      // 逐字动画 → 动画曲线
+      g.appendChild(masterSw('逐字动画','lyric_char_anim', cfgBool(s,'lyric_char_anim',false), [
+        custSel('动画曲线','lyric_ease', String(cfgGet(s,'lyric_ease','smooth')),
+          [{ v:'smooth', t:'平滑' }, { v:'sharp', t:'急促' }, { v:'gentle', t:'温和' }, { v:'easeout', t:'缓出' }],
+          function (v) { lyStyles.ease = v; persist('lyric_ease', v); })
+      ], function (on) { lyStyles.charAnim = on; persist('lyric_char_anim', on ? 'true' : 'false'); }));
+
+      // 非当前行模糊 → 模糊程度
+      g.appendChild(masterSw('非当前行模糊','lyric_blur', cfgBool(s,'lyric_blur',false), [
+        lRng('模糊程度','lyric_blur_amount','blurAmt', 0, 100, 40)
+      ], function (on) { lyStyles.blur = on; persist('lyric_blur', on ? 'true' : 'false'); }));
       return g;
     }
 
     function colorRow() {
       var rr = el('div','set-row');
-      rr.appendChild(el('label','','自定义强调色（配色方案选「自定义」时生效）'));
+      rr.appendChild(el('label','','自定义强调色'));
       var ii = el('input'); ii.type = 'color';
       ii.value = (s.app && s.app.custom_accent) || '#b5b9d6';
       ii.onchange = function () {
@@ -1905,11 +1915,15 @@ function applyPerfAnim(s) {
       };
       rr.appendChild(ii); return rr;
     }
+    var accentDetail = subBlock([colorRow()], String(s.scheme) === 'custom');
     html.appendChild(group('主题 / 外观', [
-      custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }])),
+      custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }]), function (v) {
+        accentDetail.classList.toggle('hidden', v !== 'custom');
+        applyLiveSetting('scheme', v);
+      }),
+      accentDetail,
       fontRow('界面字体','ui_font', String(cfgGet(s,'ui_font','')), applyAppFont),
       sw('Mica 背景','mica', s.mica),
-      colorRow(),
       sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
     ]));
     html.appendChild(fxGroup(s));
@@ -1924,7 +1938,28 @@ function applyPerfAnim(s) {
       i.onchange = function(){ NE.setSetting('crossfade', i.value); };
       r.appendChild(i); return r;
     }
-    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), sw('启停淡化（播放淡入 / 暂停淡出 0.5 秒）','ui_fade_on', cfgBool(s,'ui_fade_on',true)), sw('听歌打卡（播放达标后上报）','ui_scrobble', cfgBool(s,'ui_scrobble',false)), rngXfade() ]));
+    html.appendChild(group('播放', [
+      rng('默认音量','volume', s.volume),
+      sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])),
+      sw('启停淡化（播放淡入 / 暂停淡出 0.5 秒）','ui_fade_on', cfgBool(s,'ui_fade_on',true)),
+      rngXfade(),
+      sw('听歌打卡（播放达标后上报）','ui_scrobble', cfgBool(s,'ui_scrobble',false))
+    ]));
+    html.appendChild(group('桌面歌词', [
+      masterSw('启用桌面歌词','desktopLyric', s.desktopLyric, [
+        sw('锁定桌面歌词','desktopLyricTopmost', s.desktopLyricTopmost),
+        hint('想换位置：把「锁定桌面歌词」关掉就能直接拖动（这时歌词周围有一圈淡虚线框提示可拖），位置会自动记住。'),
+        fontRow('歌词字体','dl_font', String(cfgGet(s,'dl_font',''))),
+        rng2('主行字号','dl_main_size', Number(cfgGet(s,'dl_main_size',34))||34, 14, 96, 'px'),
+        rng2('副行字号','dl_sub_size', Number(cfgGet(s,'dl_sub_size',20))||20, 10, 64, 'px'),
+        colorRow2('歌词颜色','dl_color', String(cfgGet(s,'dl_color','#ffffff'))),
+        colorRow2('描边颜色','dl_stroke_color', String(cfgGet(s,'dl_stroke_color','#000000'))),
+        rng2('不透明度','dl_opacity', Number(cfgGet(s,'dl_opacity',100))||100, 10, 100, '%'),
+        sw('主行加粗','dl_bold', cfgBool(s,'dl_bold',true)),
+        sw('显示下一句 / 译文','dl_show_sub', cfgBool(s,'dl_show_sub',true))
+      ]),
+      sw('桌面歌曲信息','desktopSongInfo', s.desktopSongInfo)
+    ]));
     // ---- 快捷键（可自定义）----
     function hotkeyGroup() {
       var g = el('div','set-group');
@@ -1954,44 +1989,38 @@ function applyPerfAnim(s) {
       return g;
     }
     html.appendChild(hotkeyGroup());
-    html.appendChild(group('性能', [
-      sw('GPU 加速（硬件渲染，改动需重启）','perf_gpu', cfgBool(s, 'perf_gpu', true)),
-      sw('界面动画总开关','perf_anim', cfgBool(s, 'perf_anim', true)),
-      sel('动画速率','perf_anim_ease', String(cfgGet(s, 'perf_anim_ease', 'smooth')), [
-        { v: 'smooth', t: '平滑（默认）' }, { v: 'sharp', t: '急促' }, { v: 'gentle', t: '温和' },
-        { v: 'easeout', t: '缓出' }, { v: 'custom', t: '自定义…' }
-      ]),
+    var animEase = String(cfgGet(s, 'perf_anim_ease', 'smooth'));
+    var easeCustom = subBlock([
       rng2('自定义速率','perf_anim_speed', Number(cfgGet(s, 'perf_anim_speed', 100)) || 100, 30, 250, '%'),
       sel('自定义曲线','perf_anim_curve', String(cfgGet(s, 'perf_anim_curve', 'cubic-bezier(.18,.77,.58,.99)')), [
         { v: 'cubic-bezier(.18,.77,.58,.99)', t: '平滑' }, { v: 'cubic-bezier(.45,0,.07,1)', t: '急促' },
         { v: 'cubic-bezier(.25,.46,.45,.94)', t: '温和' }, { v: 'cubic-bezier(.15,.6,.35,1)', t: '缓出' },
         { v: 'linear', t: '匀速' }
+      ], function (v) { applyLiveSetting('perf_anim_curve', v); })
+    ], animEase === 'custom');
+    html.appendChild(group('性能', [
+      sw('GPU 加速（硬件渲染，改动需重启）','perf_gpu', cfgBool(s, 'perf_gpu', true)),
+      masterSw('界面动画总开关','perf_anim', cfgBool(s, 'perf_anim', true), [
+        sel('动画速率','perf_anim_ease', animEase, [
+          { v: 'smooth', t: '平滑（默认）' }, { v: 'sharp', t: '急促' }, { v: 'gentle', t: '温和' },
+          { v: 'easeout', t: '缓出' }, { v: 'custom', t: '自定义…' }
+        ], function (v) {
+          easeCustom.classList.toggle('hidden', v !== 'custom');
+          applyLiveSetting('perf_anim_ease', v);
+        }),
+        easeCustom,
+        sw('页面 / 列表过渡','perf_anim_page', cfgBool(s, 'perf_anim_page', true)),
+        sw('歌词页动画（进入·换行滑动）','perf_anim_np', cfgBool(s, 'perf_anim_np', true)),
+        sw('播放态动画（呼吸 / 封面浮动）','perf_play_anim', cfgBool(s, 'perf_play_anim', true)),
+        sw('配色切换水波纹','perf_anim_ripple', cfgBool(s, 'perf_anim_ripple', true))
       ]),
-      sw('页面 / 列表过渡','perf_anim_page', cfgBool(s, 'perf_anim_page', true)),
-      sw('歌词页动画（进入·换行滑动）','perf_anim_np', cfgBool(s, 'perf_anim_np', true)),
-      sw('配色切换水波纹','perf_anim_ripple', cfgBool(s, 'perf_anim_ripple', true)),
       sw('歌词页背景模糊','perf_bg_blur', cfgBool(s, 'perf_bg_blur', true)),
-      sw('播放态动画（呼吸 / 封面浮动）','perf_play_anim', cfgBool(s, 'perf_play_anim', true)),
       sel('频谱帧率','perf_vz_fps', String(cfgGet(s, 'perf_vz_fps', 33)), [
         { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
       ])
     ]));
     html.appendChild(group('网络 / 代理', [ txt('代理地址','proxy', s.proxy) ]));
     html.appendChild(group('语言', [ sel('界面语言','language', s.language, zhOpts('language', ['zh_cn','en_US'])) ]));
-    html.appendChild(group('桌面歌词', [
-      sw('启用桌面歌词','desktopLyric', s.desktopLyric),
-      sw('锁定桌面歌词','desktopLyricTopmost', s.desktopLyricTopmost),
-      hint('想换位置：把「锁定桌面歌词」关掉就能直接拖动（这时歌词周围有一圈淡虚线框提示可拖），位置会自动记住。'),
-      fontRow('歌词字体','dl_font', String(cfgGet(s,'dl_font',''))),
-      rng2('主行字号','dl_main_size', Number(cfgGet(s,'dl_main_size',34))||34, 14, 96, 'px'),
-      rng2('副行字号','dl_sub_size', Number(cfgGet(s,'dl_sub_size',20))||20, 10, 64, 'px'),
-      colorRow2('歌词颜色','dl_color', String(cfgGet(s,'dl_color','#ffffff'))),
-      colorRow2('描边颜色','dl_stroke_color', String(cfgGet(s,'dl_stroke_color','#000000'))),
-      rng2('不透明度','dl_opacity', Number(cfgGet(s,'dl_opacity',100))||100, 10, 100, '%'),
-      sw('主行加粗','dl_bold', cfgBool(s,'dl_bold',true)),
-      sw('显示下一句 / 译文','dl_show_sub', cfgBool(s,'dl_show_sub',true)),
-      sw('桌面歌曲信息','desktopSongInfo', s.desktopSongInfo)
-    ]));
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
     html.appendChild(group('关于', [
       info('版本', 'v' + (s.version||'')),

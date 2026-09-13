@@ -67,6 +67,10 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .set-value{color:rgba(var(--md-accent-color-grey-base-rgb),.72);font-size:13.5px;}
 /* 设置组里的说明文字（和快捷键那段的 .muted 同一个样式） */
 .set-group p.muted{margin:0 8px 10px;line-height:1.75;}
+/* 子项：主开关关掉 / 上级没选中时整块收起（和「鼠标特效」一个做法） */
+.set-detail{margin-left:14px;padding-left:12px;border-left:1px solid rgba(var(--md-accent-color-grey-base-rgb),.13);}
+.set-detail.hidden{display:none;}
+.set-detail .set-row{padding:8px;}
 .set-row input[type=text],.set-row select{background:var(--md-accent-color-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);border-radius:8px;color:var(--md-accent-color-secondary);padding:7px 10px;font-size:13px;min-width:200px;outline:none;}
 .set-row input[type=range]{width:200px;accent-color:var(--md-accent-color);}
 /* 下载目录：路径显示框 + 选择 / 打开文件夹按钮 */
