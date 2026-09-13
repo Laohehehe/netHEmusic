@@ -54,7 +54,7 @@ public sealed class UpdateManager
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("netHEmusic/" + Version);
     }
 
-    public string Version => "26.9.12.49";
+    public string Version => "26.9.13.1";
     private string Repo => _config.UpdateRepo;
     public UpdateState State { get { lock (_lock) return _state; } }
 
@@ -96,6 +96,36 @@ public sealed class UpdateManager
             r.Error = "无法连接更新服务器: " + e.Message;
         }
         return r;
+    }
+
+    /// <summary>
+    /// 取某个版本的 Release 正文（用于「软件已更新」公告）。
+    /// 先按 tag 精确取，取不到就退回最新 Release；两者都失败则返回错误信息。
+    /// </summary>
+    public async Task<(string Tag, string Body, string Error)> FetchReleaseNotesAsync(string version)
+    {
+        var urls = new List<string>();
+        var v = (version ?? "").Trim();
+        if (v.Length > 0) urls.Add($"https://api.github.com/repos/{Repo}/releases/tags/{v}");
+        urls.Add($"https://api.github.com/repos/{Repo}/releases/latest");
+
+        foreach (var url in urls)
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Accept.ParseAdd("application/vnd.github+json");
+                req.Headers.UserAgent.ParseAdd("netHEmusic/" + Version);
+                using var resp = await _http.SendAsync(req);
+                if (!resp.IsSuccessStatusCode) continue;
+                var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+                var tag = doc.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
+                var body = doc.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
+                if (!string.IsNullOrWhiteSpace(body)) return (tag, body, "");
+            }
+            catch (Exception e) { LogManager.Debug("取 Release 正文失败(" + url + "): " + e.Message); }
+        }
+        return ("", "", "无法连接更新服务器");
     }
 
     private static int CompareVersion(string a, string b) => VersionTuple(a).CompareTo(VersionTuple(b));

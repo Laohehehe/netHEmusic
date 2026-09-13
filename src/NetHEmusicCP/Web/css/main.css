@@ -135,9 +135,18 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .ctx-item{padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;color:rgba(var(--md-accent-color-grey-base-rgb),.85);}
 .ctx-item:hover{background:var(--nm-fill);color:var(--md-accent-color);}
 .toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--md-accent-color);color:#000;padding:9px 20px;border-radius:20px;font-weight:600;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:99;}
-::-webkit-scrollbar{width:10px;height:10px;}
-::-webkit-scrollbar-thumb{background:rgba(var(--md-accent-color-grey-base-rgb),.2);border-radius:6px;}
+/* ---- 细滚动条（4px 可见宽度，悬停变亮）---- */
+::-webkit-scrollbar{width:6px;height:6px;}
 ::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-thumb{
+  background:rgba(var(--md-accent-color-rgb),.5);        /* 用应用主题色 */
+  border-radius:6px;
+  border:1px solid transparent;         /* 两侧留白，实际可见只有 4px */
+  background-clip:content-box;
+}
+::-webkit-scrollbar-thumb:hover{background:rgba(var(--md-accent-color-rgb),.75);background-clip:content-box;}
+::-webkit-scrollbar-thumb:active{background:rgba(var(--md-accent-color-rgb),1);background-clip:content-box;}
 
 /* ---------- 配色方案切换：以点击的列表项为圆心，向外扩散覆盖新配色的"水波"过渡 ---------- */
 ::view-transition-old(root){animation:none;}

@@ -145,9 +145,17 @@ public sealed partial class MainWindow : Window
         try
         {
             // 允许网页 <audio> 在无用户手势时也能播放（前端播放内核需要：自动下一首 / SMTC 触发）
+            var browserArgs = "--autoplay-policy=no-user-gesture-required";
+            // 设置 → 性能 → GPU 加速：关掉后走软件渲染（省 GPU / 兼容老显卡，需重启生效）
+            bool gpuOn = !AppServices.Config.Get("App", "perf_gpu", "true").Equals("false", StringComparison.OrdinalIgnoreCase);
+            if (!gpuOn)
+            {
+                browserArgs += " --disable-gpu --disable-gpu-compositing --disable-accelerated-2d-canvas --disable-accelerated-video-decode";
+                LogManager.Log("GPU 加速已关闭（软件渲染）");
+            }
             var envOptions = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions
             {
-                AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required"
+                AdditionalBrowserArguments = browserArgs
             };
             // 用户数据放到 %APPDATA%\netHEmusic\webview：安装目录保持只读，MSI 卸载才干净
             string webviewData = Path.Combine(AppServices.Config.DataDir, "webview");
@@ -355,6 +363,7 @@ public sealed partial class MainWindow : Window
                 case "playnext": { if (doc.TryGetProperty("song", out var s)) { var song = SongFromWeb(s); if (song != null) { var q = AppServices.Player.Queue.ToList(); int idx = q.FindIndex(x => x.Id == song.Id); if (idx < 0) { var nxt = AppServices.Player.Index + 1; q.Insert(Math.Min(nxt, q.Count), song); _ = AppServices.Player.LoadQueueAsync(q, AppServices.Player.Index); } } } break; }
                 case "open_settings": AppServices.RunOnUi(() => { try { new SettingsWindow().Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }); break;
                 case "get_settings": HandleGetSettings(); break;
+                case "release_notes": _ = HandleReleaseNotes(doc); break;
                 case "notice_seen": AppServices.Config.VersionSeen = AppServices.Version; LogManager.Log("[Version] version 已更新为 " + AppServices.Version); break;
                 case "queue_get": PostToWeb(new { type = "queue", songs = AppServices.Player.Queue.Select(ToSongDto).ToList(), index = AppServices.Player.Index }); break;
                 case "play_index": { if (doc.TryGetProperty("index", out var qi) && qi.TryGetInt32(out var qn)) _ = AppServices.Player.PlayAtAsync(qn); break; }
@@ -397,6 +406,15 @@ public sealed partial class MainWindow : Window
     }
 
     private async Task HandleWebSearch(JsonElement doc) { var kw = doc.TryGetProperty("kw", out var k) ? k.GetString() ?? "" : ""; var songs = await AppServices.Netease.Search(kw, 1, 50); PostToWeb(new { type = "songs", songs = songs.Select(ToSongDto).ToList(), search = kw }); }
+    /// <summary>更新公告：从 GitHub Release 取正文（不在程序里写死更新日志）。</summary>
+    private async Task HandleReleaseNotes(JsonElement doc)
+    {
+        var want = doc.TryGetProperty("version", out var v) ? (v.GetString() ?? "") : "";
+        var (tag, body, err) = await AppServices.Updater.FetchReleaseNotesAsync(want);
+        LogManager.Log($"更新公告: 请求 {want} → 取到 {tag}，正文 {body.Length} 字" + (err.Length > 0 ? "（" + err + "）" : ""));
+        PostToWeb(new { type = "release_notes", want, version = tag, body, error = err });
+    }
+
     private async Task HandleWebDiscover() { var songs = await AppServices.Netease.RecommendSongs(); PostToWeb(new { type = "songs", songs = songs.Select(ToSongDto).ToList(), discover = true }); }
     private async Task HandleWebPlaylist(JsonElement doc) { long id = 0; if (doc.TryGetProperty("id", out var i)) id = i.GetInt64(); if (id <= 0) return; var tracks = await AppServices.Netease.PlaylistTracks(id, 1000, 0); PostToWeb(new { type = "songs", songs = tracks.Select(ToSongDto).ToList() }); }
     private async Task HandleWebLyric(JsonElement doc) { long id = 0; if (doc.TryGetProperty("id", out var d)) id = d.GetInt64(); if (id <= 0 && AppServices.Player.Current != null) id = AppServices.Player.Current.Id; var json = await AppServices.Netease.JsonLyric(id); var (lrc, tl, ro) = AppServices.Netease.ParseLyric(json); PostToWeb(new { type = "lyric", lrc, tlyric = tl, romalrc = ro }); }

@@ -578,3 +578,55 @@ html.no-fx .fx-shake{animation:none;}
 html.no-play-anim #player.playing #pb-play{animation:none !important;}
 html.no-play-anim #player.playing #pb-play::after{animation:none !important;opacity:0 !important;}
 html.no-play-anim #player.playing .pl-cover{animation:none !important;}
+/* ================= 更新公告正文（Markdown 渲染） ================= */
+.notice-md{margin:2px 0 0;max-height:46vh;overflow:auto;padding-right:4px;}
+.notice-md h3{font-size:15px;font-weight:600;margin:10px 0 4px;color:#fff;}
+.notice-md h4{font-size:14px;font-weight:600;margin:9px 0 3px;}
+.notice-md h5,.notice-md h6{font-size:13px;font-weight:600;margin:8px 0 3px;}
+.notice-md p{margin:4px 0;line-height:1.75;font-size:12.5px;}
+.notice-md ul,.notice-md ol{margin:4px 0 4px 18px;padding:0;}
+.notice-md ul{list-style:disc;}
+.notice-md ol{list-style:decimal;}
+.notice-md li{margin:2px 0;line-height:1.7;font-size:12.5px;}
+.notice-md code{font-family:Consolas,monospace;font-size:12px;background:rgba(255,255,255,.08);border-radius:4px;padding:1px 5px;}
+.notice-md pre{background:rgba(0,0,0,.32);border-radius:8px;padding:8px 10px;overflow:auto;}
+.notice-md pre code{background:none;padding:0;}
+.notice-md hr{border:0;border-top:1px solid rgba(255,255,255,.14);margin:10px 0;}
+.notice-md a{color:var(--md-accent-color,#b5b9d6);text-decoration:none;}
+.notice-md b{color:#fff;}
+.notice-loading{opacity:.6;font-size:12.5px;margin:6px 0;}
+
+/* ================= 性能：动画 ================= */
+:root{--anim-k:1;--anim-ease:cubic-bezier(.18,.77,.58,.99);}
+
+/* 总开关：一键停掉所有动画与过渡 */
+html.anim-off *,html.anim-off *::before,html.anim-off *::after{
+  animation-duration:.001ms !important;animation-delay:0ms !important;animation-iteration-count:1 !important;
+  transition-duration:.001ms !important;transition-delay:0ms !important;
+}
+
+/* 分组开关：页面与列表 */
+html.no-anim-page #view,html.no-anim-page .song-row,html.no-anim-page .pl-card,html.no-anim-page .row-btn,
+html.no-anim-page .action-btn,html.no-anim-page #sidebar,html.no-anim-page #sidebar .label,
+html.no-anim-page .set-switch,html.no-anim-page .set-switch::after,html.no-anim-page .ctx-menu,
+html.no-anim-page .toast,html.no-anim-page .cust-select,html.no-anim-page .cs-list{transition:none !important;}
+
+/* 分组开关：歌词页 */
+html.no-anim-np .np,html.no-anim-np .np-bg,html.no-anim-np .np-wrap,html.no-anim-np .np-cover-wrap,
+html.no-anim-np .np-line,html.no-anim-np .np-bar,html.no-anim-np .np-lyric-inner,html.no-anim-np .np-settings{transition:none !important;}
+
+/* 分组开关：配色切换水波纹 */
+html.no-anim-ripple ::view-transition-new(root){animation:none !important;}
+html.no-anim-ripple .nm-ripple-ring{display:none !important;}
+
+/* 速率与曲线：套在主要过渡上（--anim-k 为倍率，--anim-ease 为曲线） */
+html.anim-tuned #view{transition-duration:calc(.22s * var(--anim-k)) !important;transition-timing-function:var(--anim-ease) !important;}
+html.anim-tuned .song-row,html.anim-tuned .pl-card,html.anim-tuned .row-btn,html.anim-tuned .action-btn,
+html.anim-tuned .set-switch,html.anim-tuned .set-switch::after,html.anim-tuned .toast,
+html.anim-tuned .np,html.anim-tuned .np-wrap,html.anim-tuned .np-cover-wrap,html.anim-tuned .np-line,
+html.anim-tuned .np-bar,html.anim-tuned .np-lyric-inner,html.anim-tuned .np-settings{
+  transition-duration:calc(.2s * var(--anim-k)) !important;transition-timing-function:var(--anim-ease) !important;
+}
+html.anim-tuned .np-line{transition-duration:calc(.62s * var(--anim-k)) !important;}
+html.anim-tuned .np-cover-wrap{transition-duration:calc(.5s * var(--anim-k)) !important;}
+html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
