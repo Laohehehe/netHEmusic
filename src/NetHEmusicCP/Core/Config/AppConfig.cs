@@ -230,6 +230,11 @@ public sealed class AppConfig
     /// <summary>上次播放列表播到的下标（重启后恢复用）。</summary>
     public int PlaylistIndex { get => int.TryParse(Get("Player", "playlist_index", "0"), out var v) ? v : 0; set => Set("Player", "playlist_index", value); }
 
+    /// <summary>上次听到的曲目 id（-1 = 没记录）。用于下次启动续播。</summary>
+    public long LastSongId { get => long.TryParse(Get("Player", "last_song_id", "-1"), out var v) ? v : -1; set => Set("Player", "last_song_id", value); }
+    /// <summary>上次听到的位置（毫秒）。用于下次启动续播。</summary>
+    public long LastPosition { get => long.TryParse(Get("Player", "last_pos", "0"), out var v) ? v : 0; set => Set("Player", "last_pos", value); }
+
     public string GetPlaylist() => Get("Player", "playlist", "[]");
     public void SavePlaylist(string json) => Set("Player", "playlist", json);
     public string GetPlayback() => Get("Player", "playback", "");
