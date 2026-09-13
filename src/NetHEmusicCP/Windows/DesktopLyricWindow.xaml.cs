@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Windowing;
-using Microsoft.UI.Xaml.Hosting;
-using WinRT;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -15,6 +14,7 @@ using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
 using Windows.UI.Text;
+using WinRT;
 using netHEmusic.Core;
 using netHEmusic.Core.Logging;
 using netHEmusic.Core.Native;
@@ -24,13 +24,11 @@ namespace netHEmusic.Windows;
 /// <summary>
 /// 桌面歌词：整窗透明的悬浮窗，桌面上只有歌词本身（文字带描边，浅色壁纸也能看清）。
 /// 两行规则：有翻译的歌 → 上行原文、下行译文；没有翻译 → 上行当前句、下行下一句。
-/// 置顶时鼠标穿透（点不到、不抢焦点）；取消置顶后可拖动，位置记进 config。
+/// 字体/字号/颜色/透明度全都能在设置里改，改完即时生效（设置键 dl_*，见 ApplySettings）。
+/// 锁定时鼠标穿透（点不到、不抢焦点）；解锁后可拖动，位置记进 config。
 /// </summary>
 public sealed partial class DesktopLyricWindow : Window
 {
-    private const double MainFontSize = 34;
-    private const double SubFontSize = 20;
-
     private List<(TimeSpan t, string text)> _lines = new();
     private List<(TimeSpan t, string text)> _trans = new();
     private int _shownIdx = int.MinValue;
@@ -39,9 +37,10 @@ public sealed partial class DesktopLyricWindow : Window
 
     private bool _topmost = true;
     private bool _dragging;
-    private PointInt32 _dragGap;                 // 窗口左上角相对光标的偏移
+    private PointInt32 _dragGap;
     private readonly StrokeText _main;
     private readonly StrokeText _sub;
+    private readonly FontFamily _baseFont;
 
     public DesktopLyricWindow()
     {
@@ -53,10 +52,11 @@ public sealed partial class DesktopLyricWindow : Window
         try { AppWindow.Resize(new SizeInt32(760, 110)); } catch { }
         MakeBackgroundTransparent();
 
-        _main = new StrokeText(MainHost, MainFontSize, Microsoft.UI.Text.FontWeights.SemiBold,
-                               Colors.White, Color.FromArgb(0xE6, 0, 0, 0), 1.7);
-        _sub = new StrokeText(SubHost, SubFontSize, Microsoft.UI.Text.FontWeights.Normal,
-                              Color.FromArgb(0xF0, 0xFF, 0xFF, 0xFF), Color.FromArgb(0xD0, 0, 0, 0), 1.5);
+        _main = new StrokeText(MainHost, 34, Microsoft.UI.Text.FontWeights.SemiBold,
+                               Colors.White, Color.FromArgb(255, 0, 0, 0), 1.7);
+        _sub = new StrokeText(SubHost, 20, Microsoft.UI.Text.FontWeights.Normal,
+                              Color.FromArgb(255, 255, 255, 255), Color.FromArgb(255, 0, 0, 0), 1.5);
+        _baseFont = _main.FontFamily;
 
         Root.PointerPressed += OnDragStart;
         Root.PointerMoved += OnDragMove;
@@ -65,6 +65,7 @@ public sealed partial class DesktopLyricWindow : Window
         Activated += (s, e) => ApplyTopmost();
 
         RestorePosition();
+        ApplySettings();
     }
 
     /// <summary>
@@ -85,6 +86,64 @@ public sealed partial class DesktopLyricWindow : Window
             LogManager.Debug("桌面歌词: 透明背景已开启");
         }
         catch (Exception e) { LogManager.Debug("桌面歌词透明背景失败: " + e.Message); }
+    }
+
+    // ---------------- 外观设置（[App] dl_*）----------------
+
+    /// <summary>从 config 读外观设置并即时应用（设置面板改一下就调一次）。</summary>
+    public void ApplySettings()
+    {
+        try
+        {
+            var cfg = AppServices.Config;
+            var font = (cfg.Get("App", "dl_font", "") ?? "").Trim();
+            double mainSize = Clamp(ParseNum(cfg.Get("App", "dl_main_size", ""), 34), 14, 96);
+            double subSize = Clamp(ParseNum(cfg.Get("App", "dl_sub_size", ""), 20), 10, 64);
+            var fill = ParseColor(cfg.Get("App", "dl_color", ""), Colors.White);
+            var stroke = ParseColor(cfg.Get("App", "dl_stroke_color", ""), Color.FromArgb(255, 0, 0, 0));
+            double opacity = Clamp(ParseNum(cfg.Get("App", "dl_opacity", ""), 100), 10, 100) / 100.0;
+            bool bold = !(cfg.Get("App", "dl_bold", "true") ?? "true").Equals("false", StringComparison.OrdinalIgnoreCase);
+            bool showSub = !(cfg.Get("App", "dl_show_sub", "true") ?? "true").Equals("false", StringComparison.OrdinalIgnoreCase);
+
+            var ff = _baseFont;
+            if (font.Length > 0)
+            {
+                try { ff = new FontFamily(font); } catch { ff = _baseFont; }
+            }
+
+            _main.FontFamily = ff;
+            _sub.FontFamily = ff;
+            _main.SetStyle(mainSize, bold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal, fill, stroke, Math.Max(1.2, mainSize / 20.0));
+            _sub.SetStyle(subSize, Microsoft.UI.Text.FontWeights.Normal, fill, stroke, Math.Max(1.0, subSize / 14.0));
+            _main.Opacity = opacity;
+            _sub.Opacity = opacity;
+            SubHost.Visibility = showSub ? Visibility.Visible : Visibility.Collapsed;
+
+            FitToContent(true);
+            LogManager.Debug("桌面歌词外观: font=" + (font.Length > 0 ? font : "(默认)") + " main=" + mainSize + " sub=" + subSize +
+                             " color=" + fill + " stroke=" + stroke + " opacity=" + opacity + " bold=" + bold + " sub=" + showSub);
+        }
+        catch (Exception e) { LogManager.Debug("桌面歌词应用设置失败: " + e.Message); }
+    }
+
+    private static double ParseNum(string raw, double def)
+        => double.TryParse((raw ?? "").Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : def;
+
+    private static double Clamp(double v, double lo, double hi) => v < lo ? lo : (v > hi ? hi : v);
+
+    private static Color ParseColor(string raw, Color def)
+    {
+        try
+        {
+            var s = (raw ?? "").Trim().TrimStart('#');
+            if (s.Length == 6) s = "FF" + s;
+            if (s.Length != 8) return def;
+            return Color.FromArgb(byte.Parse(s.Substring(0, 2), NumberStyles.HexNumber),
+                                  byte.Parse(s.Substring(2, 2), NumberStyles.HexNumber),
+                                  byte.Parse(s.Substring(4, 2), NumberStyles.HexNumber),
+                                  byte.Parse(s.Substring(6, 2), NumberStyles.HexNumber));
+        }
+        catch { return def; }
     }
 
     // ---------------- 对外接口 ----------------
@@ -324,31 +383,55 @@ public sealed partial class DesktopLyricWindow : Window
             (-0.71, -0.71), (0.71, -0.71), (-0.71, 0.71), (0.71, 0.71)
         };
 
-        private readonly List<TextBlock> _all = new();
+        private readonly List<TextBlock> _strokes = new();
         private readonly TextBlock _front;
 
         public StrokeText(Panel host, double fontSize, FontWeight weight,
                           Color fill, Color stroke, double strokeWidth)
         {
-            foreach (var (dx, dy) in Ring)
+            foreach (var _ in Ring)
             {
                 var t = NewBlock(fontSize, weight, stroke);
-                t.RenderTransform = new TranslateTransform { X = dx * strokeWidth, Y = dy * strokeWidth };
-                _all.Add(t);
+                _strokes.Add(t);
                 host.Children.Add(t);
             }
             _front = NewBlock(fontSize, weight, fill);
-            _all.Add(_front);
             host.Children.Add(_front);
+            SetStyle(fontSize, weight, fill, stroke, strokeWidth);
         }
 
         public string Text
         {
             get => _front.Text;
-            set { var v = value ?? ""; foreach (var t in _all) t.Text = v; }
+            set { var v = value ?? ""; foreach (var t in _strokes) t.Text = v; _front.Text = v; }
         }
 
-        public string PlainText => _front.Text;
+        public FontFamily FontFamily
+        {
+            get => _front.FontFamily;
+            set { foreach (var t in _strokes) t.FontFamily = value; _front.FontFamily = value; }
+        }
+
+        public double Opacity
+        {
+            get => _front.Opacity;
+            set { foreach (var t in _strokes) t.Opacity = value; _front.Opacity = value; }
+        }
+
+        public void SetStyle(double size, FontWeight weight, Color fill, Color stroke, double strokeWidth)
+        {
+            for (var i = 0; i < _strokes.Count; i++)
+            {
+                var t = _strokes[i];
+                t.FontSize = size;
+                t.FontWeight = weight;
+                t.Foreground = new SolidColorBrush(stroke);
+                t.RenderTransform = new TranslateTransform { X = Ring[i].X * strokeWidth, Y = Ring[i].Y * strokeWidth };
+            }
+            _front.FontSize = size;
+            _front.FontWeight = weight;
+            _front.Foreground = new SolidColorBrush(fill);
+        }
 
         private static TextBlock NewBlock(double size, FontWeight weight, Color c) => new()
         {

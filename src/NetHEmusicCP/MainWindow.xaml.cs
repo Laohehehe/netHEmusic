@@ -532,6 +532,7 @@ public sealed partial class MainWindow : Window
             ["desktopSongInfo"] = AppServices.Config.DesktopSongInfo,
             ["toast"] = AppServices.Config.Get("App", "toast", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
             ["version"] = AppServices.Version,
+            ["fonts"] = SystemFonts.Families(),   // 本机字体列表，设置里的字体下拉用
         };
         PostToWeb(new { type = "settings", data = s });
     }
@@ -561,8 +562,14 @@ public sealed partial class MainWindow : Window
                     || key.StartsWith("lyric_", StringComparison.OrdinalIgnoreCase)
                     || key.StartsWith("hk_", StringComparison.OrdinalIgnoreCase)
                     || key.StartsWith("vz_", StringComparison.OrdinalIgnoreCase)
-                    || key.StartsWith("perf_", StringComparison.OrdinalIgnoreCase))
-                { AppServices.Config.Set("App", key, value); LogManager.Debug("自定义设置: " + key + "=" + value); }
+                    || key.StartsWith("perf_", StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith("dl_", StringComparison.OrdinalIgnoreCase))     // dl_* = 桌面歌词外观
+                {
+                    AppServices.Config.Set("App", key, value);
+                    LogManager.Debug("自定义设置: " + key + "=" + value);
+                    if (key.StartsWith("dl_", StringComparison.OrdinalIgnoreCase))
+                    { try { _lyricWin?.ApplySettings(); } catch { } }   // 桌面歌词外观即时生效
+                }
                 break;
             case "downloadDir": try { if (!string.IsNullOrWhiteSpace(value)) AppServices.Config.DownloadDir = value; } catch { } break;
             case "quality": AppServices.Config.Quality = value; break;

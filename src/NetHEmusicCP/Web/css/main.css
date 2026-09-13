@@ -17,7 +17,7 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 img{-webkit-user-drag:none;user-drag:none;}
 ::selection{background:rgba(var(--md-accent-color-rgb),.35);}
 html,body{height:100%;margin:0;}
-body{font-family:'Segoe UI Variable','Segoe UI',system-ui,sans-serif;background:var(--frame-bg);color:var(--md-accent-color-secondary);overflow:hidden;}
+body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-serif);background:var(--frame-bg);color:var(--md-accent-color-secondary);overflow:hidden;}
 /* 与 WinUI 原生标题栏同色：标题栏用的是主题 AppSurfaceDarkenBrush(= --md-accent-color-bg-darken) */
 :root{
   --frame-bg: var(--md-accent-color-bg-darken);

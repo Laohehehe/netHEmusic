@@ -1617,6 +1617,15 @@ function applyPerfAnim(s) {
   }
 
   // ---------- 设置（内嵌主窗口的网页设置页） ----------
+  // 界面字体：把选中的字体写进 CSS 变量 --app-font，空值就撤掉变量用默认字体
+  function applyAppFont(name) {
+    try {
+      var root = document.documentElement, v = String(name || '').trim();
+      if (v) root.style.setProperty('--app-font', '"' + v.replace(/["\\]/g, '') + '"');
+      else root.style.removeProperty('--app-font');
+    } catch (e) { }
+  }
+
   // 下载目录：路径框引用（folder_picked 回来后原地刷新，不用整页重绘）
   let dlDirEl = null;
   let dlDir = '';
@@ -1659,6 +1668,25 @@ function applyPerfAnim(s) {
       };
       ctl.appendChild(box); ctl.appendChild(bPick); ctl.appendChild(bOpen);
       r.appendChild(ctl);
+      return r;
+    }
+    // 字体下拉：列本机所有字体（C# 用 GDI 枚举后随 settings 一起下发）
+    function fontOpts(cur) {
+      var list = [{ v: '', t: '默认' }];
+      var fonts = (s && s.fonts) || [];
+      fonts.forEach(function (f) { list.push({ v: f, t: f }); });
+      if (cur && fonts.indexOf(cur) < 0) list.splice(1, 0, { v: cur, t: cur + '（本机没装）' });
+      return list;
+    }
+    function fontRow(label, key, val, onPick) {
+      return custSel(label, key, val, fontOpts(String(val || '')), onPick);
+    }
+    function colorRow2(label, key, val) {
+      var r = el('div','set-row');
+      r.appendChild(el('label','',label));
+      var i = el('input'); i.type = 'color'; i.value = val || '#ffffff';
+      i.onchange = function () { NE.setSetting(key, i.value); };
+      r.appendChild(i);
       return r;
     }
     // 自定义下拉：opts 支持字符串数组或 [{v:值,t:显示名}]；onPick(值) 用于即时生效
@@ -1870,7 +1898,13 @@ function applyPerfAnim(s) {
       };
       rr.appendChild(ii); return rr;
     }
-    html.appendChild(group('主题 / 外观', [ custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }])), sw('Mica 背景','mica', s.mica), colorRow(), sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray) ]));
+    html.appendChild(group('主题 / 外观', [
+      custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }])),
+      fontRow('界面字体','ui_font', String(cfgGet(s,'ui_font','')), applyAppFont),
+      sw('Mica 背景','mica', s.mica),
+      colorRow(),
+      sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
+    ]));
     html.appendChild(fxGroup(s));
     html.appendChild(group('下载', [ dirRow(), sel('音乐命名格式','ui_name_format', String(cfgGet(s,'ui_name_format','title-artist')), [{v:'title-artist',t:'歌曲名 - 歌手（默认）'},{v:'artist-title',t:'歌手 - 歌曲名'},{v:'title',t:'歌曲名'} ]), sel('音质','quality', s.quality, zhOpts('quality', ['standard','exhigh','lossless'])) ]));
     function rngXfade() {
@@ -1937,7 +1971,20 @@ function applyPerfAnim(s) {
     ]));
     html.appendChild(group('网络 / 代理', [ txt('代理地址','proxy', s.proxy) ]));
     html.appendChild(group('语言', [ sel('界面语言','language', s.language, zhOpts('language', ['zh_cn','en_US'])) ]));
-    html.appendChild(group('桌面歌词', [ sw('启用桌面歌词','desktopLyric', s.desktopLyric), sw('强制置顶 + 鼠标穿透','desktopLyricTopmost', s.desktopLyricTopmost), sw('桌面歌曲信息','desktopSongInfo', s.desktopSongInfo) ]));
+    html.appendChild(group('桌面歌词', [
+      sw('启用桌面歌词','desktopLyric', s.desktopLyric),
+      sw('锁定桌面歌词','desktopLyricTopmost', s.desktopLyricTopmost),
+      info('解锁后可以直接拖动歌词摆位置（有淡淡的虚线框），位置会自动记住'),
+      fontRow('歌词字体','dl_font', String(cfgGet(s,'dl_font',''))),
+      rng2('主行字号','dl_main_size', Number(cfgGet(s,'dl_main_size',34))||34, 14, 96, 'px'),
+      rng2('副行字号','dl_sub_size', Number(cfgGet(s,'dl_sub_size',20))||20, 10, 64, 'px'),
+      colorRow2('歌词颜色','dl_color', String(cfgGet(s,'dl_color','#ffffff'))),
+      colorRow2('描边颜色','dl_stroke_color', String(cfgGet(s,'dl_stroke_color','#000000'))),
+      rng2('不透明度','dl_opacity', Number(cfgGet(s,'dl_opacity',100))||100, 10, 100, '%'),
+      sw('主行加粗','dl_bold', cfgBool(s,'dl_bold',true)),
+      sw('显示下一句 / 译文','dl_show_sub', cfgBool(s,'dl_show_sub',true)),
+      sw('桌面歌曲信息','desktopSongInfo', s.desktopSongInfo)
+    ]));
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
     html.appendChild(group('关于', [ info('netHEmusic 版本 v' + (s.version||'')), info('WinUI3 + Fluent · 第三方软件，仅供学习交流，禁止商用及任何侵权用途') ]));
     view.innerHTML=''; view.appendChild(html);
@@ -2279,6 +2326,7 @@ function applyPerfAnim(s) {
       hotkeysFromSettings(s);                                  // 快捷键绑定
       AU.xfade = Math.max(0, Math.min(12, Number(s.crossfade || 0) || 0));   // 交叉淡化秒数
       AU.vol = Number(s.volume != null ? s.volume : 70) || 0;
+      applyAppFont(cfgGet(s, 'ui_font', ''));                  // 界面字体
       if (!LYRIC_LOCKED) {
         var dlOn = String(s.desktopLyric) !== 'false' && s.desktopLyric !== false;
         setLyricBtn(dlOn);
