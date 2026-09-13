@@ -1889,66 +1889,6 @@ function applyPerfAnim(s) {
       return g;
     }
 
-    // ---- 歌词页外观（改动即时生效并落 config）----
-    function lyricGroup(s) {
-      var g = el('div','set-group');
-      g.appendChild(el('h3','','歌词页（全窗口歌词）'));
-      function persist(k, v) { NE.setSetting(k, v); npApplyStyleFromState(); if (npLines.length) npRenderLyric(npLines); }
-      // 开关
-      function lSw(label, key, field, def) {
-        var r = el('div','set-row'); r.appendChild(el('label','',label));
-        var v = cfgBool(s, key, def);
-        var t = el('div','set-switch'+(v?' on':'')); t.title = label; r.appendChild(t);
-        t.onclick = function(){
-          var on = !t.classList.contains('on'); t.classList.toggle('on', on);
-          lyStyles[field] = on;
-          if (field === 'glow' && on) { lyStyles.shadow = false; shadowSw.classList.remove('on'); NE.setSetting('lyric_shadow','false'); }
-          if (field === 'shadow' && on) { lyStyles.glow = false; glowSw.classList.remove('on'); NE.setSetting('lyric_glow','false'); }
-          persist(key, on ? 'true' : 'false');
-        };
-        r.__sw = t;
-        return r;
-      }
-      // 曲率 / 模糊程度这类"附属值"滑条
-      function lRng(label, key, field, lo, hi, def) {
-        var r = el('div','set-row'); var v = Number(cfgGet(s, key, def)) || def;
-        var lb = el('label','', label + ' (' + v + ')'); r.appendChild(lb);
-        var i = el('input'); i.type = 'range'; i.min = lo; i.max = hi; i.value = v;
-        i.oninput = function(){ lb.textContent = label + ' (' + i.value + ')'; lyStyles[field] = Number(i.value); npApplyStyleFromState(); };
-        i.onchange = function(){ persist(key, i.value); };
-        r.appendChild(i); return r;
-      }
-      var rowGlow = lSw('字体辉光','lyric_glow','glow', false);
-      var rowShadow = lSw('字体阴影','lyric_shadow','shadow', true);
-      var glowSw = rowGlow.__sw, shadowSw = rowShadow.__sw;
-      g.appendChild(rowGlow); g.appendChild(rowShadow);
-      g.appendChild(lSw('字体描边','lyric_stroke','stroke', false));
-
-      // 排列 → 曲率（只有选"旋转弧形"才需要曲率）
-      var layoutDetail = subBlock([lRng('排列弯曲曲率','lyric_curve','curve', 0, 100, 50)],
-                                  String(cfgGet(s,'lyric_layout','vertical')) === 'curved');
-      g.appendChild(custSel('歌词排列','lyric_layout', String(cfgGet(s,'lyric_layout','vertical')),
-        [{ v:'vertical', t:'竖向（默认）' }, { v:'curved', t:'旋转弧形' }], function (v) {
-          lyStyles.layout = v;
-          layoutDetail.classList.toggle('hidden', v !== 'curved');
-          persist('lyric_layout', v);
-        }));
-      g.appendChild(layoutDetail);
-
-      // 逐字动画 → 动画曲线
-      g.appendChild(masterSw('逐字动画','lyric_char_anim', cfgBool(s,'lyric_char_anim',false), [
-        custSel('动画曲线','lyric_ease', String(cfgGet(s,'lyric_ease','smooth')),
-          [{ v:'smooth', t:'平滑' }, { v:'sharp', t:'急促' }, { v:'gentle', t:'温和' }, { v:'easeout', t:'缓出' }],
-          function (v) { lyStyles.ease = v; persist('lyric_ease', v); })
-      ], function (on) { lyStyles.charAnim = on; persist('lyric_char_anim', on ? 'true' : 'false'); }));
-
-      // 非当前行模糊 → 模糊程度
-      g.appendChild(masterSw('非当前行模糊','lyric_blur', cfgBool(s,'lyric_blur',false), [
-        lRng('模糊程度','lyric_blur_amount','blurAmt', 0, 100, 40)
-      ], function (on) { lyStyles.blur = on; persist('lyric_blur', on ? 'true' : 'false'); }));
-      return g;
-    }
-
     function colorRow() {
       var rr = el('div','set-row');
       rr.appendChild(el('label','','自定义强调色'));
