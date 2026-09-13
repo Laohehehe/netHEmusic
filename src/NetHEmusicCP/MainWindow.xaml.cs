@@ -413,6 +413,8 @@ public sealed partial class MainWindow : Window
                 case "playnext": { if (doc.TryGetProperty("song", out var s)) { var song = SongFromWeb(s); if (song != null) { var q = AppServices.Player.Queue.ToList(); int idx = q.FindIndex(x => x.Id == song.Id); if (idx < 0) { var nxt = AppServices.Player.Index + 1; q.Insert(Math.Min(nxt, q.Count), song); _ = AppServices.Player.LoadQueueAsync(q, AppServices.Player.Index); } } } break; }
                 case "open_settings": AppServices.RunOnUi(() => { try { new SettingsWindow().Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }); break;
                 case "get_settings": HandleGetSettings(); break;
+                case "pick_folder": PickFolder(); break;
+                case "open_folder": OpenDownloadDir(); break;
                 case "release_notes": _ = HandleReleaseNotes(doc); break;
                 case "notice_seen": AppServices.Config.VersionSeen = AppServices.Version; LogManager.Log("[Version] version 已更新为 " + AppServices.Version); break;
                 case "queue_get": PostToWeb(new { type = "queue", songs = AppServices.Player.Queue.Select(ToSongDto).ToList(), index = AppServices.Player.Index }); break;
@@ -566,6 +568,44 @@ public sealed partial class MainWindow : Window
             case "toast": AppServices.Config.Set("App", "toast", b ? "true" : "false"); break;
         }
         LogManager.Log("设置更新: " + key + "=" + value);
+    }
+
+    /// <summary>弹出图形化文件夹选择器（资源管理器风格），选完回传前端。</summary>
+    private void PickFolder()
+    {
+        try
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var picked = FolderPickerDialog.Pick(hwnd, AppServices.Config.DownloadDir, "选择下载目录");
+            if (string.IsNullOrWhiteSpace(picked)) { LogManager.Debug("用户取消了文件夹选择"); return; }
+            AppServices.Config.DownloadDir = picked;
+            PostToWeb(new { type = "folder_picked", ok = true, key = "downloadDir", path = picked });
+            LogManager.Log("下载目录已改为: " + picked);
+        }
+        catch (Exception ex)
+        {
+            LogManager.Error("选择下载目录失败: " + ex.GetType().Name + " hresult=0x" + ex.HResult.ToString("X8") + " " + ex.Message);
+            PostToWeb(new { type = "folder_picked", ok = false, error = ex.Message });
+            PostToWeb(new { type = "toast", text = "打开文件夹选择器失败：" + ex.Message });
+        }
+    }
+
+    /// <summary>用资源管理器打开当前下载目录。</summary>
+    private void OpenDownloadDir()
+    {
+        try
+        {
+            var dir = AppServices.Config.DownloadDir;
+            if (string.IsNullOrWhiteSpace(dir)) return;
+            if (!Directory.Exists(dir)) { PostToWeb(new { type = "toast", text = "下载目录不存在：" + dir }); return; }
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dir) { UseShellExecute = true });
+            LogManager.Log("已打开下载目录: " + dir);
+        }
+        catch (Exception ex)
+        {
+            LogManager.Error("打开下载目录失败: " + ex.Message);
+            PostToWeb(new { type = "toast", text = "打开下载目录失败：" + ex.Message });
+        }
     }
 
     /// <summary>通用 API 透传：前端按 name+args 调网易云接口，返回原始 JSON。</summary>
