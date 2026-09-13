@@ -67,6 +67,14 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .set-value{color:rgba(var(--md-accent-color-grey-base-rgb),.72);font-size:13.5px;}
 /* 设置组里的说明文字（和快捷键那段的 .muted 同一个样式） */
 .set-group p.muted{margin:0 8px 10px;line-height:1.75;}
+/* 颜色行：一排预设色块 + 取色器 */
+.color-ctl{display:flex;align-items:center;gap:10px;min-width:0;}
+.swatches{display:flex;align-items:center;gap:6px;}
+.sw{width:18px;height:18px;border-radius:50%;cursor:pointer;flex:0 0 auto;
+    border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.3);
+    transition:transform .12s,box-shadow .12s;}
+.sw:hover{transform:scale(1.2);}
+.sw.on{box-shadow:0 0 0 2px var(--md-accent-color);}
 /* 子项：主开关关掉 / 上级没选中时整块收起（和「鼠标特效」一个做法） */
 .set-detail{margin-left:14px;padding-left:12px;border-left:1px solid rgba(var(--md-accent-color-grey-base-rgb),.13);}
 .set-detail.hidden{display:none;}

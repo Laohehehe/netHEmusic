@@ -1713,12 +1713,61 @@ function applyPerfAnim(s) {
     function fontRow(label, key, val, onPick) {
       return custSel(label, key, val, fontOpts(String(val || '')), onPick);
     }
-    function colorRow2(label, key, val) {
+    // 桌面歌词的常用色（第一个是洛天依官方应援色「天依蓝」#66CCFF）
+    var DL_TEXT_COLORS = [
+      { c: '#66ccff', t: '天依蓝' },
+      { c: '#a8e6ff', t: '天依浅蓝' },
+      { c: '#ffffff', t: '纯白' },
+      { c: '#d6dbe6', t: '银灰' },
+      { c: '#ffd75e', t: '暖黄' },
+      { c: '#ffa45b', t: '橘' },
+      { c: '#ff9ec4', t: '樱粉' },
+      { c: '#ff7a7a', t: '珊瑚红' },
+      { c: '#b79bff', t: '紫' },
+      { c: '#7be3c8', t: '薄荷' }
+    ];
+    var DL_STROKE_COLORS = [
+      { c: '#000000', t: '纯黑' },
+      { c: '#0a2a44', t: '天依深蓝' },
+      { c: '#1b1f2a', t: '墨灰' },
+      { c: '#3a2a12', t: '深棕' },
+      { c: '#66ccff', t: '天依蓝' },
+      { c: '#ffffff', t: '纯白' }
+    ];
+    function normHex(v, def) {
+      var s = String(v || '').trim().toLowerCase();
+      return /^#[0-9a-f]{6}$/.test(s) ? s : def;
+    }
+    // 颜色行：一排预设色块（悬停出名字）+ 取色器，两者互相同步
+    function colorRow2(label, key, val, presets, def) {
+      def = def || '#ffffff';
       var r = el('div','set-row');
       r.appendChild(el('label','',label));
-      var i = el('input'); i.type = 'color'; i.value = val || '#ffffff';
-      i.onchange = function () { NE.setSetting(key, i.value); };
-      r.appendChild(i);
+      var ctl = el('div','color-ctl');
+      var cur = normHex(val, def);
+      var sws = [];
+      if (presets && presets.length) {
+        var strip = el('div','swatches');
+        presets.forEach(function (p) {
+          var s = el('span','sw' + (p.c.toLowerCase() === cur ? ' on' : ''));
+          s.style.background = p.c;
+          s.title = (p.t ? p.t + ' ' : '') + p.c.toUpperCase();
+          s.onclick = function (e) { e.stopPropagation(); pick(p.c); };
+          sws.push({ el: s, c: p.c.toLowerCase() });
+          strip.appendChild(s);
+        });
+        ctl.appendChild(strip);
+      }
+      var i = el('input'); i.type = 'color'; i.value = cur;
+      i.onchange = function () { pick(i.value); };
+      ctl.appendChild(i);
+      r.appendChild(ctl);
+      function pick(hex) {
+        var h = normHex(hex, def);
+        i.value = h;
+        sws.forEach(function (x) { x.el.classList.toggle('on', x.c === h); });
+        NE.setSetting(key, h);
+      }
       return r;
     }
     // 自定义下拉：opts 支持字符串数组或 [{v:值,t:显示名}]；onPick(值) 用于即时生效
@@ -1952,8 +2001,8 @@ function applyPerfAnim(s) {
         fontRow('歌词字体','dl_font', String(cfgGet(s,'dl_font',''))),
         rng2('主行字号','dl_main_size', Number(cfgGet(s,'dl_main_size',34))||34, 14, 96, 'px'),
         rng2('副行字号','dl_sub_size', Number(cfgGet(s,'dl_sub_size',20))||20, 10, 64, 'px'),
-        colorRow2('歌词颜色','dl_color', String(cfgGet(s,'dl_color','#ffffff'))),
-        colorRow2('描边颜色','dl_stroke_color', String(cfgGet(s,'dl_stroke_color','#000000'))),
+        colorRow2('歌词颜色','dl_color', String(cfgGet(s,'dl_color','#ffffff')), DL_TEXT_COLORS, '#ffffff'),
+        colorRow2('描边颜色','dl_stroke_color', String(cfgGet(s,'dl_stroke_color','#000000')), DL_STROKE_COLORS, '#000000'),
         rng2('不透明度','dl_opacity', Number(cfgGet(s,'dl_opacity',100))||100, 10, 100, '%'),
         sw('主行加粗','dl_bold', cfgBool(s,'dl_bold',true)),
         sw('显示下一句 / 译文','dl_show_sub', cfgBool(s,'dl_show_sub',true))
