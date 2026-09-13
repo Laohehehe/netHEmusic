@@ -193,6 +193,8 @@ public sealed class AppConfig
     }
 
     public string Quality { get => Get("Download", "quality", "high"); set => Set("Download", "quality", value); }
+    /// <summary>音乐命名格式：title-artist(默认) / artist-title / title</summary>
+    public string MusicNameFormat { get => Get("App", "ui_name_format", "title-artist"); set => Set("App", "ui_name_format", value); }
     public int ConcurrentDownloads { get { int.TryParse(Get("Download", "concurrent", "3"), out var v); return Math.Max(1, v); } set => Set("Download", "concurrent", value); }
 
     public string CacheDir

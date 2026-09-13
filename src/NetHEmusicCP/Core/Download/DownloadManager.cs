@@ -54,6 +54,19 @@ public class DownloadManager
 
     private static readonly char[] Illegal = Path.GetInvalidFileNameChars();
 
+    /// <summary>按设置生成下载文件名（默认：歌曲名 - 歌手）。</summary>
+    private static string NameFor(Song s)
+    {
+        var t = (s.Title ?? "").Trim();
+        var a = (s.ArtistsName ?? "").Trim();
+        switch ((Core.AppServices.Config.MusicNameFormat ?? "title-artist").Trim().ToLowerInvariant())
+        {
+            case "artist-title": return a.Length > 0 ? a + " - " + t : t;
+            case "title": return t;
+            default: return a.Length > 0 ? t + " - " + a : t;
+        }
+    }
+
     public static string Sanitize(string name)
     {
         if (string.IsNullOrEmpty(name)) return "untitled";
@@ -88,7 +101,7 @@ public class DownloadManager
             }
 
             var ext = url.Contains(".flac", StringComparison.OrdinalIgnoreCase) ? ".flac" : ".mp3";
-            var baseName = Sanitize(song.DisplayName);
+            var baseName = Sanitize(NameFor(song));   // 按「音乐命名格式」设置生成文件名
             Directory.CreateDirectory(saveDir);
             var path = Path.Combine(saveDir, baseName + ext);
             int n = 1;

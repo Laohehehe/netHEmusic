@@ -1848,7 +1848,7 @@ function applyPerfAnim(s) {
     }
     html.appendChild(group('主题 / 外观', [ custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }])), sw('Mica 背景','mica', s.mica), colorRow(), sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray) ]));
     html.appendChild(fxGroup(s));
-    html.appendChild(group('下载', [ txt('默认下载目录','downloadDir', s.downloadDir), sel('音质','quality', s.quality, zhOpts('quality', ['standard','exhigh','lossless'])) ]));
+    html.appendChild(group('下载', [ txt('默认下载目录','downloadDir', s.downloadDir), sel('音乐命名格式','ui_name_format', String(cfgGet(s,'ui_name_format','title-artist')), [{v:'title-artist',t:'歌曲名 - 歌手（默认）'},{v:'artist-title',t:'歌手 - 歌曲名'},{v:'title',t:'歌曲名'} ]), sel('音质','quality', s.quality, zhOpts('quality', ['standard','exhigh','lossless'])) ]));
     function rngXfade() {
       var r = el('div','set-row'); var lb = el('label','','歌曲切换淡化 (秒)');
       var cur = Math.max(0, Math.min(12, Number(s.crossfade || 0) || 0));
