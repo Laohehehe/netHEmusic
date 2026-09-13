@@ -337,7 +337,6 @@ window.addEventListener('unhandledrejection', function (e) {
       if (d) { var u = $("#pl-dur"), nu = $("#np-dur"); if (u) u.textContent = fmt(d); if (nu) nu.textContent = fmt(d); }
     }
     try { npCharFill(); } catch (e15) { }
-    if (th) th.style.left = pct + "%";
   }
   function pcKick() { if (!PC.raf && (PC.playing || PC.drag)) PC.raf = requestAnimationFrame(pcLoop); }
   function pcLoop(ts) {
@@ -443,6 +442,7 @@ window.addEventListener('unhandledrejection', function (e) {
     try { p.el.pause(); } catch (e) { }
     p.el.src = url;
     p.el.volume = auMaster();
+    try { if (p.gain && AU.ctx && !pausing) { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(auMaster(), AU.ctx.currentTime); } } catch (e) { }
     auWire(p);
     if (p.gain) p.gain.gain.value = 1;
     try { p.el.load(); } catch (e) { }
@@ -479,6 +479,9 @@ window.addEventListener('unhandledrejection', function (e) {
     auCtx();
     if (AU.ctx && AU.ctx.state === 'suspended') { try { AU.ctx.resume(); } catch (e) { } }
     var p = auCur(); if (!p.el.src) return;
+    try {   // 无条件把增益恢复到主音量：任何情况下都不允许声音卡在 0（暂停后播不出就是这里）
+      if (p.gain && AU.ctx) { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(auMaster(), AU.ctx.currentTime); }
+    } catch (e0) { }
     fadeIn();
     var pr = p.el.play();
     if (pr && pr.catch) pr.catch(function (e) { try { NE.post({ type: 'log', msg: '[au] play rejected: ' + e.message }); } catch (e2) { } });
@@ -486,7 +489,26 @@ window.addEventListener('unhandledrejection', function (e) {
   function auPauseNow() {
     for (var i = 0; i < 2; i++) { if (AU.ps[i]) { try { AU.ps[i].el.pause(); } catch (e) { } } }
   }
-  function auPause() { clearTimeout(fadeTimer); fadeOutThenPause(); }   // 暂停：先淡出再停
+  var pausing = false;
+  function auPause() {   // 暂停：先淡出再停；防重入，避免多次调度把增益搅乱
+    if (pausing) return;
+    clearTimeout(fadeTimer);
+    var dur = fadeNow(); var p = auCur();
+    if (dur <= 0 || !p || !p.gain || !AU.ctx) { auPauseNow(); return; }
+    pausing = true;
+    try {
+      var g = p.gain.gain;
+      g.cancelScheduledValues(AU.ctx.currentTime);
+      g.setValueAtTime(Math.max(0.0001, g.value), AU.ctx.currentTime);
+      g.linearRampToValueAtTime(0.0001, AU.ctx.currentTime + dur);
+    } catch (e) { }
+    clearTimeout(fadeTimer);
+    fadeTimer = setTimeout(function () {
+      pausing = false;
+      try { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(auMaster(), AU.ctx.currentTime); } catch (e) { }
+      auPauseNow();
+    }, dur * 1000 + 40);
+  }
   function auSeek(ms) {
     var p = auCur(); if (!p.el.src) return;
     try { p.el.currentTime = ms / 1000; AU.posMs = ms; auPushUI(ms); } catch (e) { }
