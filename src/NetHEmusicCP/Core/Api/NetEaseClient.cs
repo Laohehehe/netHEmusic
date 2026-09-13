@@ -124,23 +124,24 @@ public sealed class NetEaseClient
 
     public async Task<string> JsonLyric(long id)
     {
-        var js = await Get("/lyric", new Dictionary<string, string?> { ["id"] = id.ToString() });
+        var js = await Get("/lyric/new", new Dictionary<string, string?> { ["id"] = id.ToString() });
         return js?.GetRawText() ?? "{}";
     }
 
     /// <summary>解析歌词 JSON 为 LRC 行。</summary>
-    public (string lrc, string tlyric, string romalrc) ParseLyric(string json)
+    public (string lrc, string tlyric, string romalrc, string yrc) ParseLyric(string json)
     {
-        string lrc = "", tl = "", roma = "";
+        string lrc = "", tl = "", roma = "", yrc = "";
         try
         {
             var doc = JsonDocument.Parse(json).RootElement;
             if (doc.TryGetProperty("lrc", out var l) && l.TryGetProperty("lyric", out var ly)) lrc = ly.GetString() ?? "";
             if (doc.TryGetProperty("tlyric", out var t) && t.TryGetProperty("lyric", out var ty)) tl = ty.GetString() ?? "";
             if (doc.TryGetProperty("romalrc", out var m) && m.TryGetProperty("lyric", out var my)) roma = my.GetString() ?? "";
+            if (doc.TryGetProperty("yrc", out var y) && y.TryGetProperty("lyric", out var yl)) yrc = yl.GetString() ?? "";   // 逐字歌词
         }
         catch { }
-        return (lrc, tl, roma);
+        return (lrc, tl, roma, yrc);
     }
 
     // ---------- 歌单 ----------
