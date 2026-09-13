@@ -2156,17 +2156,13 @@ function applyPerfAnim(s) {
     var vs = MODES.map(function (m) { return m.v; });
     applyMode(vs[(vs.indexOf(curMode) + 1) % vs.length], false);
   };
-  // 桌面歌词按钮：暂时锁定（功能已实现但先不开放），点击只提示开发中
-  var LYRIC_LOCKED = true;
+  // 桌面歌词按钮
+  var LYRIC_LOCKED = false;
   $('#pb-lyric').onclick = function () {
     if (LYRIC_LOCKED) { toast('桌面歌词开发中…'); return; }
     var on = !$('#pb-lyric').classList.contains('on');
     setLyricBtn(on); NE.post({ type: 'desktop_lyric', on: on });
   };
-  if (LYRIC_LOCKED) {
-    var lb = $('#pb-lyric');
-    if (lb) { lb.classList.add('locked'); lb.title = '桌面歌词（开发中）'; }
-  }
   $('#pl-list').onclick = function (e) { e.stopPropagation(); toggleQueuePanel(); };
   document.addEventListener('click', function (e) {
     if (plOpen && !(e.target.closest && (e.target.closest('#plpanel') || e.target.closest('#pl-list')))) toggleQueuePanel(false);
@@ -2283,7 +2279,11 @@ function applyPerfAnim(s) {
       hotkeysFromSettings(s);                                  // 快捷键绑定
       AU.xfade = Math.max(0, Math.min(12, Number(s.crossfade || 0) || 0));   // 交叉淡化秒数
       AU.vol = Number(s.volume != null ? s.volume : 70) || 0;
-      if (!LYRIC_LOCKED) setLyricBtn(String(s.desktopLyric) !== 'false' && s.desktopLyric !== false);
+      if (!LYRIC_LOCKED) {
+        var dlOn = String(s.desktopLyric) !== 'false' && s.desktopLyric !== false;
+        setLyricBtn(dlOn);
+        if (dlOn) NE.post({ type: 'desktop_lyric', on: true });
+      }
     } catch (e) { }
   }).catch(function () { });
   setTimeout(function () { NE.post({ type: 'queue_get' }); }, 900);
