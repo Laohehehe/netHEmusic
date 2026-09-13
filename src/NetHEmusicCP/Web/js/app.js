@@ -407,7 +407,7 @@ window.addEventListener('unhandledrejection', function (e) {
     el.volume = auMaster();
     auWire(np2);
     try { el.load(); } catch (e) { }
-    if (startMs > 0) { try { el.currentTime = startMs / 1000; } catch (e) { } }
+    auSeekTo(np2, startMs);
     if (AU.ctx && AU.ctx.state === 'suspended') { try { AU.ctx.resume(); } catch (e) { } }
     if (np2.gain) { np2.gain.gain.cancelScheduledValues(AU.ctx ? AU.ctx.currentTime : 0); np2.gain.gain.value = 0; }
     var pr = el.play();
@@ -428,6 +428,16 @@ window.addEventListener('unhandledrejection', function (e) {
       AU.fading = 0;
     }, Math.round(dur * 1000) + 150);
   }
+  // 续播定位：el.load() 之后 metadata 未就绪时直接写 currentTime 会被丢弃 → 补一个一次性监听
+  function auSeekTo(p, ms) {
+    if (!p || !(ms > 0)) return;
+    var set = function () { try { p.el.currentTime = ms / 1000; } catch (e) { } };
+    set();
+    if (!(p.el.readyState >= 1)) {
+      var once = function () { p.el.removeEventListener('loadedmetadata', once); set(); };
+      p.el.addEventListener('loadedmetadata', once);
+    }
+  }
   function auLoad(url, song, index, autoplay, startMs) {
     auCtx();
     AU.curIndex = (typeof index === 'number') ? index : -1;
@@ -446,7 +456,7 @@ window.addEventListener('unhandledrejection', function (e) {
     auWire(p);
     if (p.gain) p.gain.gain.value = 1;
     try { p.el.load(); } catch (e) { }
-    if (startMs > 0) { try { p.el.currentTime = startMs / 1000; } catch (e) { } }
+    auSeekTo(p, startMs);
     if (autoplay) auPlay();
   }
   // ---- 启停淡化：播放时淡入、暂停时淡出（秒数来自设置）----

@@ -50,6 +50,29 @@ public sealed class PlayerService
     /// <summary>网页重载后调用：网页里的播放器已经清空。</summary>
     public void ResetFrontendAudio() { _frontendLoadedIndex = -1; _frontendPlaying = false; }
 
+    // ---- 记住上一次播放进度：启动时登记，只在随后第一次加载到同一首时生效一次 ----
+    private long _resumeSongId = -1;
+    private long _resumeMs;
+    private long _pendingSeekMs;               // 原生播放模式：媒体打开后再跳
+
+    /// <summary>登记"上次听到哪"。仅用于下一次真正加载该曲目时续播。</summary>
+    public void ArmResume(long songId, long positionMs)
+    {
+        _resumeSongId = songId;
+        _resumeMs = positionMs;
+    }
+
+    /// <summary>取出并消费续播位置：只认登记的曲目、只生效一次（无论是否命中都清空）。</summary>
+    private long TakeResumeMs(long songId)
+    {
+        var id = _resumeSongId;
+        var ms = _resumeMs;
+        if (id < 0 || ms < 1000) return 0;      // 没登记 / 位置太靠前，不值得续播
+        _resumeSongId = -1;
+        _resumeMs = 0;
+        return id == songId ? ms : 0;
+    }
+
     /// <summary>网页侧上报的播放状态。</summary>
     public void SetFrontendState(bool playing, long posMs, long durMs)
     {
@@ -66,6 +89,7 @@ public sealed class PlayerService
         _player.PlaybackSession.PositionChanged += (s, e) => { if (s is MediaPlaybackSession mps) PositionChanged?.Invoke(mps.Position); };
         _player.PlaybackSession.PlaybackStateChanged += OnPlaybackStateChanged;
         _player.MediaEnded += (s, e) => { LogManager.Log("播放结束，按播放模式自动切歌（" + Mode + "）"); _ = AutoNextAsync(); };
+        _player.MediaOpened += (s, e) => { var ms = _pendingSeekMs; if (ms > 0) { _pendingSeekMs = 0; try { _player.PlaybackSession.Position = TimeSpan.FromMilliseconds(ms); } catch { } } };
         _player.MediaFailed += (s, e) => { LogManager.Error("播放失败: " + e.ErrorMessage); _ = NextAsync(); };
 
         _smtc = _player.SystemMediaTransportControls;
@@ -274,8 +298,8 @@ public sealed class PlayerService
         _ = PrefetchRingAsync();
     }
 
-    /// <summary>前端播放任务载荷（曲目 / 直链 / 队列下标）。</summary>
-    public sealed record FrontendAudioLoad(Model.Song Song, string Url, int Index);
+    /// <summary>前端播放任务载荷（曲目 / 直链 / 队列下标 / 续播位置毫秒）。</summary>
+    public sealed record FrontendAudioLoad(Model.Song Song, string Url, int Index, long StartMs = 0);
 
     /// <summary>播放索引对应的歌曲。源优先内存环缓存文件，其次即时直链流。</summary>
     private async Task PlayCurrentAsync()
@@ -296,13 +320,15 @@ public sealed class PlayerService
             }
             if (string.IsNullOrEmpty(url)) { LogManager.Warn("无播放地址 id=" + s.Id); return; }
 
+            var startMs = TakeResumeMs(s.Id);   // 续播位置（仅启动后第一次、且就是这首）
+
             // 前端播放模式：直链交给网页，由 <audio> + Web Audio 播放（可拿真实频谱）
             if (FrontendAudio)
             {
                 UpdateSmtc(s);
                 _frontendLoadedIndex = _index;
-                FrontendLoad?.Invoke(new FrontendAudioLoad(s, url, _index));
-                LogManager.Log("交给前端播放: " + s.DisplayName);
+                FrontendLoad?.Invoke(new FrontendAudioLoad(s, url, _index, startMs));
+                LogManager.Log("交给前端播放: " + s.DisplayName + (startMs > 0 ? "（续播 " + (startMs / 1000) + "s）" : ""));
                 return;
             }
 
@@ -317,9 +343,10 @@ public sealed class PlayerService
             if (!string.IsNullOrEmpty(s.PicUrl)) { try { props.Thumbnail = RandomAccessStreamReference.CreateFromUri(new Uri(s.PicUrl)); } catch { } }
             item.ApplyDisplayProperties(props);
 
+            if (startMs > 0) _pendingSeekMs = startMs;   // 媒体打开后再跳（此刻还没 open）
             _player.Source = item;
             _player.Play();
-            LogManager.Log("开始播放: " + s.DisplayName);
+            LogManager.Log("开始播放: " + s.DisplayName + (startMs > 0 ? "（续播 " + (startMs / 1000) + "s）" : ""));
             UpdateSmtc(s);
         }
         catch (Exception e) { LogManager.Error("播放失败: " + e.Message); }

@@ -28,6 +28,12 @@ public sealed partial class MainWindow : Window
 {
     private bool _seeking = false;
 
+    // ---- 记住上一次播放进度（[Player] last_song_id / last_pos）----
+    private long _resumeSavedSongId = -1;   // 已经写盘的曲目 id
+    private long _resumeSavedPos = -1;      // 已经写盘的位置（毫秒）
+    private long _lastFrontPos = 0;         // 前端最近一次上报的位置
+    private long _lastFrontDur = 0;         // 前端最近一次上报的时长
+
     /// <summary>应用原生配色（根背景 + 无边框标题栏），保证标题栏与 #main/#sidebar 同色。</summary>
     private void ApplyNativeTheme()
     {
@@ -66,6 +72,19 @@ public sealed partial class MainWindow : Window
         AppServices.OnThemeApplied = () => { try { ApplyNativeTheme(); } catch { } PushTheme(); };
         InitWebView();
 
+        // 记住上一次播放进度：启动时先登记"上次听到哪"，等真正加载到那一首时才续播一次
+        try
+        {
+            var lastId = AppServices.Config.LastSongId;
+            var lastPos = AppServices.Config.LastPosition;
+            if (lastId > 0 && lastPos > 2000)
+            {
+                AppServices.Player.ArmResume(lastId, lastPos);
+                LogManager.Log("[续播] 已登记上次进度: id=" + lastId + " pos=" + (lastPos / 1000) + "s");
+            }
+        }
+        catch (Exception ex) { LogManager.Debug("登记续播失败: " + ex.Message); }
+
         // 把播放状态推给 Web 前端播放条
         AppServices.Player.SongChanged += s =>
         {
@@ -96,12 +115,21 @@ public sealed partial class MainWindow : Window
             url = load.Url,
             index = load.Index,
             autoplay = true,
+            startMs = load.StartMs,
             song = ToSongDto(load.Song)
         }));
         AppServices.Player.FrontendCommand += (cmd, val) => AppServices.RunOnUi(() => PostToWeb(new { type = "audio_cmd", cmd = cmd, value = val }));
 
         // 关闭窗口时再存一次当前曲目下标（双保险）
-        try { AppWindow.Closing += (s, e) => SavePlaylistIndex(AppServices.Player.Index); } catch (Exception ex) { LogManager.Debug("挂 Closing 失败: " + ex.Message); }
+        try
+        {
+            AppWindow.Closing += (s, e) =>
+            {
+                SavePlaylistIndex(AppServices.Player.Index);
+                SaveResumeProgress(_lastFrontPos, _lastFrontDur, true);   // 关窗时最后落一次盘
+            };
+        }
+        catch (Exception ex) { LogManager.Debug("挂 Closing 失败: " + ex.Message); }
         AppServices.Download.Completed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载完成: " + it.Display }));
         AppServices.Download.Failed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载失败: " + (it.Error ?? "") }));
 
@@ -226,6 +254,28 @@ public sealed partial class MainWindow : Window
     {
         try { AppServices.Config.PlaylistIndex = Math.Max(0, index); }
         catch (Exception e) { LogManager.Debug("保存播放下标失败: " + e.Message); }
+    }
+
+    /// <summary>
+    /// 记住"上次听到哪"：换歌或位移超过 5 秒才写盘（audio_state 约 1 次/秒，不能每次都写）。
+    /// 快播完（距结尾 3 秒内）不记，避免下次启动续播到结尾。
+    /// </summary>
+    private void SaveResumeProgress(long pos, long dur, bool force)
+    {
+        try
+        {
+            var s = AppServices.Player.Current;
+            if (s is null || pos < 0) return;
+            if (dur > 0 && pos > dur - 3000) return;
+            bool songChanged = s.Id != _resumeSavedSongId;
+            if (!force && !songChanged && Math.Abs(pos - _resumeSavedPos) < 5000) return;
+            if (songChanged) AppServices.Config.LastSongId = s.Id;
+            AppServices.Config.LastPosition = Math.Max(0, pos);
+            _resumeSavedSongId = s.Id;
+            _resumeSavedPos = pos;
+            if (songChanged) LogManager.Debug("[续播] 已记录曲目: id=" + s.Id + " pos=" + (pos / 1000) + "s");
+        }
+        catch (Exception e) { LogManager.Debug("保存播放进度失败: " + e.Message); }
     }
 
     /// <summary>把当前播放队列写进 config，重启后可以恢复。</summary>
@@ -375,6 +425,8 @@ public sealed partial class MainWindow : Window
                         long pos = doc.TryGetProperty("pos", out var pv) && pv.ValueKind == JsonValueKind.Number ? pv.GetInt64() : 0;
                         long dur = doc.TryGetProperty("dur", out var dv) && dv.ValueKind == JsonValueKind.Number ? dv.GetInt64() : 0;
                         AppServices.Player.SetFrontendState(playing, pos, dur);
+                        _lastFrontPos = pos; _lastFrontDur = dur;
+                        SaveResumeProgress(pos, dur, false);
                         break;
                     }
                 case "audio_error":
