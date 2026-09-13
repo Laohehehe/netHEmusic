@@ -1617,6 +1617,9 @@ function applyPerfAnim(s) {
   }
 
   // ---------- 设置（内嵌主窗口的网页设置页） ----------
+  // 下载目录：路径框引用（folder_picked 回来后原地刷新，不用整页重绘）
+  let dlDirEl = null;
+  let dlDir = '';
   async function goSettings() {
     loading();
     var s = await NE.getSettings();
@@ -1637,6 +1640,27 @@ function applyPerfAnim(s) {
     }
     function rng(label, key, val) { var r = el('div','set-row'); var lb=el('label','',label+' ('+(val||80)+')'); r.appendChild(lb); var i=el('input'); i.type='range'; i.min=0; i.max=100; i.value=val||80; i.oninput=function(){ lb.textContent=label+' ('+i.value+')'; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
     function info(label) { var r = el('div','set-row'); r.appendChild(el('label','',label)); return r; }
+    // 下载目录：路径显示框 + 「选择…」（C# 弹图形化文件夹选择器）+「打开文件夹」
+    function dirRow() {
+      var r = el('div','set-row');
+      r.appendChild(el('label','','下载目录'));
+      var ctl = el('div','dir-ctl');
+      dlDir = s.downloadDir || '';
+      var box = el('div','dir-path', dlDir || '（未设置）');
+      box.title = dlDir;
+      dlDirEl = box;
+      var bPick = el('button','dir-btn','选择…');
+      bPick.onclick = function (e) { e.stopPropagation(); NE.post({ type:'pick_folder' }); };
+      var bOpen = el('button','dir-btn','打开文件夹');
+      bOpen.onclick = function (e) {
+        e.stopPropagation();
+        if (!dlDir) { toast('还没有设置下载目录'); return; }
+        NE.post({ type:'open_folder' });
+      };
+      ctl.appendChild(box); ctl.appendChild(bPick); ctl.appendChild(bOpen);
+      r.appendChild(ctl);
+      return r;
+    }
     // 自定义下拉：opts 支持字符串数组或 [{v:值,t:显示名}]；onPick(值) 用于即时生效
     function custSel(label, key, val, opts, onPick) {
       var list0 = opts || [];
@@ -1848,7 +1872,7 @@ function applyPerfAnim(s) {
     }
     html.appendChild(group('主题 / 外观', [ custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }])), sw('Mica 背景','mica', s.mica), colorRow(), sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray) ]));
     html.appendChild(fxGroup(s));
-    html.appendChild(group('下载', [ txt('默认下载目录','downloadDir', s.downloadDir), sel('音乐命名格式','ui_name_format', String(cfgGet(s,'ui_name_format','title-artist')), [{v:'title-artist',t:'歌曲名 - 歌手（默认）'},{v:'artist-title',t:'歌手 - 歌曲名'},{v:'title',t:'歌曲名'} ]), sel('音质','quality', s.quality, zhOpts('quality', ['standard','exhigh','lossless'])) ]));
+    html.appendChild(group('下载', [ dirRow(), sel('音乐命名格式','ui_name_format', String(cfgGet(s,'ui_name_format','title-artist')), [{v:'title-artist',t:'歌曲名 - 歌手（默认）'},{v:'artist-title',t:'歌手 - 歌曲名'},{v:'title',t:'歌曲名'} ]), sel('音质','quality', s.quality, zhOpts('quality', ['standard','exhigh','lossless'])) ]));
     function rngXfade() {
       var r = el('div','set-row'); var lb = el('label','','歌曲切换淡化 (秒)');
       var cur = Math.max(0, Math.min(12, Number(s.crossfade || 0) || 0));
@@ -1918,6 +1942,15 @@ function applyPerfAnim(s) {
     html.appendChild(group('关于', [ info('netHEmusic 版本 v' + (s.version||'')), info('WinUI3 + Fluent · 第三方软件，仅供学习交流，禁止商用及任何侵权用途') ]));
     view.innerHTML=''; view.appendChild(html);
   }
+
+  // C# 的图形化文件夹选择器选完后回传
+  NE.on('folder_picked', function (d) {
+    if (!d || !d.ok || d.key !== 'downloadDir') return;
+    dlDir = d.path || '';
+    if (dlDirEl) { dlDirEl.textContent = dlDir || '（未设置）'; dlDirEl.title = dlDir; }
+    if (appSettings) appSettings.downloadDir = dlDir;
+    toast('下载目录已改为：' + dlDir);
+  });
 
   // 主题：把 C# 传来的 Material You 变量以【行内样式】写到 <html>（优先级最高，覆盖 :root 默认值）
   function applyThemeVars(d) {
