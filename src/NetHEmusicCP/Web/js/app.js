@@ -504,7 +504,7 @@ function applyPerfAnim(s) {
     h.classList.toggle("anim-tuned", on && (isCustom || pre !== "smooth"));
     h.style.setProperty("--anim-k", String(k));
     h.style.setProperty("--anim-ease", ease);
-    h.style.setProperty("--nm-ripple-dur", (0.62 * k).toFixed(2) + "s");
+    h.style.setProperty("--nm-ripple-dur", Math.max(0.3, Math.min(1.0, 0.62 * k)).toFixed(2) + "s");
   } catch (e) { }
 }
   function toast(t) { const el=$('#toast'); el.textContent=t; el.style.display='block'; setTimeout(()=>el.style.display='none',2000); }
