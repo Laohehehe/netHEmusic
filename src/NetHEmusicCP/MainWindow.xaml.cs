@@ -215,7 +215,7 @@ public sealed partial class MainWindow : Window
         {
             var cur = AppServices.Player.Current; if (cur is null || _lyricWin is null) return;
             var json = await AppServices.Netease.JsonLyric(cur.Id);
-            var (lrc, tl, ro) = AppServices.Netease.ParseLyric(json);
+            var (lrc, tl, ro, yrc) = AppServices.Netease.ParseLyric(json);
             AppServices.RunOnUi(() => { try { _lyricWin?.SetLyric(lrc, tl, ro); } catch { } });
         }
         catch (Exception e) { LogManager.Debug("推送歌词失败: " + e.Message); }
@@ -417,7 +417,7 @@ public sealed partial class MainWindow : Window
 
     private async Task HandleWebDiscover() { var songs = await AppServices.Netease.RecommendSongs(); PostToWeb(new { type = "songs", songs = songs.Select(ToSongDto).ToList(), discover = true }); }
     private async Task HandleWebPlaylist(JsonElement doc) { long id = 0; if (doc.TryGetProperty("id", out var i)) id = i.GetInt64(); if (id <= 0) return; var tracks = await AppServices.Netease.PlaylistTracks(id, 1000, 0); PostToWeb(new { type = "songs", songs = tracks.Select(ToSongDto).ToList() }); }
-    private async Task HandleWebLyric(JsonElement doc) { long id = 0; if (doc.TryGetProperty("id", out var d)) id = d.GetInt64(); if (id <= 0 && AppServices.Player.Current != null) id = AppServices.Player.Current.Id; var json = await AppServices.Netease.JsonLyric(id); var (lrc, tl, ro) = AppServices.Netease.ParseLyric(json); PostToWeb(new { type = "lyric", lrc, tlyric = tl, romalrc = ro }); }
+    private async Task HandleWebLyric(JsonElement doc) { long id = 0; if (doc.TryGetProperty("id", out var d)) id = d.GetInt64(); if (id <= 0 && AppServices.Player.Current != null) id = AppServices.Player.Current.Id; var json = await AppServices.Netease.JsonLyric(id); var (lrc, tl, ro, yrc) = AppServices.Netease.ParseLyric(json); PostToWeb(new { type = "lyric", lrc, tlyric = tl, romalrc = ro, yrc }); }
     private void HandleWebPlay(JsonElement doc)
     {
         if (doc.TryGetProperty("song", out var s))
