@@ -14,7 +14,7 @@ $bin = Join-Path $root "src\NetHEmusicCP\bin\x64\Release\net8.0-windows10.0.1904
 if (Test-Path $bin) {
     $dist = Join-Path $root "dist"
     New-Item -ItemType Directory -Force -Path $dist | Out-Null
-    $zip = Join-Path $dist "netHEmusic_Setup_26.9.13.1.zip"
+    $zip = Join-Path $dist "netHEmusic_Setup_26.9.13.35.zip"
     Write-Host ("打包: " + (Join-Path $bin "NetHEmusicCP.exe"))
     # 生成发布 zip（失败不中断，仅提示）
     try { Compress-Archive -Path (Join-Path $bin "*") -DestinationPath $zip -Force -ErrorAction Stop; Write-Host ("已打包: " + $zip) }

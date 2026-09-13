@@ -4,9 +4,9 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>netHEmusic_Setup_26.9.13.1</AssemblyName>
+    <AssemblyName>netHEmusic_Setup_26.9.13.35</AssemblyName>
     <ApplicationIcon>..\..\resources\icon.ico</ApplicationIcon>
-    <Version>26.9.13.1</Version>
+    <Version>26.9.13.35</Version>
     <!-- 单文件自包含：安装包本身要能独立运行（内嵌 62MB 应用 zip） -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
@@ -15,7 +15,7 @@
     <DebugType>none</DebugType>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="..\..\build\netHEmusic-26.9.13.1.zip" LogicalName="app.zip" />
+    <EmbeddedResource Include="..\..\build\netHEmusic-26.9.13.35.zip" LogicalName="app.zip" />
     <EmbeddedResource Include="..\..\build\LaoheTeam.cer" LogicalName="LaoheTeam.cer" />
   </ItemGroup>
 </Project>
