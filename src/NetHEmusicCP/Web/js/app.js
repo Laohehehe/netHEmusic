@@ -337,7 +337,6 @@ window.addEventListener('unhandledrejection', function (e) {
       if (d) { var u = $("#pl-dur"), nu = $("#np-dur"); if (u) u.textContent = fmt(d); if (nu) nu.textContent = fmt(d); }
     }
     try { npCharFill(); } catch (e15) { }
-    var th = $("#np-thumb");
     if (th) th.style.left = pct + "%";
   }
   function pcKick() { if (!PC.raf && (PC.playing || PC.drag)) PC.raf = requestAnimationFrame(pcLoop); }
@@ -421,16 +420,44 @@ window.addEventListener('unhandledrejection', function (e) {
     if (startMs > 0) { try { p.el.currentTime = startMs / 1000; } catch (e) { } }
     if (autoplay) auPlay();
   }
+  // ---- 启停淡化：播放时淡入、暂停时淡出（秒数来自设置）----
+  function fadeNow() { var v = Number((appSettings && appSettings.app && appSettings.app.fade_start_stop) || 0); return Math.max(0, Math.min(3, isNaN(v) ? 0 : v)); }
+  var fadeTimer = null;
+  function fadeIn() {
+    try {
+      var dur = fadeNow(); if (dur <= 0) return;
+      var p = auCur(); if (!p || !p.gain || !p.el.src) return;
+      var g = p.gain.gain, target = auMaster() * (AU.xf < 1 ? 1 : 1);
+      g.cancelScheduledValues(AU.ctx.currentTime);
+      g.setValueAtTime(0.0001, AU.ctx.currentTime);
+      g.linearRampToValueAtTime(auMaster(), AU.ctx.currentTime + dur);
+    } catch (e) { }
+  }
+  function fadeOutThenPause() {
+    try {
+      var dur = fadeNow();
+      var p = auCur();
+      if (dur <= 0 || !p || !p.gain || !AU.ctx) { auPauseNow(); return; }
+      var g = p.gain.gain;
+      g.cancelScheduledValues(AU.ctx.currentTime);
+      g.setValueAtTime(Math.max(0.0001, g.value), AU.ctx.currentTime);
+      g.linearRampToValueAtTime(0.0001, AU.ctx.currentTime + dur);
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(function () { try { g.setValueAtTime(auMaster(), AU.ctx.currentTime); } catch (e) { } auPauseNow(); }, dur * 1000 + 30);
+    } catch (e) { auPauseNow(); }
+  }
   function auPlay() {
     auCtx();
     if (AU.ctx && AU.ctx.state === 'suspended') { try { AU.ctx.resume(); } catch (e) { } }
     var p = auCur(); if (!p.el.src) return;
+    fadeIn();
     var pr = p.el.play();
     if (pr && pr.catch) pr.catch(function (e) { try { NE.post({ type: 'log', msg: '[au] play rejected: ' + e.message }); } catch (e2) { } });
   }
-  function auPause() {
+  function auPauseNow() {
     for (var i = 0; i < 2; i++) { if (AU.ps[i]) { try { AU.ps[i].el.pause(); } catch (e) { } } }
   }
+  function auPause() { clearTimeout(fadeTimer); fadeOutThenPause(); }   // 暂停：先淡出再停
   function auSeek(ms) {
     var p = auCur(); if (!p.el.src) return;
     try { p.el.currentTime = ms / 1000; AU.posMs = ms; auPushUI(ms); } catch (e) { }
@@ -1777,7 +1804,7 @@ function applyPerfAnim(s) {
       i.onchange = function(){ NE.setSetting('crossfade', i.value); };
       r.appendChild(i); return r;
     }
-    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), rngXfade() ]));
+    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), rng2('启停淡化','fade_start_stop', Number(cfgGet(s,'fade_start_stop',0)) || 0, 0, 3, ' 秒'), rngXfade() ]));
     // ---- 快捷键（可自定义）----
     function hotkeyGroup() {
       var g = el('div','set-group');
