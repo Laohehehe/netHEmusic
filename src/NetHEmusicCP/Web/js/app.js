@@ -1138,6 +1138,7 @@ function applyPerfAnim(s) {
     var wasOpen = npOpen;
     npOpen = true;
     np.classList.remove('hidden');          // 恢复渲染
+    void np.offsetWidth;                    // 关键：强制回流一帧，让初始态生效，否则 show 的过渡不会播
     np.classList.add('show'); np.setAttribute('aria-hidden', 'false');
     if (lyStyles.vz) setTimeout(function () { vzApply(); }, 60);
     if (!wasOpen) requestAnimationFrame(npCoverFlip);
