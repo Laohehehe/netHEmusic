@@ -686,9 +686,9 @@ function applyPerfAnim(s) {
         dynamicAccent = boostColor(R / W, G / W, B / W);
         coverColorCache[key] = dynamicAccent;
         applyAccentOverrides();
-      } catch (e) { try { NE.post({ type: 'log', msg: '[dyn] 取色失败(可能被 CORS 污染): ' + e.message }); } catch (e9) { } }
+      } catch (e) { }
     };
-    img.onerror = function () { try { NE.post({ type: 'log', msg: '[dyn] 封面加载失败' }); } catch (e10) { } };
+    img.onerror = function () { };
     img.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "param=48y48";
   }
   function allBtns(songs) {
