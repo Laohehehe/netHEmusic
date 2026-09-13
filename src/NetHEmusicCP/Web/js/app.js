@@ -442,7 +442,7 @@ window.addEventListener('unhandledrejection', function (e) {
     try { p.el.pause(); } catch (e) { }
     p.el.src = url;
     p.el.volume = auMaster();
-    try { if (p.gain && AU.ctx && !pausing) { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(auMaster(), AU.ctx.currentTime); } } catch (e) { }
+    try { if (p.gain && AU.ctx && !pausing) { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(1, AU.ctx.currentTime); } } catch (e) { }
     auWire(p);
     if (p.gain) p.gain.gain.value = 1;
     try { p.el.load(); } catch (e) { }
@@ -450,7 +450,7 @@ window.addEventListener('unhandledrejection', function (e) {
     if (autoplay) auPlay();
   }
   // ---- 启停淡化：播放时淡入、暂停时淡出（秒数来自设置）----
-  function fadeNow() { var v = Number((appSettings && appSettings.app && appSettings.app.fade_start_stop) || 0); return Math.max(0, Math.min(3, isNaN(v) ? 0 : v)); }
+  function fadeNow() { var v = Number((appSettings && appSettings.app && appSettings.app.ui_fade_start_stop) || 0); return Math.max(0, Math.min(3, isNaN(v) ? 0 : v)); }
   var fadeTimer = null;
   function fadeIn() {
     try {
@@ -459,7 +459,7 @@ window.addEventListener('unhandledrejection', function (e) {
       var g = p.gain.gain, target = auMaster() * (AU.xf < 1 ? 1 : 1);
       g.cancelScheduledValues(AU.ctx.currentTime);
       g.setValueAtTime(0.0001, AU.ctx.currentTime);
-      g.linearRampToValueAtTime(auMaster(), AU.ctx.currentTime + dur);
+      g.linearRampToValueAtTime(1, AU.ctx.currentTime + dur);
     } catch (e) { }
   }
   function fadeOutThenPause() {
@@ -480,7 +480,7 @@ window.addEventListener('unhandledrejection', function (e) {
     if (AU.ctx && AU.ctx.state === 'suspended') { try { AU.ctx.resume(); } catch (e) { } }
     var p = auCur(); if (!p.el.src) return;
     try {   // 无条件把增益恢复到主音量：任何情况下都不允许声音卡在 0（暂停后播不出就是这里）
-      if (p.gain && AU.ctx) { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(auMaster(), AU.ctx.currentTime); }
+      if (p.gain && AU.ctx) { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(1, AU.ctx.currentTime); }
     } catch (e0) { }
     fadeIn();
     var pr = p.el.play();
@@ -505,7 +505,7 @@ window.addEventListener('unhandledrejection', function (e) {
     clearTimeout(fadeTimer);
     fadeTimer = setTimeout(function () {
       pausing = false;
-      try { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(auMaster(), AU.ctx.currentTime); } catch (e) { }
+      try { p.gain.gain.cancelScheduledValues(AU.ctx.currentTime); p.gain.gain.setValueAtTime(1, AU.ctx.currentTime); } catch (e) { }
       auPauseNow();
     }, dur * 1000 + 40);
   }
@@ -1855,7 +1855,7 @@ function applyPerfAnim(s) {
       i.onchange = function(){ NE.setSetting('crossfade', i.value); };
       r.appendChild(i); return r;
     }
-    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), rng2('启停淡化','fade_start_stop', Number(cfgGet(s,'fade_start_stop',0)) || 0, 0, 3, ' 秒'), sw('听歌打卡（播放达标后上报）','scrobble', cfgBool(s,'scrobble',false)), rngXfade() ]));
+    html.appendChild(group('播放', [ rng('默认音量','volume', s.volume), sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])), rng2('启停淡化','ui_fade_start_stop', Number(cfgGet(s,'ui_fade_start_stop',0)) || 0, 0, 3, ' 秒'), sw('听歌打卡（播放达标后上报）','ui_scrobble', cfgBool(s,'ui_scrobble',false)), rngXfade() ]));
     // ---- 快捷键（可自定义）----
     function hotkeyGroup() {
       var g = el('div','set-group');
