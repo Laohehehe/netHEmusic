@@ -1,4 +1,12 @@
 // app.js — YesPlayMusic-style full player
+// ---- 前端异常上报：把 JS 错误写进应用日志，便于排查（以前前端报错在日志里完全看不到）----
+window.addEventListener('error', function (e) {
+  try { (window.NE && NE.post) ? NE.post({ type: 'log', msg: '[jserr] ' + (e.message || '') + ' @' + (e.lineno || 0) + ':' + (e.colno || 0) + ' ' + ((e.filename || '').split('/').pop() || '') }) : 0; } catch (x) { }
+}, true);
+window.addEventListener('unhandledrejection', function (e) {
+  try { var r = e.reason; (window.NE && NE.post) ? NE.post({ type: 'log', msg: '[jserr] promise: ' + ((r && r.message) || r) }) : 0; } catch (x) { }
+});
+
 
 // ---- 全局把 requestAnimationFrame 限到 60fps ----
 // 高刷屏（例如 180Hz）下浏览器按显示器刷新率出帧，界面里的 JS 动画没必要跑 180fps
