@@ -46,6 +46,7 @@ window.addEventListener('unhandledrejection', function (e) {
       Title: s.name || s.Title || '未知歌曲',
       Artist: artists || '未知',
       Album: al.name || s.Album || '',
+      AlbumId: al.id !== undefined ? al.id : (s.AlbumId || 0),
       Pic: pic,
       Duration: s.dt || s.duration || s.Duration || 0
     };
@@ -268,7 +269,7 @@ window.addEventListener('unhandledrejection', function (e) {
     AU.ps[i] = p;
     el.addEventListener('loadedmetadata', function () { if (p !== AU.ps[AU.cur]) return; AU.durMs = (el.duration || 0) * 1000; auPushUI(0); auPostState(true); });
     el.addEventListener('durationchange', function () { if (p !== AU.ps[AU.cur]) return; AU.durMs = (el.duration || 0) * 1000; auPushUI(AU.posMs); });
-    el.addEventListener('timeupdate', function () { if (p !== AU.ps[AU.cur]) return; AU.posMs = (el.currentTime || 0) * 1000; pcBuffer(el); auPushUI(AU.posMs); auPostState(false); });
+    el.addEventListener('timeupdate', function () { if (p !== AU.ps[AU.cur]) return; AU.posMs = (el.currentTime || 0) * 1000; pcBuffer(el); auPushUI(AU.posMs); auPostState(false); scrobTick(AU.posMs, AU.playing); });
     el.addEventListener('progress', function () { if (p !== AU.ps[AU.cur]) return; pcBuffer(el); });
     el.addEventListener('play', function () { if (p !== AU.ps[AU.cur]) return; AU.playing = true; PC.playing = true; PC.t0 = performance.now(); pcKick(); setPlaying(true); auPostState(true); });
     el.addEventListener('pause', function () { if (p !== AU.ps[AU.cur]) return; AU.playing = false; PC.playing = false; pcPaint(); setPlaying(false); auPostState(true); });
@@ -359,7 +360,7 @@ window.addEventListener('unhandledrejection', function (e) {
   var scrob = { id: 0, acc: 0, last: -1, done: false, sent: false };
   function scrobTick(pos, playing) {
     try {
-      var on = cfgBool(appSettings, "scrobble", false);
+      var on = cfgBool(appSettings, "ui_scrobble", false);
       var cur = queue[playingIndex];
       var sid = (cur && cur.Id) || 0;
       if (sid !== scrob.id) { scrob = { id: sid, acc: 0, last: -1, done: false, sent: false }; }
@@ -379,8 +380,15 @@ window.addEventListener('unhandledrejection', function (e) {
       var lv = (appSettings && appSettings.quality) || "";
       if (lv) p.level = lv;
       if (NE.scrobbleV1) {
-        NE.scrobbleV1(p).then(function () { scrob.sent = true; try { toast("已听歌打卡：" + (cur.Title || "")); } catch (e) { } })
-          .catch(function () { scrob.done = false; });
+        try { NE.post({ type: 'log', msg: '[scrob] 上报 ' + JSON.stringify(p) + ' 累计=' + Math.round(scrob.acc) + 's' }); } catch (e) { }
+        NE.scrobbleV1(p).then(function (res) {
+          scrob.sent = true;
+          try { NE.post({ type: 'log', msg: '[scrob] 成功 ' + JSON.stringify(res).slice(0, 220) }); } catch (e) { }
+          try { toast("已听歌打卡：" + (cur.Title || "")); } catch (e) { }
+        }).catch(function (err) {
+          scrob.done = false;
+          try { NE.post({ type: 'log', msg: '[scrob] 失败 ' + (err && err.message) }); } catch (e) { }
+        });
       }
     } catch (e) { }
   }
