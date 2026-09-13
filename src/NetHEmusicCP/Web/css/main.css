@@ -150,14 +150,13 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 
 /* ---------- 配色方案切换：以点击的列表项为圆心，向外扩散覆盖新配色的"水波"过渡 ---------- */
 ::view-transition-old(root){animation:none;}
-::view-transition-new(root){animation:nm-ripple-reveal var(--nm-ripple-dur,.62s) cubic-bezier(.18,.76,.28,1) both;}
+::view-transition-new(root){animation:nm-ripple-reveal var(--nm-ripple-dur,.62s) cubic-bezier(.18,.76,.28,1) both;will-change:clip-path;backface-visibility:hidden;}
 @keyframes nm-ripple-reveal{
-  0%{clip-path:circle(0px at var(--nm-ripple-x,50%) var(--nm-ripple-y,50%));filter:drop-shadow(0 0 0 rgba(var(--md-accent-color-rgb),0));}
-  18%{filter:drop-shadow(0 0 26px rgba(var(--md-accent-color-rgb),.55));}
-  100%{clip-path:circle(var(--nm-ripple-r,150vmax) at var(--nm-ripple-x,50%) var(--nm-ripple-y,50%));filter:drop-shadow(0 0 34px rgba(var(--md-accent-color-rgb),0));}
+  0%{clip-path:circle(0px at var(--nm-ripple-x,50%) var(--nm-ripple-y,50%));}
+  100%{clip-path:circle(var(--nm-ripple-r,150vmax) at var(--nm-ripple-x,50%) var(--nm-ripple-y,50%));}
 }
 /* 不支持视图过渡（或系统开启"减少动态效果"）时的降级水波：一圈扩散的光环 */
-.nm-ripple-ring{position:fixed;left:0;top:0;border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%) scale(.03);opacity:.9;border:2px solid var(--md-accent-color);box-shadow:0 0 44px rgba(var(--md-accent-color-rgb),.45),inset 0 0 44px rgba(var(--md-accent-color-rgb),.22);animation:nm-ring-out .78s cubic-bezier(.2,.7,.3,1) forwards;}
+.nm-ripple-ring{position:fixed;left:0;top:0;border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%) scale(.03);opacity:.9;border:2px solid var(--md-accent-color);box-shadow:0 0 22px rgba(var(--md-accent-color-rgb),.45),inset 0 0 44px rgba(var(--md-accent-color-rgb),.22);animation:nm-ring-out .78s cubic-bezier(.2,.7,.3,1) forwards;}
 .nm-ripple-ring.soft{border:none;background:radial-gradient(circle,rgba(var(--md-accent-color-rgb),.22) 0%,rgba(var(--md-accent-color-rgb),.10) 55%,rgba(var(--md-accent-color-rgb),0) 72%);}
 @keyframes nm-ring-out{to{transform:translate(-50%,-50%) scale(1);opacity:0;}}
 
