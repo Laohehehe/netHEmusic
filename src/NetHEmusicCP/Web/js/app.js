@@ -1648,7 +1648,14 @@ function applyPerfAnim(s) {
       r.appendChild(i2); return r;
     }
     function rng(label, key, val) { var r = el('div','set-row'); var lb=el('label','',label+' ('+(val||80)+')'); r.appendChild(lb); var i=el('input'); i.type='range'; i.min=0; i.max=100; i.value=val||80; i.oninput=function(){ lb.textContent=label+' ('+i.value+')'; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
-    function info(label) { var r = el('div','set-row'); r.appendChild(el('label','',label)); return r; }
+    function info(label, value) {
+      var r = el('div','set-row');
+      r.appendChild(el('label','',label));
+      if (value !== undefined) r.appendChild(el('span','set-value', esc(String(value))));
+      return r;
+    }
+    // 设置组里的说明行：和快捷键那段的 .muted 同款
+    function hint(text) { return el('p','muted', text); }
     // 下载目录：路径显示框 + 「选择…」（C# 弹图形化文件夹选择器）+「打开文件夹」
     function dirRow() {
       var r = el('div','set-row');
@@ -1974,7 +1981,7 @@ function applyPerfAnim(s) {
     html.appendChild(group('桌面歌词', [
       sw('启用桌面歌词','desktopLyric', s.desktopLyric),
       sw('锁定桌面歌词','desktopLyricTopmost', s.desktopLyricTopmost),
-      info('解锁后可以直接拖动歌词摆位置（有淡淡的虚线框），位置会自动记住'),
+      hint('想换位置：把「锁定桌面歌词」关掉就能直接拖动（这时歌词周围有一圈淡虚线框提示可拖），位置会自动记住。'),
       fontRow('歌词字体','dl_font', String(cfgGet(s,'dl_font',''))),
       rng2('主行字号','dl_main_size', Number(cfgGet(s,'dl_main_size',34))||34, 14, 96, 'px'),
       rng2('副行字号','dl_sub_size', Number(cfgGet(s,'dl_sub_size',20))||20, 10, 64, 'px'),
@@ -1986,7 +1993,11 @@ function applyPerfAnim(s) {
       sw('桌面歌曲信息','desktopSongInfo', s.desktopSongInfo)
     ]));
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
-    html.appendChild(group('关于', [ info('netHEmusic 版本 v' + (s.version||'')), info('WinUI3 + Fluent · 第三方软件，仅供学习交流，禁止商用及任何侵权用途') ]));
+    html.appendChild(group('关于', [
+      info('版本', 'v' + (s.version||'')),
+      info('技术栈', 'WinUI3 + WebView2'),
+      hint('第三方软件，仅供学习交流，禁止商用及任何侵权用途。')
+    ]));
     view.innerHTML=''; view.appendChild(html);
   }
 

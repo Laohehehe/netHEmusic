@@ -58,12 +58,17 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .big-load{color:rgba(var(--md-accent-color-grey-base-rgb),.5);padding:40px;text-align:center;font-size:14px;}
 .page-title{font-size:22px;font-weight:700;margin:0 0 16px;color:var(--md-accent-color-secondary);}
 .greet-title{font-size:24px;font-weight:700;margin:4px 0 20px;color:var(--md-accent-color-secondary);}
-.set-group{background:var(--md-accent-color-bg-darken);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;}
-.set-group h3{margin:0 0 10px;font-size:15px;font-weight:600;color:var(--md-accent-color);}
-.set-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:8px 0;font-size:14px;}
+.set-group{background:var(--md-accent-color-bg-darken);border-radius:var(--radius);padding:16px 18px 12px;margin-bottom:14px;}
+.set-group h3{margin:0 0 10px;padding-bottom:9px;font-size:15px;font-weight:600;color:var(--md-accent-color);border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.10);}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 8px;margin:0 -8px;border-radius:8px;font-size:14px;transition:background .14s;}
+/* 只有真的带控件的行才给悬停底色，纯说明行不闪 */
+.set-row:has(input,.set-switch,.cust-select,button,.dir-ctl):hover{background:rgba(var(--md-accent-color-grey-base-rgb),.06);}
 .set-row label{color:rgba(var(--md-accent-color-grey-base-rgb),.82);}
+.set-value{color:rgba(var(--md-accent-color-grey-base-rgb),.72);font-size:13.5px;}
+/* 设置组里的说明文字（和快捷键那段的 .muted 同一个样式） */
+.set-group p.muted{margin:0 8px 10px;line-height:1.75;}
 .set-row input[type=text],.set-row select{background:var(--md-accent-color-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);border-radius:8px;color:var(--md-accent-color-secondary);padding:7px 10px;font-size:13px;min-width:200px;outline:none;}
-.set-row input[type=range]{width:160px;accent-color:var(--md-accent-color);}
+.set-row input[type=range]{width:200px;accent-color:var(--md-accent-color);}
 /* 下载目录：路径显示框 + 选择 / 打开文件夹按钮 */
 .dir-ctl{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0;justify-content:flex-end;}
 .dir-path{flex:1 1 auto;min-width:0;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--md-accent-color-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);border-radius:8px;padding:7px 10px;font-size:13px;color:rgba(var(--md-accent-color-grey-base-rgb),.8);}
