@@ -328,6 +328,7 @@
       if (c2) c2.textContent = fmt(p);
       if (d) { var u = $("#pl-dur"), nu = $("#np-dur"); if (u) u.textContent = fmt(d); if (nu) nu.textContent = fmt(d); }
     }
+    try { npCharFill(); } catch (e15) { }
     var th = $("#np-thumb");
     if (th) th.style.left = pct + "%";
   }
@@ -998,6 +999,7 @@ function applyPerfAnim(s) {
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
     np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 字号（行高与排版会跟着重算）
     npLayout();
+    try { npCharFill(); } catch (e18) { }   // 打开/切行后立即画一次
     vzApply();                                                   // 背景音乐律动
   }
 
@@ -1125,12 +1127,41 @@ function applyPerfAnim(s) {
     npLayout();
   }
 
+  // ---- 逐字填充（KTV 式）：没有逐字时间戳，就在行内按字符数均匀分配 ----
+  var npFillCache = { line: -1, n: 0, sung: -1 };
+  function npCharFill() {
+    try {
+      if (!npOpen || !npLines.length || !lyStyles.charAnim) return;
+      var ln = document.querySelector(".np-line.on"); if (!ln) return;
+      if (npFillCache.line !== npIndex) {
+        npFillCache.line = npIndex;
+        npFillCache.n = ln.querySelectorAll(".ly-ch").length;
+        npFillCache.sung = -1;
+      }
+      var n = npFillCache.n; if (!n) return;
+      var cur = npLines[npIndex]; if (!cur) return;
+      var t0 = cur.t;
+      var t1 = (npLines[npIndex + 1] && npLines[npIndex + 1].t > t0) ? npLines[npIndex + 1].t : (t0 + (cur.d || 4000));
+      var pos = (typeof PC !== "undefined") ? pcNow() : npPosMs;
+      var r = (pos - t0) / Math.max(1, t1 - t0);
+      r = Math.max(0, Math.min(1, r));
+      var sung = Math.floor(r * n + 1e-6);
+      if (sung === npFillCache.sung) return;
+      var spans = ln.querySelectorAll(".ly-ch");
+      for (var i = 0; i < spans.length; i++) {
+        var on = i < sung;
+        if (on !== spans[i].classList.contains("sung")) spans[i].classList.toggle("sung", on);
+      }
+      npFillCache.sung = sung;
+    } catch (e) { }
+  }
   function npSync(pos) {
     if (!npOpen || !npLines.length) return;
     var i = -1;
     for (var k = 0; k < npLines.length; k++) { if (npLines[k].t <= pos) i = k; else break; }
     if (i === npIndex) return;
     npIndex = i;
+    npFillCache.line = -1;
     npLayout();
   }
   async function openNowPlaying() {
