@@ -667,3 +667,8 @@ html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
 
 /* 歌词页关闭时彻底不渲染（含整屏模糊背景），避免拖慢配色切换的全屏快照 */
 .np.hidden{display:none !important;}
+
+/* ---- 逐字填充：未唱的暗、已唱的亮（KTV 效果）---- */
+.np.ly-char .np-line .ly-ch{opacity:.42;transition:opacity .12s linear,color .12s linear;}
+.np.ly-char .np-line .ly-ch.sung{opacity:1;}
+.np.ly-char .np-line.on .ly-ch.sung{color:#fff;}
