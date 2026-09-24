@@ -1648,7 +1648,16 @@ function applyPerfAnim(s) {
     var s = await NE.getSettings();
     var html = el('div','page');
     html.appendChild(el('h2','page-title','设置'));
-    function group(title, rows) { var g = el('div','set-group'); g.appendChild(el('h3','',title)); rows.forEach(function(r){ g.appendChild(r); }); return g; }
+    // 每个分组都登记一下，最后在标题下面生成一排「快捷跳转」按钮
+    var navItems = [];
+    function group(title, rows) {
+      var g = el('div','set-group');
+      g.id = 'setg-' + navItems.length;
+      navItems.push({ id: g.id, t: title });
+      g.appendChild(el('h3','',title));
+      rows.forEach(function(r){ g.appendChild(r); });
+      return g;
+    }
     function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); }; r.appendChild(t); return r; }
     // 原生 <select> 的弹层在 WebView2 里定位会飘，这里统一用自定义下拉
     function sel(label, key, val, opts) { return custSel(label, key, val, opts); }
@@ -2026,7 +2035,7 @@ function applyPerfAnim(s) {
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
     html.appendChild(group('高级', [
       sw('开发者工具（F12 打开）','ui_devtools', cfgBool(s,'ui_devtools',false)),
-      hint('打开后按 F12 或右键「检查」可以查看网页端控制台，排查界面问题时用；平时建议关着。')
+      hint('打开后按 F12 就能查看网页端控制台，排查界面问题时用；开关一拨立刻生效，不用重启。平时建议关着。')
     ]));
     // ---- 插件自带的设置项（插件通过 nethe.settings.add 注册）----
     try {
@@ -2068,6 +2077,24 @@ function applyPerfAnim(s) {
       info('技术栈', 'WinUI3 + WebView2'),
       hint('第三方软件，与网易云音乐官方无关。本项目采用 MIT 许可证（允许包括商业用途在内的自由使用），仅供学习交流，请勿用于侵权或违法用途。')
     ]));
+
+    // 设置页顶部的分组快捷跳转：设置项太多，一屏一屏翻着找太累，点一下直接滚过去
+    if (navItems.length > 1) {
+      var nav = el('div','set-nav');
+      navItems.forEach(function (it) {
+        var b = el('button','set-nav-btn', it.t.replace(/\s*\/\s*(外观|代理)$/, ''));
+        b.type = 'button';
+        b.onclick = function () {
+          var target = document.getElementById(it.id); if (!target) return;
+          try { target.scrollIntoView({ behavior:'smooth', block:'start' }); } catch (e) { target.scrollIntoView(); }
+          // 滚过去之后闪一下，让人知道跳到哪儿了
+          target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
+          setTimeout(function () { target.classList.remove('flash'); }, 1100);
+        };
+        nav.appendChild(b);
+      });
+      html.insertBefore(nav, html.children[1] || null);
+    }
     view.innerHTML=''; view.appendChild(html);
   }
 
@@ -2183,6 +2210,9 @@ function applyPerfAnim(s) {
     var b = $('#pb-mode'); if (b) { b.innerHTML = SVG[m.ic]; b.title = '播放模式：' + m.t + '（点击切换）'; }
     if (!silent) { NE.setSetting('playMode', curMode); toast(m.t); }
   }
+  // 托盘菜单里切了播放模式：C# 已经写好配置，这里只负责把界面切过去
+  NE.on('playMode', function (d) { if (d && d.value) applyMode(String(d.value), false); });
+
   function setLyricBtn(on) {
     var b = $('#pb-lyric'); if (!b) return;
     b.classList.toggle('on', !!on);

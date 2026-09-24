@@ -4,18 +4,45 @@ using netHEmusic.Core.Logging;
 
 namespace netHEmusic.Core;
 
-/// <summary>系统托盘图标（Win32 Shell_NotifyIcon + 隐藏消息窗）。用于「关闭=最小化到托盘」：提供 打开/退出 菜单与双击恢复。</summary>
+/// <summary>托盘菜单需要读的状态和能触发的动作（由 MainWindow 提供，取不到就当作不可用）。</summary>
+public sealed class TrayActions
+{
+    public Action? Prev;
+    public Action? Next;
+    public Action? TogglePlay;
+    public Func<bool>? IsPlaying;
+    public Func<string>? PlayMode;
+    public Action<string>? SetPlayMode;
+    public Func<bool>? IsLyricOn;
+    public Action<bool>? SetLyric;
+}
+
+/// <summary>
+/// 系统托盘图标（Win32 Shell_NotifyIcon + 隐藏消息窗）。
+/// 左键单击 = 恢复主窗口；右键 = 菜单：打开 / 上一首 / 暂停 / 下一首 / 播放模式 ▸ / 桌面歌词 / 退出。
+/// </summary>
 public sealed class TrayIcon : IDisposable
 {
     private const int WM_USER = 0x0400;
     private const int WM_TRAYICON = WM_USER + 1;
     private const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2;
     private const uint NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4;
+    private const uint WM_LBUTTONUP = 0x0202;
     private const uint WM_LBUTTONDBLCLK = 0x0203;
     private const uint WM_CONTEXTMENU = 0x007B;
     private const uint WM_COMMAND = 0x0111;
     private const uint WM_CLOSE = 0x0010;
-    private const uint MF_STRING = 0x0, TPM_LEFTALIGN = 0x0, TPM_RIGHTBUTTON = 0x2;
+    private const uint WM_NULL = 0x0000;
+
+    // 菜单项 id
+    private const int ID_OPEN = 1, ID_EXIT = 2;
+    private const int ID_PREV = 10, ID_PLAY = 11, ID_NEXT = 12;
+    private const int ID_MODE_ORDER = 20, ID_MODE_LIST = 21, ID_MODE_SINGLE = 22, ID_MODE_RANDOM = 23;
+    private const int ID_LYRIC = 30;
+
+    // CreatePopupMenu / AppendMenu 标志
+    private const uint MF_STRING = 0x00000000, MF_SEPARATOR = 0x00000800, MF_CHECKED = 0x00000008, MF_POPUP = 0x00000010;
+    private const uint TPM_LEFTALIGN = 0x0000, TPM_RIGHTBUTTON = 0x0002, TPM_NONOTIFY = 0x0080, TPM_RETURNCMD = 0x0100;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NOTIFYICONDATA
@@ -26,6 +53,9 @@ public sealed class TrayIcon : IDisposable
         public uint dwState; public uint dwStateMask;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo; public uint uTimeout; public uint uVersion;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
 
     [DllImport("shell32.dll")] private static extern bool Shell_NotifyIcon(uint m, ref NOTIFYICONDATA d);
     [DllImport("user32.dll")] private static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr p, IntPtr m, IntPtr i, IntPtr pv);
@@ -39,21 +69,24 @@ public sealed class TrayIcon : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr LoadIconW(IntPtr h, IntPtr id);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern uint ExtractIconExW(string file, int index, out IntPtr large, out IntPtr small, uint count);
     [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr h);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr CreatePopupMenu();
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool AppendMenuW(IntPtr h, uint f, UIntPtr id, string s);
-    [DllImport("user32.dll")] private static extern bool TrackPopupMenu(IntPtr h, uint f, int x, int y, int r, IntPtr w, IntPtr rc);
+    [DllImport("user32.dll")] private static extern IntPtr CreatePopupMenu();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool AppendMenuW(IntPtr h, uint f, UIntPtr id, string? s);
+    [DllImport("user32.dll")] private static extern int TrackPopupMenu(IntPtr h, uint f, int x, int y, int r, IntPtr w, IntPtr rc);
     [DllImport("user32.dll")] private static extern bool DestroyMenu(IntPtr h);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] private static extern bool PostMessageW(IntPtr h, uint m, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] private static extern IntPtr SetWindowLongPtr(IntPtr h, int idx, IntPtr v);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr h, int c);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr h);
 
     private IntPtr _hwnd, _hIcon; private readonly IntPtr _mainHwnd; private readonly Action _onOpen, _onExit;
+    private readonly TrayActions? _actions;
     private readonly WndProcDelegate _wp; private readonly string _tip = "netHEmusic 网易云音乐下载器";
     private delegate IntPtr WndProcDelegate(IntPtr h, uint m, IntPtr w, IntPtr l);
 
-    public TrayIcon(IntPtr mainHwnd, Action onOpen, Action onExit)
+    public TrayIcon(IntPtr mainHwnd, Action onOpen, Action onExit, TrayActions? actions = null)
     {
-        _mainHwnd = mainHwnd; _onOpen = onOpen; _onExit = onExit; _wp = WndProc;
+        _mainHwnd = mainHwnd; _onOpen = onOpen; _onExit = onExit; _actions = actions; _wp = WndProc;
         _hwnd = CreateWindowEx(0, "STATIC", "netHEmusicTray", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
         SetWindowLongPtr(_hwnd, -4, Marshal.GetFunctionPointerForDelegate(_wp));
         _hIcon = LoadAppIcon();
@@ -83,6 +116,79 @@ public sealed class TrayIcon : IDisposable
         return IntPtr.Zero;
     }
 
+    /// <summary>状态读取一律吞异常：托盘菜单不应该因为播放器状态拿不到就弹不出来。</summary>
+    private static T Safe<T>(Func<T>? f, T def) { try { return f is null ? def : f(); } catch { return def; } }
+
+    private static readonly (int Id, string Key, string Text)[] Modes =
+    {
+        (ID_MODE_ORDER,  "order",  "顺序播放"),
+        (ID_MODE_LIST,   "list",   "列表循环"),
+        (ID_MODE_SINGLE, "single", "单曲循环"),
+        (ID_MODE_RANDOM, "random", "随机播放")
+    };
+
+    /// <summary>
+    /// 右键菜单。每次弹出都重新建一遍 —— 勾选状态（播放/暂停、播放模式、桌面歌词）必须是实时的。
+    /// 用 TPM_RETURNCMD 直接拿到点了哪一项，省掉 WM_COMMAND 那一套。
+    /// </summary>
+    private void ShowMenu()
+    {
+        var menu = CreatePopupMenu();
+        try
+        {
+            bool playing = Safe(() => _actions?.IsPlaying?.Invoke() ?? false, false);
+            string mode = Safe(() => _actions?.PlayMode?.Invoke() ?? "order", "order") ?? "order";
+            bool lyric = Safe(() => _actions?.IsLyricOn?.Invoke() ?? false, false);
+
+            AppendMenuW(menu, MF_STRING, new UIntPtr(ID_OPEN), "打开 netHEmusic");
+            AppendMenuW(menu, MF_SEPARATOR, UIntPtr.Zero, null);
+            AppendMenuW(menu, MF_STRING, new UIntPtr(ID_PREV), "上一首");
+            AppendMenuW(menu, MF_STRING, new UIntPtr(ID_PLAY), playing ? "暂停" : "播放");
+            AppendMenuW(menu, MF_STRING, new UIntPtr(ID_NEXT), "下一首");
+
+            var sub = CreatePopupMenu();
+            foreach (var m in Modes)
+                AppendMenuW(sub, MF_STRING | (mode == m.Key ? MF_CHECKED : 0), new UIntPtr((ulong)m.Id), m.Text);
+            AppendMenuW(menu, MF_POPUP, (UIntPtr)sub, "播放模式");
+
+            AppendMenuW(menu, MF_STRING | (lyric ? MF_CHECKED : 0), new UIntPtr(ID_LYRIC), "桌面歌词");
+            AppendMenuW(menu, MF_SEPARATOR, UIntPtr.Zero, null);
+            AppendMenuW(menu, MF_STRING, new UIntPtr(ID_EXIT), "退出");
+
+            // 标准托盘菜单三步：先把自己设成前台窗口，弹完再补一条空消息，
+            // 否则点菜单外面菜单不会消失（会一直挂在屏幕上）。
+            try { SetForegroundWindow(_hwnd); } catch { }
+            GetCursorPos(out var pt);
+            int cmd = TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD | TPM_NONOTIFY, pt.X, pt.Y, 0, _hwnd, IntPtr.Zero);
+            try { PostMessageW(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero); } catch { }
+
+            Dispatch(cmd, lyric);
+        }
+        catch (Exception e) { LogManager.Error("托盘菜单失败: " + e.Message); }
+        finally { try { DestroyMenu(menu); } catch { } }   // DestroyMenu 会连带销毁子菜单
+    }
+
+    private void Dispatch(int cmd, bool lyricNow)
+    {
+        try
+        {
+            switch (cmd)
+            {
+                case ID_OPEN: _onOpen(); break;
+                case ID_EXIT: _onExit(); break;
+                case ID_PREV: _actions?.Prev?.Invoke(); break;
+                case ID_PLAY: _actions?.TogglePlay?.Invoke(); break;
+                case ID_NEXT: _actions?.Next?.Invoke(); break;
+                case ID_LYRIC: _actions?.SetLyric?.Invoke(!lyricNow); break;
+                case ID_MODE_ORDER: _actions?.SetPlayMode?.Invoke("order"); break;
+                case ID_MODE_LIST: _actions?.SetPlayMode?.Invoke("list"); break;
+                case ID_MODE_SINGLE: _actions?.SetPlayMode?.Invoke("single"); break;
+                case ID_MODE_RANDOM: _actions?.SetPlayMode?.Invoke("random"); break;
+            }
+        }
+        catch (Exception e) { LogManager.Error("托盘菜单动作失败: " + e.Message); }
+    }
+
     private IntPtr WndProc(IntPtr h, uint m, IntPtr w, IntPtr l)
     {
         try
@@ -90,20 +196,14 @@ public sealed class TrayIcon : IDisposable
             if (m == WM_TRAYICON)
             {
                 var evt = (uint)l.ToInt64();
-                if (evt == WM_LBUTTONDBLCLK) { _onOpen(); return IntPtr.Zero; }
-                if (evt == WM_CONTEXTMENU)
-                {
-                    var menu = CreatePopupMenu();
-                    AppendMenuW(menu, MF_STRING, new UIntPtr(1), "打开 netHEmusic");
-                    AppendMenuW(menu, MF_STRING, new UIntPtr(2), "退出");
-                    TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON, 0, 0, 0, h, IntPtr.Zero);
-                    DestroyMenu(menu); return IntPtr.Zero;
-                }
+                // 左键单击 / 双击都恢复主窗口
+                if (evt == WM_LBUTTONUP || evt == WM_LBUTTONDBLCLK) { _onOpen(); return IntPtr.Zero; }
+                if (evt == WM_CONTEXTMENU) { ShowMenu(); return IntPtr.Zero; }
             }
             else if (m == WM_COMMAND)
             {
                 var id = w.ToInt64();
-                if (id == 1) _onOpen(); else if (id == 2) _onExit();
+                if (id == ID_OPEN) _onOpen(); else if (id == ID_EXIT) _onExit();
                 return IntPtr.Zero;
             }
             else if (m == WM_CLOSE) return IntPtr.Zero;

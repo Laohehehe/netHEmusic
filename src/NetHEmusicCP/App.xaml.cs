@@ -22,6 +22,7 @@ public partial class App : Application
     private static EventWaitHandle? _activateEvent;
     private static IntPtr _mainHwnd;
     private static TrayIcon? _tray;
+    private static MainWindow? _main;
     private static volatile bool _exiting;   // 真退出（更新 / 托盘退出）时为 true，关闭拦截要让路
 
     [DllImport("user32.dll")]
@@ -44,6 +45,7 @@ public partial class App : Application
     private static void RegisterMainWindow(Window w)
     {
         _mainHwnd = Core.Native.WindowHelper.Hwnd(w);
+        _main = w as MainWindow;
         // 监听“新实例已启动”信号 → 把本实例调到前台
         _ = Task.Run(() => { try { while (_activateEvent != null) { _activateEvent.WaitOne(); TrayIcon.ShowMainWindow(_mainHwnd); } } catch { } });
         // 关闭=最小化到托盘（可配置）
@@ -72,7 +74,8 @@ public partial class App : Application
         {
             _tray = new TrayIcon(_mainHwnd,
                 onOpen: () => TrayIcon.ShowMainWindow(_mainHwnd),
-                onExit: () => ExitApp());
+                onExit: () => ExitApp(),
+                actions: _main?.TrayActions());
         }
     }
 
@@ -149,6 +152,8 @@ public partial class App : Application
 
         LogManager.Log("MainWindow 已激活");
         RegisterMainWindow(_window);
+        // 托盘图标常驻：右键菜单是「最小化后遥控播放」的入口，不该等到关过一次窗口才出现
+        try { EnsureTray(); } catch (Exception te) { LogManager.Error("创建托盘图标失败: " + te.Message); }
         }
         catch (Exception ex)
         {

@@ -88,6 +88,15 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .big-load{color:rgba(var(--md-accent-color-grey-base-rgb),.5);padding:40px;text-align:center;font-size:14px;}
 .page-title{font-size:22px;font-weight:700;margin:0 0 16px;color:var(--md-accent-color-secondary);}
 .greet-title{font-size:24px;font-weight:700;margin:4px 0 20px;color:var(--md-accent-color-secondary);}
+/* 设置页顶部的分组快捷跳转：点一下滚到对应分组 */
+.set-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;}
+.set-nav-btn{padding:6px 14px;border-radius:999px;cursor:pointer;font-size:13px;line-height:1.4;
+  background:rgba(var(--md-accent-color-grey-base-rgb),.06);color:rgba(var(--md-accent-color-grey-base-rgb),.72);
+  border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.10);transition:background .15s,color .15s,border-color .15s;}
+.set-nav-btn:hover{background:rgba(var(--md-accent-color-grey-base-rgb),.13);color:var(--md-accent-color-secondary);border-color:rgba(var(--md-accent-color-grey-base-rgb),.20);}
+.set-nav-btn:active{transform:translateY(1px);}
+.set-group.flash{animation:setFlash 1.1s ease-out;}
+@keyframes setFlash{0%{box-shadow:0 0 0 2px var(--md-accent-color);}100%{box-shadow:0 0 0 2px transparent;}}
 .set-group{background:var(--md-accent-color-bg-darken);border-radius:var(--radius);padding:16px 18px 12px;margin-bottom:14px;}
 .set-group h3{margin:0 0 10px;padding-bottom:9px;font-size:15px;font-weight:600;color:var(--md-accent-color);border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.10);}
 .set-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 8px;margin:0 -8px;border-radius:8px;font-size:14px;transition:background .14s;}
