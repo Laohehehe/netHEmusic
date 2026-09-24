@@ -161,8 +161,8 @@ dotnet build src\NetHEmusicCP\NetHEmusicCP.csproj -c Release -p:Platform=x64
 ---
 
 ## 📄 开源协议
-本项目采用 **[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)**：
-**允许非商业目的的使用、修改与分发**（需保留协议与版权声明），**禁止任何商业用途**。详见 [LICENSE](LICENSE)。
+本项目采用 **[MIT License](LICENSE)**：
+**允许包括商业用途在内的自由使用、修改、分发与再许可**，只需保留版权声明与许可声明。详见 [LICENSE](LICENSE)。
 
 ---
 
@@ -172,9 +172,9 @@ dotnet build src\NetHEmusicCP\NetHEmusicCP.csproj -c Release -p:Platform=x64
 
 本软件（netHEmusic）是由个人独立开发的第三方开源软件，与网易云音乐（杭州网易云音乐科技有限公司）及其关联方**没有任何关系**，未获得其任何形式的授权、许可、认可或赞助。软件名称中出现"网易云音乐"仅用于客观描述其内容来源，不代表任何官方身份。
 
-**二、用途限制**
+**二、使用建议**
 
-本软件仅供**个人学习、技术交流与研究**使用。不得用于任何商业用途；不得用于任何违反法律法规的用途；不得用于任何侵犯他人合法权益的用途；不得用于任何损害第三方利益的行为。
+本软件采用 MIT 许可证，**允许包括商业用途在内的自由使用**；以下为使用建议而非许可限制：请勿将本软件用于任何违反法律法规的用途，也不要用于侵犯他人合法权益或损害第三方利益的行为。
 
 **三、内容与版权**
 

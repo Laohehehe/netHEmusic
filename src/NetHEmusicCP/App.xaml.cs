@@ -22,6 +22,7 @@ public partial class App : Application
     private static EventWaitHandle? _activateEvent;
     private static IntPtr _mainHwnd;
     private static TrayIcon? _tray;
+    private static volatile bool _exiting;   // 真退出（更新 / 托盘退出）时为 true，关闭拦截要让路
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -50,6 +51,7 @@ public partial class App : Application
         {
             w.AppWindow.Closing += (s, e) =>
             {
+                if (_exiting) { LogManager.Log("关闭请求: 正在退出，直接放行"); return; }
                 var toTray = AppServices.Config.Get("App", "close_to_tray", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
                 LogManager.Log("关闭请求: close_to_tray=" + toTray);
                 if (toTray)
@@ -176,10 +178,13 @@ public partial class App : Application
     /// <summary>退出（供其它窗口/更新应用后调用）。</summary>
     public static void ExitApp()
     {
+        // 先置标志：否则 _window.Close() 会触发「关闭到托盘」拦截，窗口被隐藏、还去建托盘图标，
+        // 紧接着 Environment.Exit 又把进程干掉（更新时就是这个流程，日志里能看到"已最小化到托盘"后立刻退出）
+        _exiting = true;
         LogManager.Log("应用退出");
         try { _tray?.Dispose(); } catch { }
         AppServices.Updater.CloseInstallIfRunning();
-        (Application.Current as App)?._window?.Close();
+        try { (Application.Current as App)?._window?.Close(); } catch { }
         Environment.Exit(0);
     }
 }

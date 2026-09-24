@@ -16,7 +16,7 @@
                     <Button x:Name="AgreeBtn" Click="OnAgree" Content="同意并继续" Style="{StaticResource AccentButtonStyle}" Width="150" Height="40"/>
                     <Button x:Name="DisagreeBtn" Click="OnDisagree" Content="不同意并退出" Width="150" Height="40"/>
                 </StackPanel>
-                <TextBlock Text="本软件与网易云音乐官方无关，仅供学习交流，禁止商用、禁止用于任何违法或侵犯网易云音乐官方及用户权益的行为。" FontSize="11" Foreground="{ThemeResource AppMutedBrush}" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+                <TextBlock Text="本软件与网易云音乐官方无关。项目采用 MIT 许可证发布，允许自由使用与商用；仅供学习交流，请勿用于任何违法或侵犯网易云音乐官方及用户权益的行为。" FontSize="11" Foreground="{ThemeResource AppMutedBrush}" TextWrapping="Wrap" HorizontalAlignment="Center"/>
             </StackPanel>
         </ScrollViewer>
     </Grid>

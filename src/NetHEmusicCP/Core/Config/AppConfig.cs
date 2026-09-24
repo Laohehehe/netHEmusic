@@ -157,6 +157,13 @@ public sealed class AppConfig
             ["api_base"] = ""
         };
         d.SectionOrder.Add("Network");
+        // 插件：市场清单地址（公开仓库，可自行改为别处）；停用的插件 id 用逗号分隔
+        d.Data["Plugins"] = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["market_url"] = "https://raw.githubusercontent.com/Laohehehe/netHEmusic/main/plugins/market.json",
+            ["disabled"] = ""
+        };
+        d.SectionOrder.Add("Plugins");
         // 记录“上一次已公告/已运行”的版本号：比当前版本旧就弹更新公告
         d.Data["Version"] = new(StringComparer.OrdinalIgnoreCase) { ["version"] = "0.0.0.0" };
         d.SectionOrder.Add("Version");

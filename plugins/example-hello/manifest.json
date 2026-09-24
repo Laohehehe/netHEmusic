@@ -1,0 +1,10 @@
+{
+  "manifest_version": 1,
+  "name": "Hello 插件（示例）",
+  "version": "1.0.0",
+  "author": "netHEmusic",
+  "description": "最小示例：注入一段 CSS、监听切歌、把切歌次数记在插件自己的数据目录里。",
+  "homepage": "https://github.com/Laohehehe/netHEmusic",
+  "permissions": ["ui", "events", "filesystem", "settings"],
+  "injects": { "Main": [ { "file": "./main.js" } ] }
+}

@@ -4,10 +4,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- 桌面歌词：整窗透明，桌面上只看得见歌词文字本身 -->
     <Grid x:Name="Root" Background="Transparent">
-        <!-- 「取消锁定」后鼠标移到歌词上才露出的提示框：只有一圈细边框，没有底色，
-             平时完全不显示，保证桌面上始终只有歌词 -->
+        <!-- 「取消锁定」（可拖动）时显示的提示框：常显，方便知道现在能拖。
+             注意：整窗透明、这里也没有底板，桌面上始终只有歌词文字。 -->
         <Border x:Name="EditFrame" CornerRadius="10" BorderThickness="1"
-                BorderBrush="#55888888" Background="Transparent" Visibility="Collapsed"/>
+                BorderBrush="#38FFFFFF" Background="#12000000" Visibility="Collapsed"/>
         <StackPanel x:Name="Lyric" Orientation="Vertical" Spacing="2"
                     HorizontalAlignment="Center" VerticalAlignment="Center" Padding="12,6">
             <Grid x:Name="MainHost" HorizontalAlignment="Center"/>

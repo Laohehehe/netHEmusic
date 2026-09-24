@@ -31,6 +31,7 @@ public static class AppServices
     public static ThemeManager Theme { get; private set; } = null!;
     public static LangService Lang { get; private set; } = null!;
     public static SelfRepair SelfRepair { get; private set; } = null!;
+    public static Plugins.PluginService Plugins { get; private set; } = null!;
 
     /// <summary>主题应用到主界面+推送前端的回调（由 MainWindow 注册）。</summary>
     public static Action? OnThemeApplied;
@@ -91,6 +92,7 @@ public static class AppServices
         SelfRepair = new SelfRepair(Config);
         Theme = new ThemeManager(Config);
         Player = new PlayerService(Config, Cache);
+        Plugins = new Plugins.PluginService(Config);
 
         // 恢复上次的播放列表（只装载不播放：重启后 dock 与播放列表仍是上次的内容）
         try

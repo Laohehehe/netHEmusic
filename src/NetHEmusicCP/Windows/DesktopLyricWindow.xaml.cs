@@ -336,8 +336,7 @@ public sealed partial class DesktopLyricWindow : Window
             }
             else
             {
-                // 解锁后也不常显边框，只在鼠标移上来时提示一下"这里能拖"
-                EditFrame.Visibility = _hover ? Visibility.Visible : Visibility.Collapsed;
+                EditFrame.Visibility = Visibility.Visible;   // 解锁状态常显提示框（用户要求回退成原来的样子）
                 try { ClickThroughHelper.SetClickThrough(hwnd, false); } catch { }
             }
         }

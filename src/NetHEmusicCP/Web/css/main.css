@@ -26,6 +26,35 @@ body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-se
 }
 /* Win10 没有 Segoe Fluent Icons，必须回退到自带的 Segoe MDL2 Assets，否则图标全是方框 */
 .ic{font-family:'Segoe Fluent Icons','Segoe MDL2 Assets','Segoe UI Symbol';font-style:normal;}
+/* 侧栏用的内联 SVG 图标：尺寸/对齐跟图标字体保持一致 */
+.nav-svg{display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;font-style:normal;}
+.nav-svg svg{width:1em;height:1em;display:block;fill:none;stroke:currentColor;}
+
+/* ================= 插件页 ================= */
+.plg-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px;}
+.plg-tabs{display:flex;gap:6px;background:var(--md-accent-color-bg-darken);padding:4px;border-radius:10px;}
+.plg-tab{background:transparent;border:none;color:rgba(var(--md-accent-color-grey-base-rgb),.75);font:inherit;font-size:13px;padding:6px 14px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s;}
+.plg-tab:hover{color:var(--md-accent-color);}
+.plg-tab.on{background:var(--md-accent-color-bg);color:var(--md-accent-color);font-weight:600;}
+.plg-tools{display:flex;gap:8px;}
+.plg-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;}
+.plg-card{background:var(--md-accent-color-bg-darken);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.10);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:8px;}
+.plg-card.broken{border-color:rgba(255,120,120,.45);}
+.plg-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.plg-name{font-size:15px;font-weight:600;color:var(--md-accent-color-secondary);}
+.plg-ver{font-size:11.5px;font-weight:400;color:rgba(var(--md-accent-color-grey-base-rgb),.6);}
+.plg-author{font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.6);margin-right:auto;}
+.plg-desc{font-size:13px;line-height:1.65;color:rgba(var(--md-accent-color-grey-base-rgb),.8);}
+.plg-perms{display:flex;flex-wrap:wrap;gap:6px;}
+.plg-perm{font-size:11.5px;padding:2px 8px;border-radius:20px;background:rgba(var(--md-accent-color-rgb),.14);color:var(--md-accent-color);cursor:help;}
+.plg-perm.none{background:rgba(var(--md-accent-color-grey-base-rgb),.12);color:rgba(var(--md-accent-color-grey-base-rgb),.6);}
+.plg-err{font-size:12px;color:#ff8f8f;}
+.plg-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:4px;}
+.plg-btn{background:var(--md-accent-color-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);border-radius:8px;color:var(--md-accent-color-secondary);font:inherit;font-size:12.5px;padding:6px 12px;cursor:pointer;transition:border-color .15s,color .15s,transform .1s;}
+.plg-btn:hover{border-color:var(--md-accent-color);color:var(--md-accent-color);}
+.plg-btn:active{transform:scale(.97);}
+.plg-btn.primary{border-color:var(--md-accent-color);color:var(--md-accent-color);}
+.plg-btn.danger:hover{border-color:#ff7a7a;color:#ff7a7a;}
 #app{height:100vh;display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr;background:transparent;}
 /* 侧栏：默认收起(仅图标)，悬停展开 */
 #sidebar{grid-row:1;background:var(--side-bg);padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .18s ease;overflow:hidden;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}

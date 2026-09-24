@@ -611,10 +611,13 @@ function applyPerfAnim(s) {
 
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
   function pop(el) { if(!el) return; el.classList.remove('fx-pop'); void el.offsetWidth; el.classList.add('fx-pop'); }
+  // 给插件用的事件广播（宿主不在就什么也不做）
+  function plugEmit(evt, payload) { try { if (window.PLUGHOST) window.PLUGHOST.emit(evt, payload); } catch (e) { } }
   function setPlaying(on) {
     var p = $('#player'); if(p) p.classList.toggle('playing', !!on);
     var pb = $('#pb-play'); if(pb) pb.innerHTML = on ? SVG.pause : SVG.play;
     npSetPlaying(on);   // 歌词页的播放/暂停按钮同步
+    plugEmit(on ? 'play' : 'pause', { playing: !!on });
   }
   // 「播放全部 + 下载全部」按钮组：下载全部需再点一次确认，避免误触批量下载
   // ---- 音质切换（dock 与歌词页共用一套逻辑）----
@@ -822,7 +825,7 @@ function applyPerfAnim(s) {
     if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); if(wrap) wrap.classList.add('has-cover'); try { if (String((appSettings && appSettings.scheme) || '') === 'dynamic-auto') pickCoverColor(ns.Pic); } catch (e7) { } }
     else { c.removeAttribute('src'); if(wrap) wrap.classList.remove('has-cover'); }
   }
-  function setPlayer(ns) { if(!ns) return; showSongMeta(ns); setPlaying(true); pop($('#pb-play')); }
+  function setPlayer(ns) { if(!ns) return; showSongMeta(ns); setPlaying(true); pop($('#pb-play')); plugEmit('track', ns); }
 
   // ===== 统一图标集：全部描边风格（stroke 2 / round 端点），同一功能只用同一个图标 =====
   function ico(inner) {
@@ -903,6 +906,7 @@ function applyPerfAnim(s) {
       else if (viewName==='account') task = goAccount();
       else if (viewName==='settings') task = goSettings();
       else if (viewName==='liked') task = goLiked();
+      else if (viewName==='plugins') task = (window.PLUGHOST ? window.PLUGHOST.render(view) : null);
       if (task) { await task; animateView(); }
     } catch(e) { view.innerHTML = '<div class="big-load">加载失败: '+esc(e.message)+'</div>'; animateView(); }
   }
@@ -1303,6 +1307,8 @@ function applyPerfAnim(s) {
     npIndex = i;
     npFillCache.line = -1; npFillCache.times = null;
     npLayout();
+    var l = npLines[i];
+    plugEmit('lyric', { index: i, time: l ? l.t : 0, text: l ? (l.o || l.t2 || '') : '', next: (npLines[i + 1] && (npLines[i + 1].o || npLines[i + 1].t2)) || '' });
   }
   async function openNowPlaying() {
     var np = npEl('np'); if (!np) return;
@@ -2022,10 +2028,45 @@ function applyPerfAnim(s) {
       sw('开发者工具（F12 打开）','ui_devtools', cfgBool(s,'ui_devtools',false)),
       hint('打开后按 F12 或右键「检查」可以查看网页端控制台，排查界面问题时用；平时建议关着。')
     ]));
+    // ---- 插件自带的设置项（插件通过 nethe.settings.add 注册）----
+    try {
+      var plugRows = [];
+      var pset = (window.PLUGHOST && window.PLUGHOST.settings) || [];
+      pset.forEach(function (p) {
+        var row = el('div','set-row');
+        row.appendChild(el('label','', String(p.label)));
+        if (p.type === 'switch') {
+          var cur = p.value === true || String(p.value) === 'true';
+          var t = el('div','set-switch' + (cur ? ' on' : ''));
+          t.onclick = function () {
+            var on = !t.classList.contains('on');
+            t.classList.toggle('on', on);
+            window.PLUGHOST.setPluginSetting(p.pid, p.key, on);
+          };
+          row.appendChild(t);
+        } else if (p.type === 'number') {
+          var i2 = el('input'); i2.type = 'range'; i2.min = 0; i2.max = 100; i2.value = Number(p.value) || 50;
+          var lb = el('span','set-value', String(i2.value));
+          i2.oninput = function () { lb.textContent = i2.value; };
+          i2.onchange = function () { window.PLUGHOST.setPluginSetting(p.pid, p.key, Number(i2.value)); };
+          row.appendChild(i2); row.appendChild(lb);
+        } else {
+          var tx = el('input'); tx.type = 'text'; tx.value = p.value == null ? '' : String(p.value);
+          tx.onchange = function () { window.PLUGHOST.setPluginSetting(p.pid, p.key, tx.value); };
+          row.appendChild(tx);
+        }
+        plugRows.push(row);
+      });
+      if (plugRows.length) {
+        plugRows.unshift(hint('这些是插件加进来的设置项（来自：' + Array.from(new Set(pset.map(function (x) { return x.pid; }))).join('、') + '）。'));
+        html.appendChild(group('插件设置', plugRows));
+      }
+    } catch (e) { }
+
     html.appendChild(group('关于', [
       info('版本', 'v' + (s.version||'')),
       info('技术栈', 'WinUI3 + WebView2'),
-      hint('第三方软件，仅供学习交流，禁止商用及任何侵权用途。')
+      hint('第三方软件，与网易云音乐官方无关。本项目采用 MIT 许可证（允许包括商业用途在内的自由使用），仅供学习交流，请勿用于侵权或违法用途。')
     ]));
     view.innerHTML=''; view.appendChild(html);
   }
@@ -2042,6 +2083,7 @@ function applyPerfAnim(s) {
   // 主题：把 C# 传来的 Material You 变量以【行内样式】写到 <html>（优先级最高，覆盖 :root 默认值）
   function applyThemeVars(d) {
     if (d.dark !== undefined) document.documentElement.classList.toggle('dark', !!d.dark);
+    plugEmit('theme', { dark: !!d.dark, vars: d.vars || '' });
     if (d.vars) {
       var root = document.documentElement;
       d.vars.split(';').forEach(function (pair) {
@@ -2277,6 +2319,7 @@ function applyPerfAnim(s) {
     v = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
     if (v > 0) lastVol = v;
     updateVolUI(v);
+    plugEmit('volume', { volume: v });
     try { if (window.AU) { AU.vol = v; if (typeof auSetVolume === 'function') auSetVolume(v); } } catch (e) { }
     if (post) NE.post({ type: 'volume', v: v });
   }
@@ -2357,6 +2400,8 @@ function applyPerfAnim(s) {
     else if (plOpen) NE.post({ type: 'queue_get' });
   });
   NE.on('desktop_lyric_state', function (d) { if (!LYRIC_LOCKED) setLyricBtn(!!d.on); });
+  // 插件宿主：拉一次插件列表（启用的插件会由 C# 把代码下发回来执行）
+  try { if (window.PLUGHOST) window.PLUGHOST.init(); } catch (e) { }
   // 图标字体可用性（Win10 没有 Segoe Fluent Icons，会回退到 MDL2）—— 出方框问题时先看这行
   try {
     var ff = document.fonts;

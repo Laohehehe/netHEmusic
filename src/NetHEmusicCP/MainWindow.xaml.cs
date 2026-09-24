@@ -365,6 +365,108 @@ public sealed partial class MainWindow : Window
             catch { }
         });
     }
+    // ================= 插件 =================
+
+    private void HandlePluginsList()
+        => PostToWeb(new { type = "plugins", list = AppServices.Plugins.List(), perms = netHEmusic.Core.Plugins.PluginService.AllPermissions, dir = AppServices.Plugins.PluginsDir, market = AppServices.Plugins.MarketUrl });
+
+    /// <summary>把某个插件的代码交给网页端执行（只有启用的插件才会被下发）。</summary>
+    private void HandlePluginCode(JsonElement doc)
+    {
+        var id = doc.TryGetProperty("id", out var i) ? (i.GetString() ?? "") : "";
+        if (!AppServices.Plugins.IsEnabled(id)) { PostToWeb(new { type = "plugin_code", id, ok = false, error = "插件未启用" }); return; }
+        var code = AppServices.Plugins.ReadCode(id, out var err);
+        if (code is null) { PostToWeb(new { type = "plugin_code", id, ok = false, error = err }); return; }
+        PostToWeb(new { type = "plugin_code", id, ok = true, code });
+    }
+
+    private void HandlePluginToggle(JsonElement doc)
+    {
+        var id = doc.TryGetProperty("id", out var i) ? (i.GetString() ?? "") : "";
+        bool on = doc.TryGetProperty("on", out var o) && o.ValueKind == JsonValueKind.True;
+        if (!netHEmusic.Core.Plugins.PluginService.SafeId(id)) return;
+        AppServices.Plugins.SetEnabled(id, on);
+        HandlePluginsList();
+    }
+
+    /// <summary>网页重载 / 手动点「重新加载」时，把所有启用插件的代码重新下发。</summary>
+    private void HandlePluginReload()
+    {
+        foreach (var item in AppServices.Plugins.List())
+        {
+            var id = item.GetType().GetProperty("id")?.GetValue(item)?.ToString() ?? "";
+            var enabled = item.GetType().GetProperty("enabled")?.GetValue(item) as bool? ?? false;
+            if (!enabled) continue;
+            var code = AppServices.Plugins.ReadCode(id, out var err);
+            if (code is null) { PostToWeb(new { type = "plugin_code", id, ok = false, error = err }); continue; }
+            PostToWeb(new { type = "plugin_code", id, ok = true, code });
+        }
+    }
+
+    private void OpenPluginsDir()
+    {
+        try
+        {
+            var dir = AppServices.Plugins.PluginsDir;
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dir) { UseShellExecute = true });
+            LogManager.Log("已打开插件目录: " + dir);
+        }
+        catch (Exception ex) { LogManager.Error("打开插件目录失败: " + ex.Message); }
+    }
+
+    private void HandlePluginData(JsonElement doc, bool write)
+    {
+        var id = doc.TryGetProperty("id", out var i) ? (i.GetString() ?? "") : "";
+        var name = doc.TryGetProperty("name", out var n) ? (n.GetString() ?? "") : "";
+        if (!AppServices.Plugins.IsEnabled(id)) { PostToWeb(new { type = "plugin_data", id, name, ok = false, error = "插件未启用" }); return; }
+        if (write)
+        {
+            var content = doc.TryGetProperty("content", out var c) ? (c.GetString() ?? "") : "";
+            var ok = AppServices.Plugins.WriteData(id, name, content, out var err);
+            PostToWeb(new { type = "plugin_data", id, name, ok, error = err });
+        }
+        else
+        {
+            var content = AppServices.Plugins.ReadData(id, name, out var err);
+            PostToWeb(new { type = "plugin_data", id, name, ok = err.Length == 0, content, error = err });
+        }
+    }
+
+    private async Task HandlePluginHttpAsync(JsonElement doc)
+    {
+        var id = doc.TryGetProperty("id", out var i) ? (i.GetString() ?? "") : "";
+        var rid = doc.TryGetProperty("rid", out var rr) ? (rr.GetString() ?? "") : "";
+        if (!AppServices.Plugins.IsEnabled(id)) { PostToWeb(new { type = "plugin_http", id, rid, ok = false, error = "插件未启用" }); return; }
+        var method = doc.TryGetProperty("method", out var m) ? (m.GetString() ?? "GET") : "GET";
+        var url = doc.TryGetProperty("url", out var u) ? (u.GetString() ?? "") : "";
+        var body = doc.TryGetProperty("body", out var b) ? (b.GetString() ?? "") : "";
+        var (ok, text, err) = await AppServices.Plugins.HttpAsync(method, url, body);
+        PostToWeb(new { type = "plugin_http", id, rid, ok, body = text, error = err });
+    }
+
+    private async Task HandlePluginMarketAsync()
+    {
+        var (ok, json, err) = await AppServices.Plugins.MarketAsync();
+        PostToWeb(new { type = "plugin_market", ok, json, error = err });
+    }
+
+    private async Task HandlePluginInstallAsync(JsonElement doc)
+    {
+        var id = doc.TryGetProperty("id", out var i) ? (i.GetString() ?? "") : "";
+        var url = doc.TryGetProperty("url", out var u) ? (u.GetString() ?? "") : "";
+        var (ok, err) = await AppServices.Plugins.InstallAsync(id, url);
+        PostToWeb(new { type = "plugin_install", id, ok, error = err });
+        if (ok) HandlePluginsList();
+    }
+
+    private void HandlePluginUninstall(JsonElement doc)
+    {
+        var id = doc.TryGetProperty("id", out var i) ? (i.GetString() ?? "") : "";
+        var (ok, err) = AppServices.Plugins.Uninstall(id);
+        PostToWeb(new { type = "plugin_uninstall", id, ok, error = err });
+        HandlePluginsList();
+    }
+
     /// <summary>开发者工具开关（设置里可开，默认关）。开了之后 F12 / 右键"检查"可用。</summary>
     private void ApplyDevTools(Microsoft.Web.WebView2.Core.CoreWebView2? core = null)
     {
@@ -426,6 +528,17 @@ public sealed partial class MainWindow : Window
                 case "play": HandleWebPlay(doc); break;
                 case "play_list": HandleWebPlayList(doc); break;
                 case "download": HandleWebDownload(doc); break;
+                case "plugins_list": HandlePluginsList(); break;
+                case "plugin_code": HandlePluginCode(doc); break;
+                case "plugin_toggle": HandlePluginToggle(doc); break;
+                case "plugin_reload": HandlePluginReload(); break;
+                case "plugins_open_dir": OpenPluginsDir(); break;
+                case "plugin_data_read": HandlePluginData(doc, false); break;
+                case "plugin_data_write": HandlePluginData(doc, true); break;
+                case "plugin_http": _ = HandlePluginHttpAsync(doc); break;
+                case "plugin_market": _ = HandlePluginMarketAsync(); break;
+                case "plugin_install": _ = HandlePluginInstallAsync(doc); break;
+                case "plugin_uninstall": HandlePluginUninstall(doc); break;
                 case "login": break; // 登录由 Web 前端 via /api 完成
                 case "api": _ = HandleWebApi(doc); break;
                 case "toggle": _ = AppServices.Player.ToggleAsync(); break;
