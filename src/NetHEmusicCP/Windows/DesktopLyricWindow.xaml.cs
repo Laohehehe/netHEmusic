@@ -52,6 +52,7 @@ public sealed partial class DesktopLyricWindow : Window
         try { AppWindow.IsShownInSwitchers = false; } catch { }
         try { AppWindow.Resize(new SizeInt32(760, 110)); } catch { }
         MakeBackgroundTransparent();
+        try { ClickThroughHelper.EnsureLayered(WinRT.Interop.WindowNative.GetWindowHandle(this)); } catch { }   // 透明的前提
 
         _main = new StrokeText(MainHost, 34, Microsoft.UI.Text.FontWeights.SemiBold,
                                Colors.White, Color.FromArgb(255, 0, 0, 0), 1.7);
@@ -337,7 +338,9 @@ public sealed partial class DesktopLyricWindow : Window
             else
             {
                 EditFrame.Visibility = Visibility.Visible;   // 解锁状态常显提示框（用户要求回退成原来的样子）
-                try { ClickThroughHelper.SetClickThrough(hwnd, false); } catch { }
+                // 解锁时也必须保证 WS_EX_LAYERED：否则窗口没有 per-pixel alpha，
+                // 提示框那个半透明底会被渲染成纯黑（"解锁后重启出现黑底板"就是这个原因）
+                try { ClickThroughHelper.EnsureLayered(hwnd); ClickThroughHelper.SetClickThrough(hwnd, false); } catch { }
             }
         }
         catch (Exception e) { LogManager.Debug("桌面歌词置顶: " + e.Message); }
@@ -457,18 +460,25 @@ public sealed partial class DesktopLyricWindow : Window
 
         public void SetStyle(double size, FontWeight weight, Color fill, Color stroke, double strokeWidth)
         {
+            var lh = LineHeightOf(size);
             for (var i = 0; i < _strokes.Count; i++)
             {
                 var t = _strokes[i];
                 t.FontSize = size;
+                t.LineHeight = lh;
                 t.FontWeight = weight;
                 t.Foreground = new SolidColorBrush(stroke);
                 t.RenderTransform = new TranslateTransform { X = Ring[i].X * strokeWidth, Y = Ring[i].Y * strokeWidth };
             }
             _front.FontSize = size;
+            _front.LineHeight = lh;
             _front.FontWeight = weight;
             _front.Foreground = new SolidColorBrush(fill);
         }
+
+        // 行高按字号算死（1.28 倍）：不能交给字体自己报 —— 有些装饰字体（如"萝莉体"）
+        // 行高度量偏小，长句换行后两行会叠在一起，看着就是"下句被当前句遮挡"
+        private static double LineHeightOf(double size) => Math.Ceiling(size * 1.28);
 
         private static TextBlock NewBlock(double size, FontWeight weight, Color c) => new()
         {
@@ -477,7 +487,9 @@ public sealed partial class DesktopLyricWindow : Window
             Foreground = new SolidColorBrush(c),
             TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Center,
-            IsTextScaleFactorEnabled = false
+            IsTextScaleFactorEnabled = false,
+            LineHeight = LineHeightOf(size),
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight
         };
     }
 }

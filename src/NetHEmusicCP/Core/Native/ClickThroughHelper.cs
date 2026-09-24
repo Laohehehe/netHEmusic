@@ -18,6 +18,7 @@ public static class ClickThroughHelper
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_NOZORDER = 0x0004;
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
@@ -46,6 +47,21 @@ public static class ClickThroughHelper
         long ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
         ex = clickThrough ? (ex | WS_EX_TRANSPARENT) : (ex & ~WS_EX_TRANSPARENT);
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
+    }
+
+    /// <summary>
+    /// 只保证「分层窗口」+工具窗口样式，不碰置顶、不碰鼠标穿透，也不改 z 序。
+    /// 为什么必须有 WS_EX_LAYERED：窗口要靠它才带 per-pixel alpha。
+    /// 少了它，界面里所有半透明颜色（比如桌面歌词那个 7% 黑的提示框）会被当成不透明渲染 ——
+    /// 表现就是「解锁桌面歌词后重启，歌词外面变成一个纯黑底板」。
+    /// </summary>
+    public static void EnsureLayered(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        long ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        long want = ex | WS_EX_LAYERED | WS_EX_TOOLWINDOW;
+        if (want != ex) SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(want));
+        SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
     }
 
     /// <summary>恢复普通窗口（取消置顶/穿透/工具窗口），用于关闭重置。</summary>
