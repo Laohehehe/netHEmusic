@@ -160,7 +160,7 @@ public sealed class AppConfig
         // 插件：市场清单地址（公开仓库，可自行改为别处）；停用的插件 id 用逗号分隔
         d.Data["Plugins"] = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["market_url"] = "https://raw.githubusercontent.com/Laohehehe/netHEmusic/main/plugins/market.json",
+            ["market_url"] = "https://raw.githubusercontent.com/netHEmusic/netHEmusic-plugins/main/plugins.json",
             ["disabled"] = ""
         };
         d.SectionOrder.Add("Plugins");

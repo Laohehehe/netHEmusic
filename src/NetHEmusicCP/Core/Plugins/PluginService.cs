@@ -54,18 +54,26 @@ public sealed class PluginService
     }
 
     /// <summary>
-    /// 官方插件市场清单：由仓库的 Actions 每天把 GitHub 上所有打了 nethe-plugin 话题的仓库聚合而成
-    /// （见 .github/market/build.mjs）。客户端只拉这一个静态 JSON，不直接打 GitHub 搜索接口。
+    /// 官方插件市场清单：由插件商店仓库（netHEmusic/netHEmusic-plugins）的 Actions 每天
+    /// 把 GitHub 上所有打了 nethe-plugin 话题的仓库聚合而成。客户端只拉这一个静态 JSON，
+    /// 不直接打 GitHub 搜索接口（那个未登录只有 10 次/分钟）。
     /// </summary>
-    public const string DefaultMarketUrl = "https://raw.githubusercontent.com/Laohehehe/netHEmusic/main/plugins/market.json";
+    public const string DefaultMarketUrl = "https://raw.githubusercontent.com/netHEmusic/netHEmusic-plugins/main/plugins.json";
 
-    /// <summary>插件市场清单地址。config.ini 里配了 [Plugins] market_url 就用配的，否则用官方市场。</summary>
+    /// <summary>老版本写进 config.ini 的默认市场地址（指向主仓库里的那份清单）。</summary>
+    private const string LegacyMarketUrl = "https://raw.githubusercontent.com/Laohehehe/netHEmusic/main/plugins/market.json";
+
+    /// <summary>
+    /// 插件市场清单地址：config.ini 里配了就用配的，否则用官方市场。
+    /// 老配置里存着 LegacyMarketUrl 的，当成「没配过」自动迁到新商店，不用用户手动改。
+    /// </summary>
     public string MarketUrl
     {
         get
         {
             var u = (_config.Get("Plugins", "market_url", "") ?? "").Trim();
-            return u.Length > 0 ? u : DefaultMarketUrl;
+            if (u.Length == 0 || u.Equals(LegacyMarketUrl, StringComparison.OrdinalIgnoreCase)) return DefaultMarketUrl;
+            return u;
         }
     }
 
@@ -227,7 +235,7 @@ public sealed class PluginService
 
     // ---------------- 插件市场 ----------------
 
-    /// <summary>拉取市场清单（一个 JSON，格式见 plugins/market.json）。</summary>
+    /// <summary>拉取市场清单（一个 JSON，格式见插件商店仓库 netHEmusic/netHEmusic-plugins）。</summary>
     public async Task<(bool ok, string json, string error)> MarketAsync()
     {
         var url = MarketUrl;

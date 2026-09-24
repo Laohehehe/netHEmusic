@@ -220,9 +220,10 @@ nethe.data.read('count.txt').then(function (t) {
 2. 仓库**根目录**放 `manifest.json`（就是插件自己用的那个文件，格式见第 3 节）
 3. 给仓库加 **`nethe-plugin`** 话题（仓库页右上角 ⚙ About → Topics）
 
-之后就完事了。仓库里的 GitHub Actions 每天（UTC 03:00）会把所有带这个话题的仓库
-聚合成一份清单写进 `plugins/market.json`，软件里「插件 → 插件市场」直接能看到并一键安装。
-想立刻看到效果可以在 Actions 页手动跑一次 **market** 这个 workflow。
+之后就完事了。[**netHEmusic-plugins**](https://github.com/netHEmusic/netHEmusic-plugins)
+（插件商店仓库）里的 GitHub Actions 每天（UTC 03:00）会把所有带这个话题的仓库聚合成
+`plugins.json`，软件里「插件 → 插件市场」直接能看到并一键安装。
+想立刻看到效果，可以在那个仓库的 Actions 页手动跑一次 **update**。
 
 **打包方式**（二选一）：
 
