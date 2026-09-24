@@ -2,7 +2,7 @@
 
 > **一个更好看的网易云音乐桌面客户端。** 
 
-<p align="center"><img src="resources/logo.png" width="120" alt="netHEmusic"></p>
+<p align="center"><img src="resources/Logoo.png" width="200" alt="netHEmusic"></p>
 
 ---
 
