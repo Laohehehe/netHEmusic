@@ -22,6 +22,8 @@ public class UpdateCheckResult
     public string AssetName { get; set; } = "";
     public string Body { get; set; } = "";
     public string Error { get; set; } = "";
+    /// <summary>这个结果是从哪个源拿到的：GitHub / Gitee。</summary>
+    public string Source { get; set; } = "";
 }
 
 /// <summary>下载状态（供进度轮询）。</summary>
@@ -58,43 +60,131 @@ public sealed class UpdateManager
     private string Repo => _config.UpdateRepo;
     public UpdateState State { get { lock (_lock) return _state; } }
 
-    public async Task<UpdateCheckResult> Check()
+    /// <summary>一个更新源。GitHub 和 Gitee 的接口不一样，这里包一层。</summary>
+    private sealed class ReleaseSource
     {
-        var r = new UpdateCheckResult { Current = Version };
+        public string Name = "";
+        public bool IsGitee;
+    }
+
+    /// <summary>两个源的尝试顺序：国内优先 Gitee，海外优先 GitHub；写死了 source 就按写的来。</summary>
+    private List<ReleaseSource> SourcesInOrder()
+    {
+        var gh = new ReleaseSource { Name = "GitHub", IsGitee = false };
+        var gt = new ReleaseSource { Name = "Gitee", IsGitee = true };
+        switch (_config.UpdateSource)
+        {
+            case "github": return new List<ReleaseSource> { gh, gt };
+            case "gitee": return new List<ReleaseSource> { gt, gh };
+            default: return GeoHint.InChina() ? new List<ReleaseSource> { gt, gh } : new List<ReleaseSource> { gh, gt };
+        }
+    }
+
+    /// <summary>问一个源要最新版本；失败返回 null（不抛）。</summary>
+    private async Task<UpdateCheckResult?> CheckSourceAsync(ReleaseSource s, CancellationToken ct)
+    {
         try
         {
-            var url = $"https://api.github.com/repos/{Repo}/releases/latest";
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Accept.ParseAdd("application/vnd.github+json");
-            req.Headers.UserAgent.ParseAdd("netHEmusic/" + Version);
-            using var resp = await _http.SendAsync(req);
-            resp.EnsureSuccessStatusCode();
-            var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
-            var tag = doc.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
-            var body = doc.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
-            string url2 = "", sha = "", asset = "";
-            if (doc.TryGetProperty("assets", out var assets))
-                foreach (var a in assets.EnumerateArray())
-                {
-                    var name = a.TryGetProperty("name", out var nm) ? nm.GetString() ?? "" : "";
-                    if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && name.Contains(AssetPrefix))
+            if (!s.IsGitee)
+            {
+                var url = $"https://api.github.com/repos/{Repo}/releases/latest";
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Accept.ParseAdd("application/vnd.github+json");
+                req.Headers.UserAgent.ParseAdd("netHEmusic/" + Version);
+                using var resp = await _http.SendAsync(req, ct);
+                resp.EnsureSuccessStatusCode();
+                var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct)).RootElement;
+                var tag = doc.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
+                var body = doc.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
+                string url2 = "", sha = "", asset = "";
+                if (doc.TryGetProperty("assets", out var assets))
+                    foreach (var a in assets.EnumerateArray())
                     {
-                        url2 = a.TryGetProperty("browser_download_url", out var bu) ? bu.GetString() ?? "" : "";
-                        var digest = a.TryGetProperty("digest", out var dg) ? dg.GetString() ?? "" : "";
-                        if (digest.StartsWith("sha256:")) sha = digest[7..].ToLowerInvariant();
-                        asset = name;
-                        break;
+                        var name = a.TryGetProperty("name", out var nm) ? nm.GetString() ?? "" : "";
+                        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && name.Contains(AssetPrefix))
+                        {
+                            url2 = a.TryGetProperty("browser_download_url", out var bu) ? bu.GetString() ?? "" : "";
+                            var digest = a.TryGetProperty("digest", out var dg) ? dg.GetString() ?? "" : "";
+                            if (digest.StartsWith("sha256:")) sha = digest[7..].ToLowerInvariant();
+                            asset = name;
+                            break;
+                        }
                     }
+                return new UpdateCheckResult { Latest = tag, Body = body, DownloadUrl = url2, Sha256 = sha, AssetName = asset, Source = s.Name };
+            }
+
+            // Gitee：/releases/latest 给 tag；附件要另开一个接口列（它没有 assets 字段），
+            // 下载直链是 https://gitee.com/{owner}/{repo}/releases/download/{tag}/{文件名}
+            var repo = _config.UpdateGiteeRepo;
+            using (var req = new HttpRequestMessage(HttpMethod.Get, $"https://gitee.com/api/v5/repos/{repo}/releases/latest"))
+            {
+                req.Headers.UserAgent.ParseAdd("netHEmusic/" + Version);
+                using var resp = await _http.SendAsync(req, ct);
+                resp.EnsureSuccessStatusCode();
+                var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct)).RootElement;
+                var tag = doc.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
+                var body = doc.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
+                var id = doc.TryGetProperty("id", out var i) && i.TryGetInt64(out var iv) ? iv : 0;
+                var asset = "";
+                if (id > 0)
+                {
+                    try
+                    {
+                        using var areq = new HttpRequestMessage(HttpMethod.Get, $"https://gitee.com/api/v5/repos/{repo}/releases/{id}/attach_files");
+                        areq.Headers.UserAgent.ParseAdd("netHEmusic/" + Version);
+                        using var aresp = await _http.SendAsync(areq, ct);
+                        if (aresp.IsSuccessStatusCode)
+                        {
+                            var arr = JsonDocument.Parse(await aresp.Content.ReadAsStringAsync(ct)).RootElement;
+                            foreach (var a in arr.EnumerateArray())
+                            {
+                                var title = a.TryGetProperty("title", out var tt) ? tt.GetString() ?? "" : "";
+                                if (title.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && title.Contains(AssetPrefix)) { asset = title; break; }
+                            }
+                        }
+                    }
+                    catch (Exception e) { LogManager.Debug("Gitee 附件列表取不到: " + e.Message); }
                 }
-            r.Latest = tag; r.Body = body; r.DownloadUrl = url2; r.Sha256 = sha; r.AssetName = asset;
-            r.HasUpdate = CompareVersion(tag, Version) > 0;
-            r.Error = "";
+                if (asset.Length == 0) asset = $"{AssetPrefix}_{tag}.exe";   // 列不出来就按命名约定拼
+                var dl = tag.Length > 0 ? $"https://gitee.com/{repo}/releases/download/{tag}/{asset}" : "";
+                // Gitee 不给 sha256（GitHub 的 digest 字段它没有），所以这里 Sha256 留空，下载时跳过校验
+                return new UpdateCheckResult { Latest = tag, Body = body, DownloadUrl = dl, AssetName = asset, Source = s.Name };
+            }
         }
         catch (Exception e)
         {
-            LogManager.Error("检查更新失败: " + e.Message);
-            r.Error = "无法连接更新服务器: " + e.Message;
+            LogManager.Debug($"[{s.Name}] 检查更新失败: {e.Message}");
+            return null;
         }
+    }
+
+    /// <summary>
+    /// 检查更新：两个源都问一遍，谁给出的版本号新就用谁。
+    /// 之所以不「问到第一个就返回」，是因为 Gitee 的 Release 是手动传的，可能落后于 GitHub，
+    /// 只认首选源的话国内用户会一直看不到新版本。多一个请求换准确，值。
+    /// </summary>
+    public async Task<UpdateCheckResult> Check()
+    {
+        var r = new UpdateCheckResult { Current = Version };
+        UpdateCheckResult? best = null;
+        foreach (var s in SourcesInOrder())
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var one = await CheckSourceAsync(s, cts.Token);
+            if (one is null) continue;
+            if (best is null || CompareVersion(one.Latest, best.Latest) > 0) best = one;
+        }
+        if (best is null)
+        {
+            LogManager.Error("检查更新失败: GitHub 和 Gitee 都没取到版本");
+            r.Error = "无法连接更新服务器（GitHub / Gitee 都试过了）";
+            return r;
+        }
+        r.Latest = best.Latest; r.Body = best.Body; r.DownloadUrl = best.DownloadUrl;
+        r.Sha256 = best.Sha256; r.AssetName = best.AssetName; r.Source = best.Source;
+        r.HasUpdate = CompareVersion(best.Latest, Version) > 0;
+        r.Error = "";
+        LogManager.Log($"更新检查: 来源={best.Source} 最新={r.Latest} 当前={Version} 有更新={r.HasUpdate}（{GeoHint.Describe()}）");
         return r;
     }
 
@@ -108,6 +198,9 @@ public sealed class UpdateManager
         var v = (version ?? "").Trim();
         if (v.Length > 0) urls.Add($"https://api.github.com/repos/{Repo}/releases/tags/{v}");
         urls.Add($"https://api.github.com/repos/{Repo}/releases/latest");
+        // Gitee 那边也问一下，国内拉不到 GitHub 时公告还能出得来
+        if (v.Length > 0) urls.Add($"https://gitee.com/api/v5/repos/{_config.UpdateGiteeRepo}/releases/tags/{v}");
+        urls.Add($"https://gitee.com/api/v5/repos/{_config.UpdateGiteeRepo}/releases/latest");
 
         foreach (var url in urls)
         {
@@ -146,6 +239,8 @@ public sealed class UpdateManager
 
     private IEnumerable<string> BuildDownloadUrls(string url)
     {
+        // Gitee 直链不套镜像：那几个镜像都是给 GitHub 用的代理，套上去反而打不开
+        if (url.Contains("gitee.com", StringComparison.OrdinalIgnoreCase)) { yield return url; yield break; }
         foreach (var m in _config.UpdateMirrors) yield return $"https://{m}/{url}";
         yield return url;
     }

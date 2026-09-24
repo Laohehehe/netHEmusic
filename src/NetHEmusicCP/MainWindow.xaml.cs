@@ -747,6 +747,8 @@ public sealed partial class MainWindow : Window
             ["desktopLyric"] = AppServices.Config.Get("App", "desktop_lyric", "false").Equals("true", StringComparison.OrdinalIgnoreCase),
             ["desktopLyricTopmost"] = AppServices.Config.DesktopLyricTopmost,
             ["desktopSongInfo"] = AppServices.Config.DesktopSongInfo,
+            ["updateSource"] = AppServices.Config.UpdateSource,
+            ["updateRegion"] = GeoHint.InChina() ? "cn" : "other",   // 界面里能显示「自动」挑到了哪边
             ["toast"] = AppServices.Config.Get("App", "toast", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
             ["version"] = AppServices.Version,
             ["fonts"] = SystemFonts.Families(),   // 本机字体列表，设置里的字体下拉用
@@ -801,6 +803,7 @@ public sealed partial class MainWindow : Window
             case "crossfade": AppServices.Config.Set("Player", "crossfade", value); break;
             case "volume": if (int.TryParse(value, out var vol)) { AppServices.Player.SetVolume(vol); PostToWeb(new { type = "volume_changed", v = AppServices.Player.GetVolume() }); } break;
             case "playMode": AppServices.Config.Set("Player", "mode", value); break;
+            case "updateSource": AppServices.Config.Set("Update", "source", value); break;
             case "proxy": AppServices.Config.Set("Network", "proxy", value); break;
             case "language": AppServices.Lang.SetLanguage(value); AppServices.Config.Language = value; break;
             case "desktopLyric": AppServices.Config.Set("App", "desktop_lyric", b ? "true" : "false"); break;

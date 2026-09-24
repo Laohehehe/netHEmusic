@@ -77,6 +77,12 @@
 2. 双击安装（默认装到 `D:\Program Files\netHEmusic`，可改路径）
 3. 到账号页扫码登录，即可使用每日推荐 / 我的歌单等个性化内容
 
+> **国内下载不动 GitHub？** 用 Gitee 镜像：<https://gitee.com/laohehehe/netHEmusic>
+>
+> 软件内的自动更新也会**自动挑源**：判定在国内就优先问 Gitee，判定在海外就优先问 GitHub；
+> 两个源都会问一遍，谁给出的版本新就用谁，另一个当兜底。也可以在
+> **设置 → 网络 / 代理 → 更新源** 里手动指定。
+
 > 卸载：开始菜单「卸载 netHEmusic」，或系统设置 → 应用 → netHEmusic
 
 ---

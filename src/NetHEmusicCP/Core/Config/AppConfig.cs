@@ -144,7 +144,11 @@ public sealed class AppConfig
         d.SectionOrder.Add("Player");
         d.Data["Update"] = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["repo"] = "Laohehehe/NET163download",
+            ["repo"] = "Laohehehe/netHEmusic",
+            // Gitee 镜像仓库（国内走这个）：GitHub 的 Release 附件不会自动同步过去，发版时要手动传一份
+            ["gitee_repo"] = "laohehehe/netHEmusic",
+            // 更新源偏好：auto = 按地区自动挑（国内优先 Gitee）；也可以写死 github / gitee
+            ["source"] = "auto",
             ["mirrors"] = "gh-proxy.com;ghm.078465.xyz;ghfast.top",
             ["current_version"] = "26.9.24.11"
         };
@@ -230,6 +234,12 @@ public sealed class AppConfig
     public int Volume { get { int.TryParse(Get("Player", "volume", "100"), out var v); return Math.Clamp(v, 0, 100); } set => Set("Player", "volume", Math.Clamp(value, 0, 100)); }
 
     public string UpdateRepo => Get("Update", "repo", "Laohehehe/netHEmusic");
+
+    /// <summary>Gitee 镜像仓库（owner/repo）。国内更新走它，GitHub 拉不到时也靠它兜底。</summary>
+    public string UpdateGiteeRepo => (Get("Update", "gitee_repo", "laohehehe/netHEmusic") ?? "laohehehe/netHEmusic").Trim();
+
+    /// <summary>更新源偏好：auto（按地区自动挑）/ github / gitee。</summary>
+    public string UpdateSource => (Get("Update", "source", "auto") ?? "auto").Trim().ToLowerInvariant();
     public string[] UpdateMirrors => (Get("Update", "mirrors", "gh-proxy.com;ghm.078465.xyz;ghfast.top") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public string Proxy => Get("Network", "proxy", "");

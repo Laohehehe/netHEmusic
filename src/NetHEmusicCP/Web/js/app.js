@@ -2044,7 +2044,16 @@ function applyPerfAnim(s) {
         { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
       ])
     ]));
-    html.appendChild(group('网络 / 代理', [ txt('代理地址','proxy', s.proxy) ]));
+    html.appendChild(group('网络 / 代理', [
+      txt('代理地址','proxy', s.proxy),
+      // 更新源：国内默认走 Gitee，海外走 GitHub；两个源都会试，这里只是决定先问谁
+      sel('更新源','updateSource', String(s.updateSource || 'auto'), [
+        { v: 'auto',   t: '自动（当前判定：' + ((s.updateRegion === 'cn') ? '国内 → 优先 Gitee' : '海外 → 优先 GitHub') + '）' },
+        { v: 'gitee',  t: 'Gitee（国内镜像，GitHub 兜底）' },
+        { v: 'github', t: 'GitHub（Gitee 兜底）' }
+      ]),
+      hint('更新会同时问 GitHub 和 Gitee，谁给出的版本新就用谁，另一个当兜底 —— 所以选错也不会漏更新。')
+    ]));
     html.appendChild(group('语言', [ sel('界面语言','language', s.language, zhOpts('language', ['zh_cn','en_US'])) ]));
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
     html.appendChild(group('高级', [
