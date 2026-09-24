@@ -1,0 +1,91 @@
+name: build
+
+# 手动触发的构建项：Actions 页面点 "Run workflow"。
+#
+# 目的有两个：
+#   1) 在干净的 GitHub 环境里验证项目能不能构建出来，产物当 artifact 下载，跟本地构建对比；
+#   2) 以后要接 SignPath Foundation 的免费代码签名，必须先有这条 CI 链路 ——
+#      他们要求被签名的产物必须由 GitHub 工作流构建出来，不接受本地构建的 exe。
+#
+# 注意：真实 API 地址不在仓库里。要么在仓库 Secrets 里加 NETHE_API_BASE，
+#       要么让它是空的（能编译，但连不上后端）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      make_installer:
+        description: "顺便用 Inno Setup 打出安装包"
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: 环境信息
+        shell: pwsh
+        run: |
+          dotnet --info
+          Write-Host "--- Windows Kits ---"
+          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+
+      - name: 还原
+        env:
+          NETHE_API_BASE: ${{ secrets.NETHE_API_BASE }}
+        run: dotnet restore src/NetHEmusicCP/NetHEmusicCP.csproj -p:Platform=x64
+
+      - name: 构建 Release x64
+        env:
+          NETHE_API_BASE: ${{ secrets.NETHE_API_BASE }}
+        run: dotnet build src/NetHEmusicCP/NetHEmusicCP.csproj -c Release -p:Platform=x64 --no-restore
+
+      - name: 整理安装包载荷
+        shell: pwsh
+        run: |
+          $out = "src/NetHEmusicCP/bin/x64/Release/net8.0-windows10.0.19041.0/win-x64"
+          if (-not (Test-Path $out)) { throw "找不到构建产物: $out" }
+          Remove-Item build/app -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force build/app | Out-Null
+          Copy-Item "$out/*" build/app -Recurse -Force
+          Write-Host ("载荷文件数: " + (Get-ChildItem build/app -Recurse -File).Count)
+          Get-ChildItem build/app -Filter *.exe | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: 上传应用产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: netHEmusic-app
+          path: build/app
+          if-no-files-found: error
+
+      - name: 安装 Inno Setup
+        if: inputs.make_installer
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: 编译安装包
+        if: inputs.make_installer
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $iscc = @("C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files\Inno Setup 6\ISCC.exe") |
+                  Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "没找到 ISCC.exe" }
+          New-Item -ItemType Directory -Force ci-out | Out-Null
+          & $iscc /O"$PWD/ci-out" installer/netHEmusic.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC 退出码 $LASTEXITCODE" }
+
+      - name: 上传安装包
+        if: inputs.make_installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: netHEmusic-setup
+          path: ci-out/*.exe
+          if-no-files-found: warn

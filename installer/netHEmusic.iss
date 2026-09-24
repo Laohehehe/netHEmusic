@@ -40,9 +40,17 @@ Name: "chinese"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："; Flags: checkedonce
 Name: "firewall"; Description: "为程序添加防火墙放行规则（Laohehehe）"; GroupDescription: "附加任务："; Flags: checkedonce
+Name: "trustcert"; Description: "把本软件的签名证书装进【本机】受信任存储（以后更新/卸载的 UAC 不再显示「未知发布者」）"; GroupDescription: "附加任务："; Flags: checkedonce
 
 [Files]
 Source: "..\build\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 证书单独补一份：payload 里不一定有最新那张。用 #if 兜底，文件不在也不会让编译失败。
+#if FileExists(AddBackslash(SourcePath) + "..\resources\LaoheTeam.cer")
+Source: "..\resources\LaoheTeam.cer"; DestDir: "{app}"; Flags: ignoreversion
+#endif
+#if FileExists(AddBackslash(SourcePath) + "..\resources\Laohehehe.cer")
+Source: "..\resources\Laohehehe.cer"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 
 [Icons]
 Name: "{group}\netHEmusic"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
@@ -50,9 +58,15 @@ Name: "{group}\卸载 netHEmusic"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\netHEmusic"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-; 安装自签名证书（当前用户 Root + 受信任的发布者），装完可用 certmgr.msc 查看
-Filename: "{sys}\certutil.exe"; Parameters: "-f -user -addstore Root ""{app}\LaoheTeam.cer"""; Flags: runhidden; StatusMsg: "正在安装自签名证书…"
-Filename: "{sys}\certutil.exe"; Parameters: "-f -user -addstore TrustedPublisher ""{app}\LaoheTeam.cer"""; Flags: runhidden
+; 证书必须装进【本机】存储：UAC 的同意窗口是 consent.exe 以 SYSTEM 身份弹的，只认 LocalMachine。
+; 以前只装 -user，所以自己机器上签名校验是好的，别人机器上的 UAC 却永远是「未知发布者」。
+; 安装器本身就有管理员权限（PrivilegesRequired=admin），所以这里写得进去。
+Filename: "{sys}\certutil.exe"; Parameters: "-f -addstore Root ""{app}\LaoheTeam.cer"""; Flags: runhidden; Tasks: trustcert; StatusMsg: "正在把签名证书装进本机受信任的根证书颁发机构…"
+Filename: "{sys}\certutil.exe"; Parameters: "-f -addstore TrustedPublisher ""{app}\LaoheTeam.cer"""; Flags: runhidden; Tasks: trustcert
+Filename: "{sys}\certutil.exe"; Parameters: "-f -addstore TrustedPublisher ""{app}\Laohehehe.cer"""; Flags: runhidden; Tasks: trustcert
+; 当前用户存储也来一份（本地开发时 Get-AuthenticodeSignature 走的是这份）
+Filename: "{sys}\certutil.exe"; Parameters: "-f -user -addstore Root ""{app}\LaoheTeam.cer"""; Flags: runhidden; Tasks: trustcert
+Filename: "{sys}\certutil.exe"; Parameters: "-f -user -addstore TrustedPublisher ""{app}\LaoheTeam.cer"""; Flags: runhidden; Tasks: trustcert
 ; 防火墙放行规则（名字固定为 Laohehehe，卸载时删除）
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Laohehehe"" dir=out program=""{app}\{#AppExe}"" action=allow enable=yes"; Flags: runhidden; Tasks: firewall; StatusMsg: "正在添加防火墙规则…"
 ; 安装完成后启动
@@ -60,8 +74,13 @@ Filename: "{app}\{#AppExe}"; Description: "立即启动 {#AppName}"; Flags: nowa
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Laohehehe"""; Flags: runhidden; RunOnceId: "DelFirewallRule"
+; 本机存储里的也一并撤掉（卸载要卸载干净），当前用户那份照旧
+Filename: "{sys}\certutil.exe"; Parameters: "-delstore Root LaoheTeam.top"; Flags: runhidden; RunOnceId: "DelCertRootMachine"
+Filename: "{sys}\certutil.exe"; Parameters: "-delstore TrustedPublisher LaoheTeam.top"; Flags: runhidden; RunOnceId: "DelCertTPMachine"
+Filename: "{sys}\certutil.exe"; Parameters: "-delstore TrustedPublisher Laohehehe"; Flags: runhidden; RunOnceId: "DelCertLeafTPMachine"
 Filename: "{sys}\certutil.exe"; Parameters: "-user -delstore Root LaoheTeam.top"; Flags: runhidden; RunOnceId: "DelCertRoot"
 Filename: "{sys}\certutil.exe"; Parameters: "-user -delstore TrustedPublisher LaoheTeam.top"; Flags: runhidden; RunOnceId: "DelCertTP"
+Filename: "{sys}\certutil.exe"; Parameters: "-user -delstore TrustedPublisher Laohehehe"; Flags: runhidden; RunOnceId: "DelCertLeafTP"
 
 [Code]
 function PrepareToInstall(var NeedsRestart: Boolean): String;
