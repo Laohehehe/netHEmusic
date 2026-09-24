@@ -119,7 +119,7 @@ html.no-fx .fx-shake{animation:none;}
 .modal-check input{accent-color:var(--md-accent-color);}.modal-dim{font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.45);}
 /* ================= Dock（播放条）图标与动画 ================= */
 /* 图标字体：dock 里的 <i> 之前漏了 .ic，才会显示成方块 */
-.ic-btn i, .ic-btn .ic{font-family:'Segoe Fluent Icons','Segoe UI Symbol';font-style:normal;line-height:1;}
+.ic-btn i, .ic-btn .ic{font-family:'Segoe Fluent Icons','Segoe MDL2 Assets','Segoe UI Symbol';font-style:normal;line-height:1;}
 
 /* 整条 dock 入场 */
 @keyframes dock-in{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:none;}}

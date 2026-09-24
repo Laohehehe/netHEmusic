@@ -1954,8 +1954,7 @@ function applyPerfAnim(s) {
         rng2('不透明度','dl_opacity', Number(cfgGet(s,'dl_opacity',100))||100, 10, 100, '%'),
         sw('主行加粗','dl_bold', cfgBool(s,'dl_bold',true)),
         sw('显示下一句 / 译文','dl_show_sub', cfgBool(s,'dl_show_sub',true))
-      ]),
-      sw('桌面歌曲信息','desktopSongInfo', s.desktopSongInfo)
+      ])
     ]));
     // ---- 快捷键（可自定义）----
     function hotkeyGroup() {
@@ -2019,6 +2018,10 @@ function applyPerfAnim(s) {
     html.appendChild(group('网络 / 代理', [ txt('代理地址','proxy', s.proxy) ]));
     html.appendChild(group('语言', [ sel('界面语言','language', s.language, zhOpts('language', ['zh_cn','en_US'])) ]));
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
+    html.appendChild(group('高级', [
+      sw('开发者工具（F12 打开）','ui_devtools', cfgBool(s,'ui_devtools',false)),
+      hint('打开后按 F12 或右键「检查」可以查看网页端控制台，排查界面问题时用；平时建议关着。')
+    ]));
     html.appendChild(group('关于', [
       info('版本', 'v' + (s.version||'')),
       info('技术栈', 'WinUI3 + WebView2'),
@@ -2117,7 +2120,11 @@ function applyPerfAnim(s) {
     if (c) c.textContent = fmt(d.pos||0);
     if (u && d.dur) u.textContent = fmt(d.dur);
   });
-  NE.on('toast', function(d){ toast(d.text||''); });
+  // 只有「下载」类提示受设置里的「下载完成通知」开关控制，其它提示（错误、分享成功等）照常弹
+  NE.on('toast', function(d){
+    if (d && d.kind === 'download' && !cfgBool(appSettings, 'toast', true)) return;
+    toast(d.text||'');
+  });
   NE.on('nav', function(d){ if(d.view) go(d.view, d); });
 
   // ================= Dock：图标 / 播放模式 / 桌面歌词 / 当前播放列表 =================
@@ -2350,6 +2357,11 @@ function applyPerfAnim(s) {
     else if (plOpen) NE.post({ type: 'queue_get' });
   });
   NE.on('desktop_lyric_state', function (d) { if (!LYRIC_LOCKED) setLyricBtn(!!d.on); });
+  // 图标字体可用性（Win10 没有 Segoe Fluent Icons，会回退到 MDL2）—— 出方框问题时先看这行
+  try {
+    var ff = document.fonts;
+    NE.post({ type: 'log', msg: '[env] SegoeFluentIcons=' + ff.check('16px "Segoe Fluent Icons"') + ' MDL2=' + ff.check('16px "Segoe MDL2 Assets"') });
+  } catch (e0) { }
   // 启动时同步：播放模式 / （未锁定时）桌面歌词状态 / 上次的播放列表
   NE.getSettings().then(function (s) {
     try {

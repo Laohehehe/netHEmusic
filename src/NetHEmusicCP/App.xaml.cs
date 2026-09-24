@@ -112,6 +112,8 @@ public partial class App : Application
         }
 
         LogManager.Log($"版本 {AppServices.Version} | PID {Environment.ProcessId} | OS {Environment.OSVersion.Version}");
+        // 运行环境快照：排"某台机器图标是方框""歌词位置不对"这类问题时先看这几行
+        foreach (var line in Core.Native.SystemInfo.Lines()) LogManager.Log(line);
 
         // 3) 启动证书检测：计算机未安装启动证书则显示“安装证书”提示，安装成功后才继续，否则退出
         if (!AppServices.CertificatePresent())

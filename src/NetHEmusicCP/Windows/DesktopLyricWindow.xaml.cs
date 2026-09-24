@@ -37,6 +37,7 @@ public sealed partial class DesktopLyricWindow : Window
 
     private bool _topmost = true;
     private bool _dragging;
+    private bool _hover;
     private PointInt32 _dragGap;
     private readonly StrokeText _main;
     private readonly StrokeText _sub;
@@ -58,6 +59,8 @@ public sealed partial class DesktopLyricWindow : Window
                               Color.FromArgb(255, 255, 255, 255), Color.FromArgb(255, 0, 0, 0), 1.5);
         _baseFont = _main.FontFamily;
 
+        Root.PointerEntered += (s, e) => { _hover = true; if (!_topmost) EditFrame.Visibility = Visibility.Visible; };
+        Root.PointerExited += (s, e) => { _hover = false; if (!_topmost && !_dragging) EditFrame.Visibility = Visibility.Collapsed; };
         Root.PointerPressed += OnDragStart;
         Root.PointerMoved += OnDragMove;
         Root.PointerReleased += OnDragEnd;
@@ -327,12 +330,14 @@ public sealed partial class DesktopLyricWindow : Window
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             if (_topmost)
             {
+                _hover = false;
                 EditFrame.Visibility = Visibility.Collapsed;
                 ClickThroughHelper.MakeTopmostClickThrough(hwnd, true);
             }
             else
             {
-                EditFrame.Visibility = Visibility.Visible;
+                // 解锁后也不常显边框，只在鼠标移上来时提示一下"这里能拖"
+                EditFrame.Visibility = _hover ? Visibility.Visible : Visibility.Collapsed;
                 try { ClickThroughHelper.SetClickThrough(hwnd, false); } catch { }
             }
         }
@@ -366,6 +371,7 @@ public sealed partial class DesktopLyricWindow : Window
         if (!_dragging) return;
         _dragging = false;
         SavePosition();
+        if (!_topmost && !_hover) EditFrame.Visibility = Visibility.Collapsed;
     }
 
     // ---------------- 歌词解析 ----------------

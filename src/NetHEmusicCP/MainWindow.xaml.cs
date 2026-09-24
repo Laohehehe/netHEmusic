@@ -138,8 +138,8 @@ public sealed partial class MainWindow : Window
             };
         }
         catch (Exception ex) { LogManager.Debug("挂 Closing 失败: " + ex.Message); }
-        AppServices.Download.Completed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载完成: " + it.Display }));
-        AppServices.Download.Failed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", text = "下载失败: " + (it.Error ?? "") }));
+        AppServices.Download.Completed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", kind = "download", text = "下载完成: " + it.Display }));
+        AppServices.Download.Failed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", kind = "download", text = "下载失败: " + (it.Error ?? "") }));
 
         LogManager.Log("MainWindow 构造完成");
         _ = StartupFlowAsync();
@@ -204,6 +204,7 @@ public sealed partial class MainWindow : Window
             // 关闭 WebView2 缓存，保证热重载后拿到最新的 HTML/CSS/JS
             try { await core.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}"); } catch (Exception ce) { LogManager.Debug("禁用缓存失败: " + ce.Message); }
             SetupHotReload(webFolder);
+            ApplyDevTools(core);                       // 按设置决定是否允许 F12 打开开发者工具
             core.WebMessageReceived += OnWebMessage;
             core.NavigationCompleted += (s, e) =>
             {
@@ -364,6 +365,21 @@ public sealed partial class MainWindow : Window
             catch { }
         });
     }
+    /// <summary>开发者工具开关（设置里可开，默认关）。开了之后 F12 / 右键"检查"可用。</summary>
+    private void ApplyDevTools(Microsoft.Web.WebView2.Core.CoreWebView2? core = null)
+    {
+        try
+        {
+            core ??= WebView.CoreWebView2;
+            if (core is null) return;
+            bool on = !AppServices.Config.Get("App", "ui_devtools", "false").Equals("false", StringComparison.OrdinalIgnoreCase);
+            core.Settings.AreDevToolsEnabled = on;
+            core.Settings.AreBrowserAcceleratorKeysEnabled = true;   // F12 属于浏览器快捷键
+            LogManager.Log("开发者工具: " + (on ? "已启用（F12 打开）" : "已关闭"));
+        }
+        catch (Exception e) { LogManager.Debug("设置开发者工具失败: " + e.Message); }
+    }
+
     private void PostToWeb(object msg) { try { WebView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(msg)); } catch { } }
     private void PushTheme()
     {
@@ -554,6 +570,14 @@ public sealed partial class MainWindow : Window
             case "mica": AppServices.Config.Mica = b; WindowHelper.ApplyBackdrop(this, b); break;
             case "closeToTray": AppServices.Config.Set("App", "close_to_tray", b ? "true" : "false"); break;
             case "uiEffects": AppServices.Config.Set("App", "ui_effects", b ? "true" : "false"); break;
+            case "custom_accent":
+                // 自定义强调色：不在任何前缀白名单里，必须显式存，否则重启就丢
+                AppServices.Config.Set("App", "custom_accent", value);
+                break;
+            case "ui_devtools":
+                AppServices.Config.Set("App", "ui_devtools", b ? "true" : "false");
+                ApplyDevTools();
+                break;
             default:
                 // 前端自定义设置：fx_* / ui_* 原样落到 [App] 段。
                 // 以后新增这类设置项只改前端即可，不用改 C#、不用重编译。

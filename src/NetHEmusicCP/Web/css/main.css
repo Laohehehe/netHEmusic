@@ -24,7 +24,8 @@ body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-se
   --side-bg:  var(--md-accent-color-bg-darken);
   --card-bg:  var(--md-accent-color-bg-darken);
 }
-.ic{font-family:'Segoe Fluent Icons','Segoe UI Symbol';font-style:normal;}
+/* Win10 没有 Segoe Fluent Icons，必须回退到自带的 Segoe MDL2 Assets，否则图标全是方框 */
+.ic{font-family:'Segoe Fluent Icons','Segoe MDL2 Assets','Segoe UI Symbol';font-style:normal;}
 #app{height:100vh;display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr;background:transparent;}
 /* 侧栏：默认收起(仅图标)，悬停展开 */
 #sidebar{grid-row:1;background:var(--side-bg);padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .18s ease;overflow:hidden;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
