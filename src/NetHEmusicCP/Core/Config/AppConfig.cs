@@ -146,14 +146,15 @@ public sealed class AppConfig
         {
             ["repo"] = "Laohehehe/NET163download",
             ["mirrors"] = "gh-proxy.com;ghm.078465.xyz;ghfast.top",
-            ["current_version"] = "26.9.13.35"
+            ["current_version"] = "26.9.24.1"
         };
         d.SectionOrder.Add("Update");
         d.Data["Network"] = new(StringComparer.OrdinalIgnoreCase)
         {
             ["proxy"] = "",
             // 网易云 API 服务地址（NeteaseCloudMusicApi 部署实例），接口文档见 {api_base}/docs/
-            ["api_base"] = "http://8.166.131.193:3000"
+            // 真实地址不在源码里：编译期由 ApiSecrets 注入（见 csproj / build.local.props）
+            ["api_base"] = ""
         };
         d.SectionOrder.Add("Network");
         // 记录“上一次已公告/已运行”的版本号：比当前版本旧就弹更新公告
@@ -212,7 +213,7 @@ public sealed class AppConfig
     /// <summary>网易云 API 服务地址（NeteaseCloudMusicApi 实例，文档 {base}/docs/）。</summary>
     public string ApiBase
     {
-        get { var v = (Get("Network", "api_base", "") ?? "").Trim(); return string.IsNullOrEmpty(v) ? "http://8.166.131.193:3000" : v.TrimEnd('/'); }
+        get { var v = (Get("Network", "api_base", "") ?? "").Trim(); return string.IsNullOrEmpty(v) ? ApiSecrets.Base : v.TrimEnd('/'); }
         set => Set("Network", "api_base", (value ?? "").Trim());
     }
 

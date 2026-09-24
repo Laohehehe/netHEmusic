@@ -21,7 +21,7 @@ namespace netHEmusic.Core;
 /// </summary>
 public static class AppServices
 {
-    public const string Version = "26.9.13.35";   // 版本号 = 26.M.D.X，X 为当日修改次数（每次改动 +1）
+    public const string Version = "26.9.24.1";   // 版本号 = 26.M.D.X，X 为当日修改次数（每次改动 +1）
     public static AppConfig Config { get; private set; } = null!;
     public static NetEaseClient Netease { get; private set; } = null!;
     public static DownloadManager Download { get; private set; } = null!;
@@ -46,12 +46,40 @@ public static class AppServices
         else _ui?.TryEnqueue(() => { try { a(); } catch { } });
     }
 
+    /// <summary>
+    /// API 服务换过供应商：老版本 config.ini 里存着旧地址，会盖过代码里的新默认值，
+    /// 所以这里做一次性强制迁移（标记 [Network] api_migrated，避免每次都覆盖用户自定义的地址）。
+    /// </summary>
+    private static void MigrateApiServer()
+    {
+        try
+        {
+            const string tag = "2";
+            if (Config.Get("Network", "api_migrated", "") == tag) return;
+            var real = ApiSecrets.Base;
+            if (!string.IsNullOrEmpty(real))
+            {
+                var old = Config.Get("Network", "api_base", "");
+                if (!string.Equals(old, real, StringComparison.OrdinalIgnoreCase))
+                {
+                    Config.Set("Network", "api_base", real);
+                    LogManager.Log("[API] 服务器地址已迁移到新供应商");
+                }
+            }
+            else LogManager.Warn("[API] 编译期未注入服务器地址（本地构建缺 build.local.props）");
+            Config.Set("Network", "api_migrated", tag);
+        }
+        catch (Exception e) { LogManager.Debug("API 迁移失败: " + e.Message); }
+    }
+
     public static void Initialize()
     {
         Config = new AppConfig();
 
         // 日志：默认存放 %APPDATA%\netHEmusic\logs\log.txt（5 份轮换）
         LogManager.Init(Path.Combine(Config.DataDir, "logs"));
+
+        MigrateApiServer();   // 换过 API 供应商：把老配置里存的旧地址强制换掉（只做一次）
 
         Lang = new LangService(Config, ResolveLangRoot());
         Netease = new NetEaseClient(Config.ApiBase);   // API 服务地址见 config.ini [Network] api_base

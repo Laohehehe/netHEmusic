@@ -1,4 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" InitialTargets="GenerateApiSecrets">
+
+  <!-- 真实 API 地址不入库：来自本地 build.local.props（已 gitignore）或环境变量 NETHE_API_BASE -->
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build.local.props')" />
+  <PropertyGroup>
+    <NetHEApiBase Condition="'$(NetHEApiBase)' == ''">$(NETHE_API_BASE)</NetHEApiBase>
+  </PropertyGroup>
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -22,11 +28,11 @@
     <PublishSingleFile>false</PublishSingleFile>
     <ApplicationIcon>..\..\resources\icon.ico</ApplicationIcon>
 
-    <Version>26.9.13.35</Version>
-    <AssemblyVersion>26.9.13.35</AssemblyVersion>
-    <FileVersion>26.9.13.35</FileVersion>
+    <Version>26.9.24.1</Version>
+    <AssemblyVersion>26.9.24.1</AssemblyVersion>
+    <FileVersion>26.9.24.1</FileVersion>
     <Product>netHEmusic 网易云音乐下载器</Product>
-    <Description>netHEmusic - 网易云音乐第三方 WinUI3 + Fluent 下载/播放器（26.9.13.35）</Description>
+    <Description>netHEmusic - 网易云音乐第三方 WinUI3 + Fluent 下载/播放器（26.9.24.1）</Description>
     <Company>netHEmusic</Company>
     <Copyright>Copyright (C) 2026 netHEmusic</Copyright>
     <Authors>laohehehe</Authors>
@@ -46,5 +52,24 @@
     <None Include="..\..\resources\LaoheTeam.cer" Link="Assets\LaoheTeam.cer" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\lang\**\*" Link="lang\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- 编译期生成 API 地址常量：仓库源码里不出现任何地址。
+       用 InitialTargets 保证在任何编译步骤之前跑（挂在 BeforeCompile 上会被 WinUI 的 XAML 编译抢先）。 -->
+  <Target Name="GenerateApiSecrets">
+    <PropertyGroup>
+      <_ApiSecretsDir>$(IntermediateOutputPath)</_ApiSecretsDir>
+      <_ApiSecretsFile>$(_ApiSecretsDir)ApiSecrets.g.cs</_ApiSecretsFile>
+    </PropertyGroup>
+    <MakeDir Directories="$(_ApiSecretsDir)" Condition="!Exists('$(_ApiSecretsDir)')" />
+    <WriteLinesToFile File="$(_ApiSecretsFile)" Overwrite="true"
+      Lines="// &lt;auto-generated&gt; 由 csproj 的 GenerateApiSecrets 目标生成，不要手改%3B 真实值见本地 build.local.props&#xA;namespace netHEmusic.Core { internal static class ApiSecrets { public const string Base = &quot;$(NetHEApiBase)&quot;%3B } }" />
+    <ItemGroup>
+      <Compile Include="$(_ApiSecretsFile)" Condition="'$(NetHEApiSecretsAdded)' != 'true'" />
+      <FileWrites Include="$(_ApiSecretsFile)" />
+    </ItemGroup>
+    <PropertyGroup>
+      <NetHEApiSecretsAdded>true</NetHEApiSecretsAdded>
+    </PropertyGroup>
+  </Target>
 
 </Project>

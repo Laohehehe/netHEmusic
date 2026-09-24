@@ -131,6 +131,19 @@ powershell -ExecutionPolicy Bypass -File tools/sign.ps1        # 生成自签名
 powershell -ExecutionPolicy Bypass -File tools/test.ps1        # 自测试
 ```
 
+> **音乐接口地址不在仓库里。** 源码中的 API 地址为空，真实地址在编译期由 `build.local.props`
+> （已在 `.gitignore` 中排除）或环境变量 `NETHE_API_BASE` 注入成 `netHEmusic.Core.ApiSecrets.Base`。
+> 自行构建时，在仓库根目录建一个：
+>
+> ```xml
+> <!-- build.local.props -->
+> <Project>
+>   <PropertyGroup>
+>     <NetHEApiBase>http://你的地址:端口</NetHEApiBase>
+>   </PropertyGroup>
+> </Project>
+> ```
+
 打包安装程序：
 ```powershell
 # 1) 准备待打包目录（Release 产物）

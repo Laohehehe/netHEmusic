@@ -10,10 +10,11 @@ using netHEmusic.Core.Model;
 
 namespace netHEmusic.Core.Api;
 
-/// <summary>网易云 API 客户端（封装 http://8.166.131.193:3000，与旧 backend/api/client.py 等价）。</summary>
+/// <summary>网易云 API 客户端（与旧 backend/api/client.py 等价）。
+/// 默认地址在编译期注入（netHEmusic.Core.ApiSecrets），源码与仓库里不含任何地址。</summary>
 public sealed class NetEaseClient
 {
-    public const string DefaultBase = "http://8.166.131.193:3000";
+    public const string DefaultBase = ApiSecrets.Base;
     private readonly HttpClient _http;
     private string _base;
 

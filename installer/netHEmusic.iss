@@ -1,6 +1,6 @@
 ; netHEmusic —— Inno Setup 安装脚本（中文向导 / 默认装到非系统盘 / 自签名证书 / 防火墙规则）
 #define AppName "netHEmusic"
-#define AppVer "26.9.13.35"
+#define AppVer "26.9.24.1"
 #define AppPub "Laohehehe"
 #define AppExe "NetHEmusicCP.exe"
 
