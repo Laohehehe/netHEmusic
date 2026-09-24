@@ -53,8 +53,21 @@ public sealed class PluginService
         }
     }
 
-    /// <summary>插件市场清单地址（可改）。</summary>
-    public string MarketUrl => (_config.Get("Plugins", "market_url", "") ?? "").Trim();
+    /// <summary>
+    /// 官方插件市场清单：由仓库的 Actions 每天把 GitHub 上所有打了 nethe-plugin 话题的仓库聚合而成
+    /// （见 .github/market/build.mjs）。客户端只拉这一个静态 JSON，不直接打 GitHub 搜索接口。
+    /// </summary>
+    public const string DefaultMarketUrl = "https://raw.githubusercontent.com/Laohehehe/netHEmusic/main/plugins/market.json";
+
+    /// <summary>插件市场清单地址。config.ini 里配了 [Plugins] market_url 就用配的，否则用官方市场。</summary>
+    public string MarketUrl
+    {
+        get
+        {
+            var u = (_config.Get("Plugins", "market_url", "") ?? "").Trim();
+            return u.Length > 0 ? u : DefaultMarketUrl;
+        }
+    }
 
     // ---------------- 扫描 ----------------
 

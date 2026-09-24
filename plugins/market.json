@@ -1,16 +1,7 @@
 {
   "manifest_version": 1,
+  "generator": "topic:nethe-plugin",
   "updated": "2026-09-24",
-  "plugins": [
-    {
-      "id": "example-hello",
-      "name": "Hello 插件（示例）",
-      "version": "1.0.0",
-      "author": "netHEmusic",
-      "description": "最小示例：注入 CSS、监听切歌、把切歌次数记在插件自己的数据目录里。",
-      "homepage": "https://github.com/Laohehehe/netHEmusic",
-      "permissions": ["ui", "events", "filesystem", "settings"],
-      "download": "https://github.com/Laohehehe/netHEmusic/releases/latest/download/example-hello.zip"
-    }
-  ]
+  "count": 0,
+  "plugins": []
 }

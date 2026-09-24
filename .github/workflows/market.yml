@@ -1,0 +1,47 @@
+name: market
+
+# 插件市场清单的自动聚合。
+#
+# 上架方式是「话题聚合」：任何人把自己的插件做成公开仓库、根目录放 manifest.json、
+# 再给仓库加 nethe-plugin 话题，第二天就会被收进清单 —— 不需要给本仓库提 PR。
+#
+# 为什么放 CI 里跑：GitHub 搜索接口未登录只有 10 次/分钟，客户端现查必然被限流；
+# 这里每天聚合一次写成 plugins/market.json，客户端只拉一个静态 JSON。
+
+on:
+  schedule:
+    # 每天 UTC 03:00（北京时间 11:00）
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 聚合插件市场
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/market/build.mjs
+
+      - name: 有变化就提交
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/market.json
+          if git diff --staged --quiet; then
+            echo "清单没有变化，不提交"
+          else
+            git commit -m "chore(market): 自动更新插件市场清单"
+            git push
+          fi

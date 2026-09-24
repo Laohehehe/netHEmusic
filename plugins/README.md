@@ -214,7 +214,43 @@ nethe.data.read('count.txt').then(function (t) {
 
 ## 8. 发布到插件市场
 
-市场清单是一个 JSON（默认地址见 `config.ini` 的 `[Plugins] market_url`，仓库内文件为 `plugins/market.json`）：
+市场是**话题聚合**的 —— 不用给谁提 PR，也不用注册什么账号：
+
+1. 把插件做成一个**公开仓库**
+2. 仓库**根目录**放 `manifest.json`（就是插件自己用的那个文件，格式见第 3 节）
+3. 给仓库加 **`nethe-plugin`** 话题（仓库页右上角 ⚙ About → Topics）
+
+之后就完事了。仓库里的 GitHub Actions 每天（UTC 03:00）会把所有带这个话题的仓库
+聚合成一份清单写进 `plugins/market.json`，软件里「插件 → 插件市场」直接能看到并一键安装。
+想立刻看到效果可以在 Actions 页手动跑一次 **market** 这个 workflow。
+
+**打包方式**（二选一）：
+
+- **什么都不做**：直接用仓库的源码 zip（GitHub 自动生成），客户端能认
+- **在 Release 里传一个 `.zip` 资源**：有的话优先用它，你可以只把要发布的东西打进去
+
+不管哪种，zip 里必须满足下面之一，否则客户端解压后找不到 manifest：
+
+- 根目录直接有 `manifest.json`
+- 或者只有**一层**子目录，`manifest.json` 在那层目录里
+
+**清单里用到的字段**（从你的 `manifest.json` 里读）：
+
+| 字段 | 说明 |
+|---|---|
+| `name` / `version` / `author` / `description` / `homepage` / `permissions` | 展示用 |
+| `id`（可选） | 安装后的文件夹名；不写就用仓库名 |
+
+### 想自己控制市场清单
+
+不想走话题聚合的话，也可以自己写一份清单 JSON 自己托管，然后在 `config.ini` 里指过去：
+
+```ini
+[Plugins]
+market_url = https://你的地址/market.json
+```
+
+清单格式：
 
 ```json
 {

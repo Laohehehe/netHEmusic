@@ -372,7 +372,10 @@
         var list = (HOST.marketJson.plugins || []);
         var installedIds = HOST.list.map(function (x) { return x.id; });
         var gg = el('div','plg-list');
-        if (!list.length) gg.appendChild(el('p','muted','市场里暂时没有插件。'));
+        if (!list.length) {
+          gg.appendChild(el('p','muted','市场里暂时还没有插件。'));
+          gg.appendChild(el('p','muted','这个市场是 GitHub 话题聚合出来的：把自己的插件做成一个公开仓库、根目录放 manifest.json、再给仓库加上 nethe-plugin 话题，第二天就会自动出现在这里（也可以去 Actions 页手动跑一次 market）。'));
+        }
         list.forEach(function (p) { gg.appendChild(marketCard(p, installedIds)); });
         body.appendChild(gg);
       }
