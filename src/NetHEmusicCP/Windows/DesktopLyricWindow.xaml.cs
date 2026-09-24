@@ -66,6 +66,20 @@ public sealed partial class DesktopLyricWindow : Window
 
         RestorePosition();
         ApplySettings();
+
+        // 拖到缩放不同的另一块屏幕上时，重新贴合一次（否则窗口尺寸又会和文字对不上）
+        try
+        {
+            Root.Loaded += (s, e) =>
+            {
+                try
+                {
+                    Root.XamlRoot?.Changed += (_, _) => { try { FitToContent(true); } catch { } };
+                }
+                catch { }
+            };
+        }
+        catch { }
     }
 
     /// <summary>
@@ -209,19 +223,37 @@ public sealed partial class DesktopLyricWindow : Window
 
     // ---------------- 自适应大小（窗口贴着文字，桌面看着就「只有歌词」）----------------
 
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    /// <summary>本窗口的 DIP→物理像素比例（125% 缩放 = 1.25）。</summary>
+    private double RasterScale()
+    {
+        try
+        {
+            var dpi = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+            if (dpi > 0) return dpi / 96.0;
+        }
+        catch { }
+        try { var s = Root.XamlRoot?.RasterizationScale ?? 0; if (s > 0) return s; } catch { }
+        return 1.0;
+    }
+
     private void FitToContent(bool force)
     {
         try
         {
             var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
-            var work = area.WorkArea;
-            double maxW = Math.Max(360, work.Width * 0.72);
-            Lyric.MaxWidth = maxW;
-            Lyric.Measure(new Size(maxW, double.PositiveInfinity));
-            var d = Lyric.DesiredSize;
-            int w = (int)Math.Ceiling(Math.Min(d.Width, maxW)) + 6;
-            int h = (int)Math.Ceiling(d.Height) + 4;
-            w = Math.Clamp(w, 160, (int)maxW);
+            var work = area.WorkArea;                                 // 物理像素
+            var k = RasterScale();                                    // XAML 量出来的是 DIP，AppWindow 收的是物理像素
+
+            double maxDip = Math.Max(360, work.Width / k * 0.72);     // 可用宽度换算成 DIP
+            Lyric.MaxWidth = maxDip;
+            Lyric.Measure(new Size(maxDip, double.PositiveInfinity));
+            var d = Lyric.DesiredSize;                                // DIP
+            int w = (int)Math.Ceiling(Math.Min(d.Width, maxDip) * k) + 6;
+            int h = (int)Math.Ceiling(d.Height * k) + 4;
+            w = Math.Clamp(w, 160, (int)(work.Width * 0.72));
             h = Math.Clamp(h, 40, (int)(work.Height * 0.4));
 
             var cur = AppWindow.Size;

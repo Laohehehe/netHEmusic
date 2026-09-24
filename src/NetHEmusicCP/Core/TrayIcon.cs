@@ -31,8 +31,13 @@ public sealed class TrayIcon : IDisposable
     [DllImport("user32.dll")] private static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr p, IntPtr m, IntPtr i, IntPtr pv);
     [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr h);
     [DllImport("user32.dll")] private static extern IntPtr DefWindowProcW(IntPtr h, uint m, IntPtr w, IntPtr l);
-    [DllImport("user32.dll")] private static extern IntPtr GetModuleHandle(string? n);
+    // 注意：GetModuleHandle 在 kernel32.dll，不在 user32.dll。
+    // 之前写成 user32 会抛 EntryPointNotFoundException，托盘图标一直没建起来，
+    // 而且异常从 Closing 处理里抛出去会把"关闭到托盘"整个带崩。
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr GetModuleHandle(string? n);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr LoadIconW(IntPtr h, IntPtr id);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern uint ExtractIconExW(string file, int index, out IntPtr large, out IntPtr small, uint count);
     [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr h);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr CreatePopupMenu();
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool AppendMenuW(IntPtr h, uint f, UIntPtr id, string s);
@@ -51,10 +56,31 @@ public sealed class TrayIcon : IDisposable
         _mainHwnd = mainHwnd; _onOpen = onOpen; _onExit = onExit; _wp = WndProc;
         _hwnd = CreateWindowEx(0, "STATIC", "netHEmusicTray", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
         SetWindowLongPtr(_hwnd, -4, Marshal.GetFunctionPointerForDelegate(_wp));
-        _hIcon = LoadIconW(GetModuleHandle(null), new IntPtr(32512));
+        _hIcon = LoadAppIcon();
         var nid = new NOTIFYICONDATA { cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(), hWnd = _hwnd, uID = 1, uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP, uCallbackMessage = WM_TRAYICON, hIcon = _hIcon, szTip = _tip };
         Shell_NotifyIcon(NIM_ADD, ref nid);
         LogManager.Log("托盘图标已创建");
+    }
+
+    /// <summary>
+    /// 取托盘图标：优先从自身 exe 里抽第一个图标组（ExtractIconEx），
+    /// 失败再退回系统默认应用图标。之前用 LoadIcon(自身模块, 32512) 在 .NET exe 上取不到，
+    /// 返回 NULL → Shell_NotifyIcon 照样"添加成功"，但托盘上是看不见的空白。
+    /// </summary>
+    private static IntPtr LoadAppIcon()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe) && ExtractIconExW(exe, 0, out var big, out var small, 1) > 0)
+            {
+                if (small != IntPtr.Zero) { if (big != IntPtr.Zero) DestroyIcon(big); return small; }
+                if (big != IntPtr.Zero) return big;
+            }
+        }
+        catch { }
+        try { return LoadIconW(IntPtr.Zero, new IntPtr(32512)); } catch { }
+        return IntPtr.Zero;
     }
 
     private IntPtr WndProc(IntPtr h, uint m, IntPtr w, IntPtr l)

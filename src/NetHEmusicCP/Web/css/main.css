@@ -115,7 +115,7 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 /* 歌曲行内的单图标 SVG 按钮（外观在 effects.css 里统一覆盖） */
 .row-btn{width:30px;height:30px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:50%;background:transparent;color:rgba(var(--md-accent-color-grey-base-rgb),.7);cursor:pointer;transition:background .15s,color .15s;}
 .row-btn:hover{background:var(--nm-fill);color:var(--md-accent-color);}
-.row-btn svg{width:16px;height:16px;fill:currentColor;}
+.row-btn svg{width:20px;height:20px;fill:none;}
 .row-btn.primary{color:var(--md-accent-color);}
 .action-btn{border:none;cursor:pointer;border-radius:9px;padding:5px 12px;background:var(--md-accent-color);color:rgba(0,0,0,.85);font-weight:600;font-size:12px;white-space:nowrap;}
 .action-btn.ghost{background:transparent;color:var(--md-accent-color);border:1px solid rgba(var(--md-accent-color-rgb),.5);}

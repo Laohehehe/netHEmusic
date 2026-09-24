@@ -2506,9 +2506,6 @@ function applyPerfAnim(s) {
   // 启动：拉一次发现页并渲染首页
   window.addEventListener('load', function () {
     try { NE.post({ type: 'discover' }); go('home'); } catch (e) { }
-    // TEMP-NPCHK
-    setTimeout(function () { try { var n = document.getElementById('np'); NE.post({ type: 'log', msg: '[npchk] 打开前 cls=' + n.className + ' h=' + n.offsetHeight }); openNowPlaying(); setTimeout(function () { NE.post({ type: 'log', msg: '[npchk] 打开后 cls=' + n.className + ' h=' + n.offsetHeight + ' npOpen=' + npOpen }); }, 900); } catch (e12) { } }, 5000);
-    setTimeout(function () { try { var n = document.getElementById('np'); closeNowPlaying(); setTimeout(function () { NE.post({ type: 'log', msg: '[npchk] 关闭后 cls=' + n.className + ' h=' + n.offsetHeight }); }, 700); } catch (e13) { } }, 8000);
   });
 
 })();

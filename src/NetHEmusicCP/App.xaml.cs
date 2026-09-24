@@ -50,11 +50,14 @@ public partial class App : Application
         {
             w.AppWindow.Closing += (s, e) =>
             {
-                if (AppServices.Config.Get("App", "close_to_tray", "false").Equals("true", StringComparison.OrdinalIgnoreCase))
+                var toTray = AppServices.Config.Get("App", "close_to_tray", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
+                LogManager.Log("关闭请求: close_to_tray=" + toTray);
+                if (toTray)
                 {
                     e.Cancel = true;
+                    try { EnsureTray(); } catch (Exception te) { LogManager.Error("创建托盘图标失败: " + te.Message); }
                     try { ShowWindow(_mainHwnd, 0); } catch { }
-                    EnsureTray();
+                    LogManager.Log("已最小化到托盘（窗口句柄 " + _mainHwnd + "）");
                 }
             };
         }
