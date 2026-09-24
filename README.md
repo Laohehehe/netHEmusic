@@ -116,23 +116,29 @@ src/Setup              早期自解压安装器（已被 Inno 取代，保留）
 installer/             Inno Setup 脚本（.iss）与 WiX 脚本（.wxs）
 resources/             图标与 Logo
 lang/                  语言包（zh_cn / en_US）
-tools/                 自运行 / 自测试 / 自构建 / 自签名 / 自更新 / 自修复脚本
 config/                默认配置模板与版本号
 ```
+
+> 构建 / 签名 / 打包用的 PowerShell 脚本与忽略规则**保留在本地、不入库**，仓库里只有应用源码与安装脚本。
 
 ---
 
 ## 🔧 构建
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/bootstrap.ps1   # 首次：准备 .NET SDK
-powershell -ExecutionPolicy Bypass -File tools/build.ps1       # 编译自包含应用（Release）
-powershell -ExecutionPolicy Bypass -File tools/sign.ps1        # 生成自签名证书并签名 exe
-powershell -ExecutionPolicy Bypass -File tools/test.ps1        # 自测试
+# 1) 编译自包含应用（Release / x64）
+dotnet build src\NetHEmusicCP\NetHEmusicCP.csproj -c Release -p:Platform=x64
+
+# 2) 生成自签名证书并给 exe 签名
+#    签名口令取自环境变量 NETHE_PFX_PASS，或本地 build.local.props 的 <NetHEPfxPass>
+
+# 3) 用 Inno Setup 编译 installer\netHEmusic.iss → dist\netHEmusic_Setup_<版本>.exe
+
+# 4) 用 signtool 给安装包签名
 ```
 
-> **音乐接口地址不在仓库里。** 源码中的 API 地址为空，真实地址在编译期由 `build.local.props`
-> （已在 `.gitignore` 中排除）或环境变量 `NETHE_API_BASE` 注入成 `netHEmusic.Core.ApiSecrets.Base`。
+> **音乐接口地址不在仓库里。** 源码中的 API 地址为空，真实地址在编译期由本地 `build.local.props`
+> 或环境变量 `NETHE_API_BASE` 注入成 `netHEmusic.Core.ApiSecrets.Base`。
 > 自行构建时，在仓库根目录建一个：
 >
 > ```xml
@@ -144,12 +150,7 @@ powershell -ExecutionPolicy Bypass -File tools/test.ps1        # 自测试
 > </Project>
 > ```
 
-打包安装程序：
-```powershell
-# 1) 准备待打包目录（Release 产物）
-# 2) 用 Inno Setup 编译 installer/netHEmusic.iss  → dist\netHEmusic_Setup_<版本>.exe
-# 3) 用 signtool 给安装包签名
-```
+待打包目录 = Release 产物，之后交给 Inno Setup 打成一个自签名安装包。
 
 ---
 
