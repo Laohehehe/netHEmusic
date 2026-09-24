@@ -35,7 +35,12 @@ VersionInfoDescription={#AppName} 安装程序
 VersionInfoProductName={#AppName}
 
 [Languages]
-Name: "chinese"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; 中文语言包 Inno 官方安装包并不带（属于社区翻译），原来写 compiler:Languages\... 只在「本机装过这个语言包」时能用，
+; 换台机器（比如 GitHub Actions）编译会直接报 Couldn't open include file。
+; 所以随仓库带一份：installer\Languages\ChineseSimplified.isl
+; 来源：Inno Setup 非官方翻译，维护者 Zhenghan Yang (Kira)
+;       https://github.com/kira-96/Inno-Setup-Chinese-Simplified-Translation
+Name: "chinese"; MessagesFile: "Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："; Flags: checkedonce
