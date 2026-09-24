@@ -37,7 +37,6 @@ public sealed partial class DesktopLyricWindow : Window
 
     private bool _topmost = true;
     private bool _dragging;
-    private bool _hover;
     private PointInt32 _dragGap;
     private readonly StrokeText _main;
     private readonly StrokeText _sub;
@@ -60,8 +59,6 @@ public sealed partial class DesktopLyricWindow : Window
                               Color.FromArgb(255, 255, 255, 255), Color.FromArgb(255, 0, 0, 0), 1.5);
         _baseFont = _main.FontFamily;
 
-        Root.PointerEntered += (s, e) => { _hover = true; if (!_topmost) EditFrame.Visibility = Visibility.Visible; };
-        Root.PointerExited += (s, e) => { _hover = false; if (!_topmost && !_dragging) EditFrame.Visibility = Visibility.Collapsed; };
         Root.PointerPressed += OnDragStart;
         Root.PointerMoved += OnDragMove;
         Root.PointerReleased += OnDragEnd;
@@ -78,7 +75,18 @@ public sealed partial class DesktopLyricWindow : Window
             {
                 try
                 {
-                    Root.XamlRoot?.Changed += (_, _) => { try { FitToContent(true); } catch { } };
+                    Root.XamlRoot?.Changed += (_, _) => { try { if (Math.Abs(RasterScale() - _fittedScale) > 0.001) FitToContent(); } catch { } };
+                    // 被拖到另一块缩放不同的屏幕上时，也要重新贴合一次
+                    try
+                    {
+                        AppWindow.Changed += (_, args) =>
+                        {
+                            try { if (args.DidPositionChange && Math.Abs(RasterScale() - _fittedScale) > 0.001) FitToContent(); } catch { }
+                        };
+                    }
+                    catch { }
+                    // 窗口真正上屏后再贴合一次：恢复位置可能把窗口挪到了另一块缩放不同的屏幕上
+                    try { FitToContent(); } catch { }
                 }
                 catch { }
             };
@@ -137,7 +145,7 @@ public sealed partial class DesktopLyricWindow : Window
             _sub.Opacity = opacity;
             SubHost.Visibility = showSub ? Visibility.Visible : Visibility.Collapsed;
 
-            FitToContent(true);
+            FitToContent();
             LogManager.Debug("桌面歌词外观: font=" + (font.Length > 0 ? font : "(默认)") + " main=" + mainSize + " sub=" + subSize +
                              " color=" + fill + " stroke=" + stroke + " opacity=" + opacity + " bold=" + bold + " sub=" + showSub);
         }
@@ -176,7 +184,7 @@ public sealed partial class DesktopLyricWindow : Window
         _shownIdx = int.MinValue;
         LogManager.Debug("桌面歌词: 原文 " + _lines.Count + " 行 / 译文 " + _trans.Count + " 行");
         UpdateLine(_lastPos);
-        FitToContent(true);
+        FitToContent();
     }
 
     /// <summary>播放进度（前端模式和原生模式都会喂）。</summary>
@@ -195,7 +203,7 @@ public sealed partial class DesktopLyricWindow : Window
             if (_shownMain.Length == 0 && _shownSub.Length == 0) return;
             _shownIdx = -1; _shownMain = ""; _shownSub = "";
             _main.Text = ""; _sub.Text = "";
-            FitToContent(false);
+            FitToContent();
             return;
         }
 
@@ -214,7 +222,7 @@ public sealed partial class DesktopLyricWindow : Window
         _shownIdx = idx; _shownMain = mainText; _shownSub = subText;
         _main.Text = mainText;
         _sub.Text = subText;
-        FitToContent(false);
+        FitToContent();
     }
 
     private static string NearestText(List<(TimeSpan t, string text)> list, TimeSpan pos)
@@ -230,6 +238,9 @@ public sealed partial class DesktopLyricWindow : Window
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
 
+    /// <summary>上一次自适应时用的缩放比，用来发现「窗口被拖到另一块缩放不同的屏幕上」。</summary>
+    private double _fittedScale = -1;
+
     /// <summary>本窗口的 DIP→物理像素比例（125% 缩放 = 1.25）。</summary>
     private double RasterScale()
     {
@@ -243,25 +254,56 @@ public sealed partial class DesktopLyricWindow : Window
         return 1.0;
     }
 
-    private void FitToContent(bool force)
+    /// <summary>
+    /// 把窗口贴着文字调整大小。
+    /// 「换不换行」必须先量一次自然宽度再定死：量尺寸用的宽度和实际排版用的宽度只要差几个像素，
+    /// 文字就会多折一行，而窗口高度是按一行算的 → 折出来的那行直接被窗口裁掉（看着就是「有的歌词显示不全」）。
+    /// </summary>
+    private void FitToContent()
     {
         try
         {
             var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
             var work = area.WorkArea;                                 // 物理像素
             var k = RasterScale();                                    // XAML 量出来的是 DIP，AppWindow 收的是物理像素
+            int pad = (int)Math.Ceiling(k) * 2 + 8;                   // 描边 + DIP→px 取整的富余量
+            _fittedScale = k;
 
-            double maxDip = Math.Max(360, work.Width / k * 0.72);     // 可用宽度换算成 DIP
-            Lyric.MaxWidth = maxDip;
-            Lyric.Measure(new Size(maxDip, double.PositiveInfinity));
+            // 1) 先按「不换行」量一次，拿到这一句真正需要多宽（DIP）
+            Lyric.MaxWidth = double.PositiveInfinity;
+            _main.SetWrap(TextWrapping.NoWrap);
+            _sub.SetWrap(TextWrapping.NoWrap);
+            Lyric.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double natural = Lyric.DesiredSize.Width;
+
+            // 2) 真的超屏才换行。「换不换行」在这里一次定死，之后不再让布局系统自己决定 ——
+            //    量的时候不换行，实际排版时窗口又刚好窄几个像素 → 多折一行 → 高度不够 → 那行被裁掉，
+            //    这就是「有的歌词显示得下、有的显示不全」的根因。
+            double wrapDip = Math.Max(300, work.Width / k * 0.72);
+            bool wrap = natural > wrapDip + 0.5;
+            if (wrap)
+            {
+                _main.SetWrap(TextWrapping.Wrap);
+                _sub.SetWrap(TextWrapping.Wrap);
+            }
+            double widthDip = wrap ? wrapDip : natural;
+            Lyric.MaxWidth = widthDip;
+            Lyric.Measure(new Size(widthDip, double.PositiveInfinity));
             var d = Lyric.DesiredSize;                                // DIP
-            int w = (int)Math.Ceiling(Math.Min(d.Width, maxDip) * k) + 6;
-            int h = (int)Math.Ceiling(d.Height * k) + 4;
-            w = Math.Clamp(w, 160, (int)(work.Width * 0.72));
-            h = Math.Clamp(h, 40, (int)(work.Height * 0.4));
+
+            int w = (int)Math.Ceiling(d.Width * k) + pad;
+            int h = (int)Math.Ceiling(d.Height * k) + pad;
+            w = Math.Clamp(w, 160, work.Width);
+            h = Math.Clamp(h, 40, (int)(work.Height * 0.6));
 
             var cur = AppWindow.Size;
-            if (!force && Math.Abs(cur.Width - w) < 12 && Math.Abs(cur.Height - h) < 6) return;
+            // 注意：这里**不能**做「尺寸差不多就不动窗口」的滞后处理。
+            // 窗口只要比文字窄几个像素，文字就会多折一行，而高度是按一行算的 —— 那一行会被直接裁掉。
+            if (cur.Width != w || cur.Height != h)
+                LogManager.Debug("[歌词布局] 缩放=" + k.ToString("F2") + " 工作区=" + work.Width + "x" + work.Height + "@" + work.X + "," + work.Y +
+                                 " 自然宽=" + natural.ToString("F0") + " 换行=" + (wrap ? "是" : "否") +
+                                 " 文字DIP=" + d.Width.ToString("F0") + "x" + d.Height.ToString("F0") +
+                                 " → 窗口px=" + w + "x" + h + " (原 " + cur.Width + "x" + cur.Height + ")");
 
             var pos = AppWindow.Position;
             int nx = pos.X + (cur.Width - w) / 2;
@@ -269,6 +311,25 @@ public sealed partial class DesktopLyricWindow : Window
             nx = Math.Clamp(nx, work.X, Math.Max(work.X, work.X + work.Width - w));
             ny = Math.Clamp(ny, work.Y, Math.Max(work.Y, work.Y + work.Height - h));
             AppWindow.MoveAndResize(new RectInt32(nx, ny, w, h));
+            // 自检：布局真正跑完之后核对一次「文字有没有被窗口裁掉」。
+            // 正常情况下一行都不该出现；一旦出现就说明「量出来的尺寸」和「实际排版」又对不上了。
+            try
+            {
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    try
+                    {
+                        var cs = AppWindow.ClientSize;
+                        var kp = RasterScale();
+                        double needW = Lyric.ActualWidth * kp, needH = Lyric.ActualHeight * kp;
+                        if (needW > cs.Width + 1 || needH > cs.Height + 1)
+                            LogManager.Debug("[歌词溢出] 文字需要 " + needW.ToString("F0") + "x" + needH.ToString("F0") +
+                                             "px，窗口客户区只有 " + cs.Width + "x" + cs.Height + "px（缩放 " + kp.ToString("F2") + "）");
+                    }
+                    catch { }
+                });
+            }
+            catch { }
         }
         catch (Exception e) { LogManager.Debug("桌面歌词自适应失败: " + e.Message); }
     }
@@ -283,13 +344,17 @@ public sealed partial class DesktopLyricWindow : Window
             var rawY = AppServices.Config.Get("App", "desktop_lyric_y", "");
             if (int.TryParse(rawX, out var x) && int.TryParse(rawY, out var y))
             {
-                var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
-                var work = area.WorkArea;
-                // 屏幕数量/分辨率变了就当作失效，回到默认位置
-                if (x > work.X - 200 && x < work.X + work.Width && y > work.Y - 100 && y < work.Y + work.Height)
+                // 关键：不能只拿「窗口当前所在的那块屏」来判断。窗口刚建出来时永远在主屏上，
+                // 副屏上保存的坐标会被当成非法，于是每次启动都跳回主屏。
+                var target = DisplayArea.GetFromPoint(new PointInt32(x, y), DisplayAreaFallback.None);
+                if (target != null)
                 {
-                    AppWindow.Move(new PointInt32(x, y));
-                    return;
+                    var wa = target.WorkArea;
+                    if (x > wa.X - 200 && x < wa.X + wa.Width && y > wa.Y - 100 && y < wa.Y + wa.Height)
+                    {
+                        AppWindow.Move(new PointInt32(x, y));
+                        return;
+                    }
                 }
             }
         }
@@ -331,7 +396,6 @@ public sealed partial class DesktopLyricWindow : Window
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             if (_topmost)
             {
-                _hover = false;
                 EditFrame.Visibility = Visibility.Collapsed;
                 ClickThroughHelper.MakeTopmostClickThrough(hwnd, true);
             }
@@ -373,7 +437,7 @@ public sealed partial class DesktopLyricWindow : Window
         if (!_dragging) return;
         _dragging = false;
         SavePosition();
-        if (!_topmost && !_hover) EditFrame.Visibility = Visibility.Collapsed;
+        if (!_topmost) EditFrame.Visibility = Visibility.Visible;   // 解锁状态提示框常显
     }
 
     // ---------------- 歌词解析 ----------------
@@ -444,6 +508,15 @@ public sealed partial class DesktopLyricWindow : Window
         {
             get => _front.Text;
             set { var v = value ?? ""; foreach (var t in _strokes) t.Text = v; _front.Text = v; }
+        }
+
+        public double LineHeightNow => _front.LineHeight;
+
+        /// <summary>整组文字一起切换换行策略（换不换行必须由外面一次定死，见 FitToContent）。</summary>
+        public void SetWrap(TextWrapping wrap)
+        {
+            foreach (var t in _strokes) t.TextWrapping = wrap;
+            _front.TextWrapping = wrap;
         }
 
         public FontFamily FontFamily

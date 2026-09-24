@@ -5,9 +5,10 @@
     <!-- 桌面歌词：整窗透明，桌面上只看得见歌词文字本身 -->
     <Grid x:Name="Root" Background="Transparent">
         <!-- 「取消锁定」（可拖动）时显示的提示框：常显，方便知道现在能拖。
-             注意：整窗透明、这里也没有底板，桌面上始终只有歌词文字。 -->
+             这里**故意不设底色**（Background 为空）——只要没有半透明填充，
+             就算窗口的 per-pixel alpha 因为任何原因失效，也不可能渲染成黑底板。 -->
         <Border x:Name="EditFrame" CornerRadius="10" BorderThickness="1"
-                BorderBrush="#38FFFFFF" Background="#12000000" Visibility="Collapsed"/>
+                BorderBrush="#66A0A6B8" Background="{x:Null}" Visibility="Collapsed"/>
         <StackPanel x:Name="Lyric" Orientation="Vertical" Spacing="2"
                     HorizontalAlignment="Center" VerticalAlignment="Center" Padding="12,6">
             <Grid x:Name="MainHost" HorizontalAlignment="Center"/>
