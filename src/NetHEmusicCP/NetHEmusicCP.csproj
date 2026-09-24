@@ -49,7 +49,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="..\..\resources\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\resources\LaoheTeam.cer" Link="Assets\LaoheTeam.cer" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 证书是 gitignore 的（只有本机 / 发布时才有），所以必须加 Exists 判断：
+         否则全新的 clone（比如 GitHub Actions 上）会因为拷不到这个文件直接编译失败（MSB3030） -->
+    <None Include="..\..\resources\LaoheTeam.cer" Link="Assets\LaoheTeam.cer" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\resources\LaoheTeam.cer')" />
     <None Include="..\..\lang\**\*" Link="lang\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
