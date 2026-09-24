@@ -37,14 +37,30 @@ jobs:
           Write-Host "--- Windows Kits ---"
           Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
 
+      - name: 修正仓库里硬编码的 NuGet 缓存路径
+        shell: pwsh
+        run: |
+          # NuGet.Config 把 globalPackagesFolder 指到了本机的 E:\Devtools\nuget-packages。
+          # GitHub runner 上没有 E 盘，restore 会直接报 "Could not find a part of the path"。
+          # 只改这次 CI 的工作副本，仓库里的文件不动。
+          $p = "NuGet.Config"
+          if (Test-Path $p) {
+            $t = [System.IO.File]::ReadAllText($p)
+            $t = $t.Replace('E:\Devtools\nuget-packages', ($env:RUNNER_TEMP + '\nuget-packages'))
+            [System.IO.File]::WriteAllText($p, $t, (New-Object System.Text.UTF8Encoding($false)))
+            Get-Content $p
+          }
+
       - name: 还原
         env:
           NETHE_API_BASE: ${{ secrets.NETHE_API_BASE }}
+          NUGET_PACKAGES: ${{ runner.temp }}\nuget-packages
         run: dotnet restore src/NetHEmusicCP/NetHEmusicCP.csproj -p:Platform=x64
 
       - name: 构建 Release x64
         env:
           NETHE_API_BASE: ${{ secrets.NETHE_API_BASE }}
+          NUGET_PACKAGES: ${{ runner.temp }}\nuget-packages
         run: dotnet build src/NetHEmusicCP/NetHEmusicCP.csproj -c Release -p:Platform=x64 --no-restore
 
       - name: 整理安装包载荷
