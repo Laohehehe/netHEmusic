@@ -25,14 +25,18 @@ public sealed class TrayIcon : IDisposable
 {
     private const int WM_USER = 0x0400;
     private const int WM_TRAYICON = WM_USER + 1;
-    private const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2;
+    private const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
+    private const uint NOTIFYICON_VERSION_4 = 4;
     private const uint NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4;
     private const uint WM_LBUTTONUP = 0x0202;
     private const uint WM_LBUTTONDBLCLK = 0x0203;
+    private const uint WM_RBUTTONUP = 0x0205;
     private const uint WM_CONTEXTMENU = 0x007B;
     private const uint WM_COMMAND = 0x0111;
     private const uint WM_CLOSE = 0x0010;
     private const uint WM_NULL = 0x0000;
+    // version 4 的回调：左键选中 / 键盘选中（这些值出现在 lParam 里）
+    private const uint NIN_SELECT = 0x0400, NIN_KEYSELECT = 0x0401;
 
     // 菜单项 id
     private const int ID_OPEN = 1, ID_EXIT = 2;
@@ -44,20 +48,34 @@ public sealed class TrayIcon : IDisposable
     private const uint MF_STRING = 0x00000000, MF_SEPARATOR = 0x00000800, MF_CHECKED = 0x00000008, MF_POPUP = 0x00000010;
     private const uint TPM_LEFTALIGN = 0x0000, TPM_RIGHTBUTTON = 0x0002, TPM_NONOTIFY = 0x0080, TPM_RETURNCMD = 0x0100;
 
-    [StructLayout(LayoutKind.Sequential)]
+    // 必须是完整的 NOTIFYICONDATAW（x64 上 976 字节），cbSize 对不上外壳就按老版本对待。
+    // 另外 uTimeout / uVersion 在 C 里是 union，只能留一个字段，写两个会让结构凭空大 4 字节。
+    // CharSet=Unicode 不能少：少了的话下面 ByValTStr 的 SizeConst 按「字节」算，
+    // 整个结构会缩水到 528 字节（正确是 976），cbSize 对不上任何版本，外壳只能瞎猜。
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct NOTIFYICONDATA
     {
-        public uint cbSize; public IntPtr hWnd; public uint uID; public uint uFlags; public uint uCallbackMessage;
+        public uint cbSize;
+        public IntPtr hWnd;
+        public uint uID;
+        public uint uFlags;
+        public uint uCallbackMessage;
         public IntPtr hIcon;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
-        public uint dwState; public uint dwStateMask;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo; public uint uTimeout; public uint uVersion;
+        public uint dwState;
+        public uint dwStateMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo;
+        public uint uVersion;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szInfoTitle;
+        public uint dwInfoFlags;
+        public Guid guidItem;
+        public IntPtr hBalloonIcon;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int X; public int Y; }
 
-    [DllImport("shell32.dll")] private static extern bool Shell_NotifyIcon(uint m, ref NOTIFYICONDATA d);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern bool Shell_NotifyIcon(uint m, ref NOTIFYICONDATA d);
     [DllImport("user32.dll")] private static extern IntPtr CreateWindowEx(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr p, IntPtr m, IntPtr i, IntPtr pv);
     [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr h);
     [DllImport("user32.dll")] private static extern IntPtr DefWindowProcW(IntPtr h, uint m, IntPtr w, IntPtr l);
@@ -74,6 +92,7 @@ public sealed class TrayIcon : IDisposable
     [DllImport("user32.dll")] private static extern int TrackPopupMenu(IntPtr h, uint f, int x, int y, int r, IntPtr w, IntPtr rc);
     [DllImport("user32.dll")] private static extern bool DestroyMenu(IntPtr h);
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int i);
     [DllImport("user32.dll")] private static extern bool PostMessageW(IntPtr h, uint m, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] private static extern IntPtr SetWindowLongPtr(IntPtr h, int idx, IntPtr v);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr h, int c);
@@ -90,9 +109,14 @@ public sealed class TrayIcon : IDisposable
         _hwnd = CreateWindowEx(0, "STATIC", "netHEmusicTray", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
         SetWindowLongPtr(_hwnd, -4, Marshal.GetFunctionPointerForDelegate(_wp));
         _hIcon = LoadAppIcon();
-        var nid = new NOTIFYICONDATA { cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(), hWnd = _hwnd, uID = 1, uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP, uCallbackMessage = WM_TRAYICON, hIcon = _hIcon, szTip = _tip };
-        Shell_NotifyIcon(NIM_ADD, ref nid);
-        LogManager.Log("托盘图标已创建");
+        var size = (uint)Marshal.SizeOf<NOTIFYICONDATA>();
+        var nid = new NOTIFYICONDATA { cbSize = size, hWnd = _hwnd, uID = 1, uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP, uCallbackMessage = WM_TRAYICON, hIcon = _hIcon, szTip = _tip };
+        bool ok = Shell_NotifyIcon(NIM_ADD, ref nid);
+        // 关键：必须紧接着升到 version 4，否则外壳右键发过来的是 WM_RBUTTONUP（不是 WM_CONTEXTMENU），
+        // 我们只认 WM_CONTEXTMENU 的话右键就完全没反应 —— 这就是「托盘不能右键」的原因。
+        var ver = new NOTIFYICONDATA { cbSize = size, hWnd = _hwnd, uID = 1, uVersion = NOTIFYICON_VERSION_4 };
+        bool vok = Shell_NotifyIcon(NIM_SETVERSION, ref ver);
+        LogManager.Log("托盘图标已创建 add=" + ok + " setversion=" + vok + " cbSize=" + size);
     }
 
     /// <summary>
@@ -131,7 +155,7 @@ public sealed class TrayIcon : IDisposable
     /// 右键菜单。每次弹出都重新建一遍 —— 勾选状态（播放/暂停、播放模式、桌面歌词）必须是实时的。
     /// 用 TPM_RETURNCMD 直接拿到点了哪一项，省掉 WM_COMMAND 那一套。
     /// </summary>
-    private void ShowMenu()
+    private void ShowMenu(int x = int.MinValue, int y = int.MinValue)
     {
         var menu = CreatePopupMenu();
         try
@@ -158,8 +182,8 @@ public sealed class TrayIcon : IDisposable
             // 标准托盘菜单三步：先把自己设成前台窗口，弹完再补一条空消息，
             // 否则点菜单外面菜单不会消失（会一直挂在屏幕上）。
             try { SetForegroundWindow(_hwnd); } catch { }
-            GetCursorPos(out var pt);
-            int cmd = TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD | TPM_NONOTIFY, pt.X, pt.Y, 0, _hwnd, IntPtr.Zero);
+            if (x == int.MinValue || y == int.MinValue) { GetCursorPos(out var pt); x = pt.X; y = pt.Y; }
+            int cmd = TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD | TPM_NONOTIFY, x, y, 0, _hwnd, IntPtr.Zero);
             try { PostMessageW(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero); } catch { }
 
             Dispatch(cmd, lyric);
@@ -195,10 +219,23 @@ public sealed class TrayIcon : IDisposable
         {
             if (m == WM_TRAYICON)
             {
-                var evt = (uint)l.ToInt64();
-                // 左键单击 / 双击都恢复主窗口
-                if (evt == WM_LBUTTONUP || evt == WM_LBUTTONDBLCLK) { _onOpen(); return IntPtr.Zero; }
-                if (evt == WM_CONTEXTMENU) { ShowMenu(); return IntPtr.Zero; }
+                // version 4：lParam 低 16 位是鼠标消息，wParam 低/高 16 位是图标在屏幕上的坐标
+                long wp = w.ToInt64();
+                uint evt = (uint)(l.ToInt64() & 0xFFFF);
+                int ax = (short)(wp & 0xFFFF), ay = (short)((wp >> 16) & 0xFFFF);
+                LogManager.Debug("托盘回调: lParam=0x" + evt.ToString("X4") + " 坐标=" + ax + "," + ay);
+                if (evt == WM_LBUTTONUP || evt == WM_LBUTTONDBLCLK || evt == NIN_SELECT || evt == NIN_KEYSELECT)
+                {
+                    _onOpen(); return IntPtr.Zero;
+                }
+                if (evt == WM_CONTEXTMENU || evt == WM_RBUTTONUP)
+                {
+                    // 坐标只有在屏幕范围内才信（老回调里 wParam 是图标 id，不是坐标）
+                    int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77);   // SM_XVIRTUALSCREEN / SM_YVIRTUALSCREEN
+                    bool sane = ax >= vx && ax < vx + GetSystemMetrics(78) && ay >= vy && ay < vy + GetSystemMetrics(79);
+                    ShowMenu(sane ? ax : int.MinValue, sane ? ay : int.MinValue);
+                    return IntPtr.Zero;
+                }
             }
             else if (m == WM_COMMAND)
             {
