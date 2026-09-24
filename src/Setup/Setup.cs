@@ -16,7 +16,7 @@ namespace netHEmusic.Setup;
 /// </summary>
 public static class Program
 {
-    private const string AppVersion = "26.9.24.1";
+    private const string AppVersion = "26.9.24.11";
     private const string AppName = "netHEmusic";
 
     [STAThread]
