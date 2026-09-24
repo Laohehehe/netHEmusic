@@ -356,40 +356,54 @@ window.addEventListener('unhandledrejection', function (e) {
       if (b2) b2.style.width = pct;
     } catch (e) { }
   }
-  // ---- 听歌打卡：累计播放时长达到「一半或 4 分钟（取小）」时上报一次 ----
-  var scrob = { id: 0, acc: 0, last: -1, done: false, sent: false };
+  // ---- 听歌打卡：**切歌就上报一次**，报的是刚刚切走的那一首 ----
+  // 以前的规则是「累计播放到一半或 4 分钟（取小）才上报」，歌没听完就切走的话永远打不上卡。
+  // 现在改成：切歌时把上一首结掉，报它实际听了多少秒；同一首歌只报一次（重播不重复报）。
+  var scrob = { id: 0, acc: 0, last: -1, sent: false, song: null };
+
+  // 切到新歌：先把上一首结掉，再开新账
+  function scrobSwitchTo(cur) {
+    var sid = (cur && cur.Id) || 0;
+    if (sid && sid === scrob.id) return;          // 同一首歌（重播 / 刷新）不重复打卡
+    scrobFlush();
+    scrob = { id: sid, acc: 0, last: -1, sent: false, song: cur || null };
+  }
+
+  // 累计「真正播放」的秒数（拖动进度条造成的大跳跃不算）
   function scrobTick(pos, playing) {
     try {
-      var on = cfgBool(appSettings, "ui_scrobble", false);
-      var cur = queue[playingIndex];
-      var sid = (cur && cur.Id) || 0;
-      if (sid !== scrob.id) { scrob = { id: sid, acc: 0, last: -1, done: false, sent: false }; }
-      if (!on || !sid) { scrob.last = pos; return; }
+      if (!scrob.song) return;
       if (!playing) { scrob.last = pos; return; }
       if (scrob.last >= 0 && pos > scrob.last && (pos - scrob.last) < 5000) scrob.acc += (pos - scrob.last) / 1000;
       scrob.last = pos;
+    } catch (e) { }
+  }
+
+  // 把当前这一首结掉（切歌时调用）
+  function scrobFlush() {
+    try {
+      var cur = scrob.song;
+      if (!cur || scrob.sent) return;
+      if (!cfgBool(appSettings, "ui_scrobble", false)) return;
+      var sid = cur.Id || 0;
+      if (!sid || scrob.acc <= 0) return;         // 一秒都没放（纯跳过）就不报，免得刷屏
+      scrob.sent = true;
       var total = Math.round((AU.durMs || 0) / 1000);
-      var need = total > 0 ? Math.min(total * 0.5, 240) : 240;
-      need = Math.max(60, need);
-      if (scrob.done || scrob.acc < need) return;
-      scrob.done = true;
       var secs = Math.round(Math.min(scrob.acc, total > 0 ? total : scrob.acc));
       var p = { id: sid, time: secs, name: cur.Title || "", artist: cur.Artist || "" };
       if (total > 0) p.total = total;
       if (cur.AlbumId) p.sourceid = cur.AlbumId;
       var lv = (appSettings && appSettings.quality) || "";
       if (lv) p.level = lv;
-      if (NE.scrobbleV1) {
-        try { NE.post({ type: 'log', msg: '[scrob] 上报 ' + JSON.stringify(p) + ' 累计=' + Math.round(scrob.acc) + 's' }); } catch (e) { }
-        NE.scrobbleV1(p).then(function (res) {
-          scrob.sent = true;
-          try { NE.post({ type: 'log', msg: '[scrob] 成功 ' + JSON.stringify(res).slice(0, 220) }); } catch (e) { }
-          try { toast("已听歌打卡：" + (cur.Title || "")); } catch (e) { }
-        }).catch(function (err) {
-          scrob.done = false;
-          try { NE.post({ type: 'log', msg: '[scrob] 失败 ' + (err && err.message) }); } catch (e) { }
-        });
-      }
+      if (!NE.scrobbleV1) return;
+      try { NE.post({ type: 'log', msg: '[scrob] 切歌上报 ' + JSON.stringify(p) }); } catch (e) { }
+      NE.scrobbleV1(p).then(function (res) {
+        try { NE.post({ type: 'log', msg: '[scrob] 成功 ' + JSON.stringify(res).slice(0, 220) }); } catch (e) { }
+        try { toast("已听歌打卡：" + (cur.Title || "")); } catch (e) { }
+      }).catch(function (err) {
+        scrob.sent = false;                        // 失败了留着，下次切歌再补报
+        try { NE.post({ type: 'log', msg: '[scrob] 失败 ' + (err && err.message) }); } catch (e) { }
+      });
     } catch (e) { }
   }
   function auPushUI(pos) {
@@ -825,7 +839,7 @@ function applyPerfAnim(s) {
     if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); if(wrap) wrap.classList.add('has-cover'); try { if (String((appSettings && appSettings.scheme) || '') === 'dynamic-auto') pickCoverColor(ns.Pic); } catch (e7) { } }
     else { c.removeAttribute('src'); if(wrap) wrap.classList.remove('has-cover'); }
   }
-  function setPlayer(ns) { if(!ns) return; showSongMeta(ns); setPlaying(true); pop($('#pb-play')); plugEmit('track', ns); }
+  function setPlayer(ns) { if(!ns) return; scrobSwitchTo(ns); showSongMeta(ns); setPlaying(true); pop($('#pb-play')); plugEmit('track', ns); }
 
   // ===== 统一图标集：全部描边风格（stroke 2 / round 端点），同一功能只用同一个图标 =====
   function ico(inner) {
@@ -1955,7 +1969,7 @@ function applyPerfAnim(s) {
       sel('播放模式','playMode', s.playMode, zhOpts('playMode', ['order','list','single','random'])),
       sw('启停淡化（播放淡入 / 暂停淡出 0.5 秒）','ui_fade_on', cfgBool(s,'ui_fade_on',true)),
       rngXfade(),
-      sw('听歌打卡（播放达标后上报）','ui_scrobble', cfgBool(s,'ui_scrobble',false))
+      sw('听歌打卡（切歌时上报一次）','ui_scrobble', cfgBool(s,'ui_scrobble',false))
     ]));
     html.appendChild(group('桌面歌词', [
       masterSw('启用桌面歌词','desktopLyric', s.desktopLyric, [
