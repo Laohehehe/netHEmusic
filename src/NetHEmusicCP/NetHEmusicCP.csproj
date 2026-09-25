@@ -28,11 +28,11 @@
     <PublishSingleFile>false</PublishSingleFile>
     <ApplicationIcon>..\..\resources\icon.ico</ApplicationIcon>
 
-    <Version>26.9.24.31</Version>
-    <AssemblyVersion>26.9.24.31</AssemblyVersion>
-    <FileVersion>26.9.24.31</FileVersion>
+    <Version>26.9.25.5</Version>
+    <AssemblyVersion>26.9.25.5</AssemblyVersion>
+    <FileVersion>26.9.25.5</FileVersion>
     <Product>netHEmusic 网易云音乐下载器</Product>
-    <Description>netHEmusic - 网易云音乐第三方 WinUI3 + Fluent 下载/播放器（26.9.24.31）</Description>
+    <Description>netHEmusic - 网易云音乐第三方 WinUI3 + Fluent 下载/播放器（26.9.25.5）</Description>
     <Company>netHEmusic</Company>
     <Copyright>Copyright (C) 2026 netHEmusic</Copyright>
     <Authors>laohehehe</Authors>
