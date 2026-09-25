@@ -263,3 +263,13 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .row-btn.danger:hover{background:rgba(255,90,90,.14);color:#ff7a7a;}
 .row-btn.armed{background:rgba(255,90,90,.16);color:#ff7a7a;}
 .dl-row .row-btn:disabled{opacity:.3;cursor:default;}
+
+/* ---- 关于页：开源仓库圆形品牌按钮（GitHub / Gitee） ---- */
+.repo-btns{display:flex;align-items:center;gap:10px;}
+.repo-btn{width:38px;height:38px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+  border-radius:50%;background:rgba(var(--md-accent-color-grey-base-rgb),.07);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.14);
+  color:rgba(var(--md-accent-color-grey-base-rgb),.82);transition:background .15s,color .15s,border-color .15s,transform .12s;}
+.repo-btn svg{width:21px;height:21px;display:block;fill:currentColor;}
+.repo-btn:hover{background:rgba(var(--md-accent-color-rgb),.16);border-color:transparent;color:var(--md-accent-color);transform:translateY(-1px);}
+.repo-btn:active{transform:translateY(0) scale(.95);}
+.repo-btn:focus-visible{outline:2px solid var(--md-accent-color);outline-offset:2px;}

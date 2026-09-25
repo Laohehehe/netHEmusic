@@ -651,6 +651,7 @@ public sealed partial class MainWindow : Window
                 case "queue_add": { if (doc.TryGetProperty("song", out var s2)) { var song = SongFromWeb(s2); if (song != null) { var q = AppServices.Player.Queue.ToList(); if (q.All(x => x.Id != song.Id)) { q.Add(song); _ = AppServices.Player.LoadQueueAsync(q, AppServices.Player.Index < 0 ? 0 : AppServices.Player.Index); } } } break; }
                 case "playnext": { if (doc.TryGetProperty("song", out var s)) { var song = SongFromWeb(s); if (song != null) { var q = AppServices.Player.Queue.ToList(); int idx = q.FindIndex(x => x.Id == song.Id); if (idx < 0) { var nxt = AppServices.Player.Index + 1; q.Insert(Math.Min(nxt, q.Count), song); _ = AppServices.Player.LoadQueueAsync(q, AppServices.Player.Index); } } } break; }
                 case "open_settings": AppServices.RunOnUi(() => { try { new SettingsWindow().Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }); break;
+                case "open_repo": OpenRepo(doc); break;
                 case "get_settings": HandleGetSettings(); break;
                 case "pick_folder": PickFolder(); break;
                 case "open_folder": OpenDownloadDir(); break;
@@ -816,6 +817,9 @@ public sealed partial class MainWindow : Window
             ["desktopSongInfo"] = AppServices.Config.DesktopSongInfo,
             ["updateSource"] = AppServices.Config.UpdateSource,
             ["updateRegion"] = GeoHint.InChina() ? "cn" : "other",   // 界面里能显示「自动」挑到了哪边
+            // 开源仓库地址（关于页两个圆形按钮用）：前端只回传名字，URL 一律由配置拼，避免前端能开任意地址
+            ["repoGithub"] = "https://github.com/" + AppServices.Config.UpdateRepo,
+            ["repoGitee"] = "https://gitee.com/" + AppServices.Config.UpdateGiteeRepo,
             ["toast"] = AppServices.Config.Get("App", "toast", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
             ["version"] = AppServices.Version,
             ["fonts"] = SystemFonts.Families(),   // 本机字体列表，设置里的字体下拉用
@@ -882,6 +886,29 @@ public sealed partial class MainWindow : Window
             case "toast": AppServices.Config.Set("App", "toast", b ? "true" : "false"); break;
         }
         LogManager.Log("设置更新: " + key + "=" + value);
+    }
+
+    /// <summary>在默认浏览器里打开开源仓库（关于页的 GitHub / Gitee 圆形按钮）。</summary>
+    private void OpenRepo(JsonElement doc)
+    {
+        var name = doc.TryGetProperty("name", out var n) ? (n.GetString() ?? "").ToLowerInvariant() : "";
+        var url = name switch
+        {
+            "github" => "https://github.com/" + AppServices.Config.UpdateRepo,
+            "gitee" => "https://gitee.com/" + AppServices.Config.UpdateGiteeRepo,
+            _ => ""
+        };
+        if (url.Length == 0) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            LogManager.Log("打开仓库: " + url);
+        }
+        catch (Exception e)
+        {
+            LogManager.Error("打开仓库失败: " + e.Message);
+            PostToWeb(new { type = "toast", text = "打开浏览器失败：" + e.Message });
+        }
     }
 
     /// <summary>弹出图形化文件夹选择器（资源管理器风格），选完回传前端。</summary>
