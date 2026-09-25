@@ -910,6 +910,8 @@ function applyPerfAnim(s) {
   }
   async function go(viewName, data) {
     try {
+      // 离开设置页：顶栏换回搜索框（设置导航只在设置页存在）
+      if (viewName !== 'settings') clearSetNavTopbar();
       var task = null;
       if (viewName==='home') task = goHome();
       else if (viewName==='recommend') task = goRecommend();
@@ -922,7 +924,7 @@ function applyPerfAnim(s) {
       else if (viewName==='liked') task = goLiked();
       else if (viewName==='plugins') task = (window.PLUGHOST ? window.PLUGHOST.render(view) : null);
       if (task) { await task; animateView(); }
-    } catch(e) { view.innerHTML = '<div class="big-load">加载失败: '+esc(e.message)+'</div>'; animateView(); }
+    } catch(e) { if (viewName === 'settings') clearSetNavTopbar(); view.innerHTML = '<div class="big-load">加载失败: '+esc(e.message)+'</div>'; animateView(); }
   }
 
   async function goHome() {
@@ -2101,24 +2103,9 @@ function applyPerfAnim(s) {
       hint('第三方软件，与网易云音乐官方无关。本项目采用 MIT 许可证（允许包括商业用途在内的自由使用），仅供学习交流，请勿用于侵权或违法用途。')
     ]));
 
-    // 设置页顶部的分组快捷跳转：设置项太多，一屏一屏翻着找太累，点一下直接滚过去
-    if (navItems.length > 1) {
-      var nav = el('div','set-nav');
-      navItems.forEach(function (it) {
-        var b = el('button','set-nav-btn', it.t.replace(/\s*\/\s*(外观|代理)$/, ''));
-        b.type = 'button';
-        b.onclick = function () {
-          var target = document.getElementById(it.id); if (!target) return;
-          try { target.scrollIntoView({ behavior:'smooth', block:'start' }); } catch (e) { target.scrollIntoView(); }
-          // 滚过去之后闪一下，让人知道跳到哪儿了
-          target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
-          setTimeout(function () { target.classList.remove('flash'); }, 1100);
-        };
-        nav.appendChild(b);
-      });
-      html.insertBefore(nav, html.children[1] || null);
-    }
     view.innerHTML=''; view.appendChild(html);
+    // 设置页有了专属 headtop：这排分组按钮铺到顶栏上（替换搜索框），不再占内容区高度
+    if (navItems.length > 1) mountSetNavTopbar(navItems);
   }
 
   // C# 的图形化文件夹选择器选完后回传
@@ -2506,6 +2493,84 @@ function applyPerfAnim(s) {
       document.querySelectorAll('#sidebar a[data-nav]').forEach(x => x.classList.remove('on'));
     } catch (e) { toast('搜索失败: ' + e.message); }
   }
+
+  // ---------- 设置页专属 headtop ----------
+  // 进设置页时整条顶栏换成设置分组导航（搜索框让位），离开设置页自动换回搜索框。
+  // 内容仍是一整页：点按钮滚到对应分组 + 闪一下，滚动时导航联动高亮当前分组。
+  var setNavState = null;   // { bar, btns, groups, lock, idx }
+  function mountSetNavTopbar(navItems) {
+    var bar = document.getElementById('set-nav'), topbar = document.getElementById('topbar');
+    if (!bar || !topbar) return;
+    bar.textContent = '';
+    var btns = [], groups = [];
+    navItems.forEach(function (it, i) {
+      groups.push(document.getElementById(it.id));
+      // 「主题 / 外观」「网络 / 代理」在按钮上只留前半截，省地方
+      var b = el('button','set-nav-btn', it.t.replace(/\s*\/\s*(外观|代理)$/, ''));
+      b.type = 'button';
+      b.title = it.t;
+      b.onclick = function () {
+        var t = groups[i]; if (!t) return;
+        setNavState.lock = true;      // 先锁在被点的分组，免得平滑滚动过程中高亮乱跳
+        setNavActive(i);
+        try { t.scrollIntoView({ behavior:'smooth', block:'start' }); } catch (e) { t.scrollIntoView(); }
+        // 滚过去之后闪一下，让人知道跳到哪儿了
+        t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
+        setTimeout(function () { t.classList.remove('flash'); }, 1100);
+      };
+      bar.appendChild(b); btns.push(b);
+    });
+    setNavState = { bar: bar, btns: btns, groups: groups, lock: false, idx: -1 };
+    topbar.classList.add('set-mode');
+    bar.setAttribute('aria-hidden', 'false');
+    setNavActive(0);
+    setNavFades();
+  }
+  function clearSetNavTopbar() {
+    setNavState = null;
+    var bar = document.getElementById('set-nav'), topbar = document.getElementById('topbar');
+    if (bar) { bar.textContent = ''; bar.setAttribute('aria-hidden', 'true'); bar.classList.remove('fade-l','fade-r'); }
+    if (topbar) topbar.classList.remove('set-mode');
+  }
+  function setNavActive(i) {
+    if (!setNavState || i < 0 || i >= setNavState.btns.length) return;
+    setNavState.idx = i;
+    setNavState.btns.forEach(function (b, k) { b.classList.toggle('on', k === i); });
+    // 当前分组按钮留在可视范围内：横条自己滚，不碰内容区
+    var b = setNavState.btns[i], sc = setNavState.bar;
+    var br = b.getBoundingClientRect(), cr = sc.getBoundingClientRect();
+    if (br.left < cr.left + 8) sc.scrollLeft -= (cr.left + 8 - br.left);
+    else if (br.right > cr.right - 8) sc.scrollLeft += (br.right - cr.right + 8);
+  }
+  function setNavFades() {
+    if (!setNavState) return;
+    var sc = setNavState.bar, max = sc.scrollWidth - sc.clientWidth;
+    sc.classList.toggle('fade-l', max > 1 && sc.scrollLeft > 1);
+    sc.classList.toggle('fade-r', max > 1 && sc.scrollLeft < max - 1);
+  }
+  function updateSetNavActive() {
+    if (!setNavState || !setNavState.groups.length) return;
+    var gs = setNavState.groups, vr = view.getBoundingClientRect(), best = 0;
+    for (var i = 0; i < gs.length; i++) {
+      var g = gs[i]; if (!g) continue;
+      if (g.getBoundingClientRect().top - vr.top <= 28) best = i; else break;
+    }
+    // 滚到底时最后一组永远到不了顶端，直接高亮它，免得高亮停在上一组
+    if (view.scrollTop + view.clientHeight >= view.scrollHeight - 2) best = gs.length - 1;
+    setNavActive(best);
+  }
+  view.addEventListener('scroll', function () {
+    if (!setNavState) return;
+    if (!setNavState.lock) updateSetNavActive();
+    setNavFades();
+  });
+  // 用户自己滚（滚轮 / 键盘）就把高亮交还给联动，不再锁在被点的分组
+  view.addEventListener('wheel', function () { if (setNavState) setNavState.lock = false; }, { passive: true });
+  window.addEventListener('keydown', function (e) {
+    if (!setNavState) return;
+    if (/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(e.key)) setNavState.lock = false;
+  });
+  window.addEventListener('resize', setNavFades);
 
   // ----- 自定义右键菜单（屏蔽 html 默认右键） -----
   document.addEventListener('contextmenu', e => e.preventDefault());

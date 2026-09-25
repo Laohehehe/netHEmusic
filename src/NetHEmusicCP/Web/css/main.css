@@ -88,13 +88,22 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .big-load{color:rgba(var(--md-accent-color-grey-base-rgb),.5);padding:40px;text-align:center;font-size:14px;}
 .page-title{font-size:22px;font-weight:700;margin:0 0 16px;color:var(--md-accent-color-secondary);}
 .greet-title{font-size:24px;font-weight:700;margin:4px 0 20px;color:var(--md-accent-color-secondary);}
-/* 设置页顶部的分组快捷跳转：点一下滚到对应分组 */
-.set-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;}
-.set-nav-btn{padding:6px 14px;border-radius:999px;cursor:pointer;font-size:13px;line-height:1.4;
+/* 设置页专属 headtop：进设置页时整条顶栏换成这排分组按钮，单行横向滚动 + 两端渐隐 */
+#topbar.set-mode .tb-search{display:none;}
+.set-nav{display:none;flex:1 1 auto;min-width:0;gap:8px;overflow-x:auto;overflow-y:hidden;scroll-behavior:smooth;scrollbar-width:none;}
+#topbar.set-mode .set-nav{display:flex;}
+.set-nav::-webkit-scrollbar{display:none;}
+.set-nav.fade-l{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 22px);mask-image:linear-gradient(to right,transparent 0,#000 22px);}
+.set-nav.fade-r{-webkit-mask-image:linear-gradient(to left,transparent 0,#000 22px);mask-image:linear-gradient(to left,transparent 0,#000 22px);}
+.set-nav.fade-l.fade-r{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 22px,#000 calc(100% - 22px),transparent 100%);mask-image:linear-gradient(to right,transparent 0,#000 22px,#000 calc(100% - 22px),transparent 100%);}
+.set-nav-btn{flex:0 0 auto;white-space:nowrap;padding:6px 14px;border-radius:999px;cursor:pointer;font-size:13px;line-height:1.4;font-family:inherit;
   background:rgba(var(--md-accent-color-grey-base-rgb),.06);color:rgba(var(--md-accent-color-grey-base-rgb),.72);
   border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.10);transition:background .15s,color .15s,border-color .15s;}
 .set-nav-btn:hover{background:rgba(var(--md-accent-color-grey-base-rgb),.13);color:var(--md-accent-color-secondary);border-color:rgba(var(--md-accent-color-grey-base-rgb),.20);}
 .set-nav-btn:active{transform:translateY(1px);}
+.set-nav-btn:focus-visible{outline:2px solid var(--md-accent-color);outline-offset:2px;}
+/* 当前所在分组（滚动联动）：实心强调色胶囊 */
+.set-nav-btn.on,.set-nav-btn.on:hover{background:var(--md-accent-color);color:rgba(0,0,0,.85);border-color:transparent;font-weight:600;}
 .set-group.flash{animation:setFlash 1.1s ease-out;}
 @keyframes setFlash{0%{box-shadow:0 0 0 2px var(--md-accent-color);}100%{box-shadow:0 0 0 2px transparent;}}
 .set-group{background:var(--md-accent-color-bg-darken);border-radius:var(--radius);padding:16px 18px 12px;margin-bottom:14px;}
