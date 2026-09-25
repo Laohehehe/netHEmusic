@@ -859,6 +859,8 @@ function applyPerfAnim(s) {
     star:    ico('<path d="M12 3.6l2.7 5.4 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.9l6-.9z"/>'),
     playNext:ico('<line x1="3" x2="13" y1="6" y2="6"/><line x1="3" x2="11" y1="12" y2="12"/><line x1="3" x2="11" y1="18" y2="18"/><path d="M15 11l6 4-6 4z"/>'),
     trash:   ico('<polyline points="3 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>'),
+    folder:  ico('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.1a2 2 0 0 1 1.6.8l1 1.4h7.3A2.5 2.5 0 0 1 21 9.7v8.8A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"/>'),
+    x:       ico('<line x1="6" x2="18" y1="6" y2="18"/><line x1="18" x2="6" y1="6" y2="18"/>'),
     share:   ico('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" x2="15.4" y1="10.5" y2="6.5"/><line x1="8.6" x2="15.4" y1="13.5" y2="17.5"/>'),
     volOn:   ico('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.6 8.6a5 5 0 0 1 0 6.8"/><path d="M18.6 5.6a9 9 0 0 1 0 12.8"/>'),
     volMute: ico('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="17" y1="9" x2="23" y2="15"/><line x1="23" y1="9" x2="17" y2="15"/>'),
@@ -922,6 +924,7 @@ function applyPerfAnim(s) {
       else if (viewName==='account') task = goAccount();
       else if (viewName==='settings') task = goSettings();
       else if (viewName==='liked') task = goLiked();
+      else if (viewName==='downloads') task = goDownloads();
       else if (viewName==='plugins') task = (window.PLUGHOST ? window.PLUGHOST.render(view) : null);
       if (task) { await task; animateView(); }
     } catch(e) { if (viewName === 'settings') clearSetNavTopbar(); view.innerHTML = '<div class="big-load">加载失败: '+esc(e.message)+'</div>'; animateView(); }
@@ -2571,6 +2574,210 @@ function applyPerfAnim(s) {
     if (/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(e.key)) setNavState.lock = false;
   });
   window.addEventListener('resize', setNavFades);
+
+  // ---------- 下载管理：正在下载 / 已下载音乐 ----------
+  var dlTab = 'active';      // active | done
+  var dlTasks = [];          // C# 推来的下载队列快照
+  var dlItems = [];          // 已下载音乐（扫下载目录 ∩ 下载历史）
+  var dlDirNow = '';
+  var dlArmTimers = {};      // 「再点一次确认」的复位计时器
+  var dlClearTimer = null;   // 「清除下载历史」的复位计时器
+
+  function fmtSize(b) {
+    b = Number(b) || 0;
+    if (b >= 1073741824) return (b / 1073741824).toFixed(2) + ' GB';
+    if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
+    if (b >= 1024) return Math.round(b / 1024) + ' KB';
+    return b + ' B';
+  }
+  function dlPic(p) { return p ? p.replace(/\^\d+\^/, '') + '?param=80y80' : ''; }
+  function dlIds() { return dlTasks.map(function (t) { return t.id; }).join(','); }
+  function dlStatusText(t) {
+    switch (t.status) {
+      case 'queued': return '等待下载…';
+      case 'downloading': return '正在下载 ' + Math.round((t.progress || 0) * 100) + '%';
+      case 'paused': return t.done > 0 ? '已暂停（已下 ' + fmtSize(t.done) + '）' : '已暂停';
+      case 'done': return '已完成';
+      case 'failed': return '失败：' + (t.error || '未知原因');
+      default: return t.status || '';
+    }
+  }
+
+  function goDownloads() {
+    var html = el('div', 'page');
+    html.appendChild(el('h2', 'page-title', '下载管理'));
+    var tabs = el('div', 'dl-tabs');
+    [['active', '正在下载'], ['done', '已下载音乐']].forEach(function (pair) {
+      var b = el('button', 'dl-tab' + (dlTab === pair[0] ? ' on' : ''), pair[1]);
+      b.type = 'button';
+      b.onclick = function () {
+        if (dlTab === pair[0]) return;
+        dlTab = pair[0];
+        tabs.querySelectorAll('.dl-tab').forEach(function (x) { x.classList.toggle('on', x === b); });
+        renderDlBody();
+        NE.post({ type: dlTab === 'active' ? 'dl_state' : 'dl_list' });
+      };
+      tabs.appendChild(b);
+    });
+    html.appendChild(tabs);
+    html.appendChild(el('div', 'dl-body'));
+    view.innerHTML = ''; view.appendChild(html);
+    renderDlBody();
+    NE.post({ type: dlTab === 'active' ? 'dl_state' : 'dl_list' });
+  }
+
+  function renderDlBody() {
+    var body = view.querySelector('.dl-body');
+    if (!body) return;
+    body.textContent = '';
+    if (dlTab === 'active') renderDlActive(body); else renderDlDone(body);
+  }
+
+  // ---- 正在下载 ----
+  function renderDlActive(body) {
+    var bar = el('div', 'action-row');
+    var bAll = el('button', 'action-btn', '开始全部'); bAll.type = 'button';
+    bAll.onclick = function () { NE.post({ type: 'dl_resume_all' }); toast('已开始全部下载'); };
+    var bPause = el('button', 'action-btn ghost', '暂停全部'); bPause.type = 'button';
+    bPause.onclick = function () { NE.post({ type: 'dl_pause_all' }); toast('已暂停全部下载'); };
+    bar.appendChild(bAll); bar.appendChild(bPause);
+    body.appendChild(bar);
+
+    if (!dlTasks.length) {
+      body.appendChild(el('div', 'big-load', '下载队列是空的 —— 在歌曲列表点下载按钮加进来'));
+      return;
+    }
+    var list = el('div', 'dl-list'); list.id = 'dl-active-list';
+    dlTasks.forEach(function (t) { list.appendChild(buildDlRow(t)); });
+    list.dataset.ids = dlIds();
+    body.appendChild(list);
+  }
+
+  function buildDlRow(t) {
+    var r = el('div', 'dl-row');
+    r.dataset.id = t.id;
+    r.innerHTML =
+      '<img class="dl-cover" loading="lazy" src="' + esc(dlPic(t.pic)) + '">' +
+      '<div class="dl-meta"><div class="dl-name">' + esc(t.title || '未知歌曲') + '</div>' +
+      '<div class="dl-sub">' + esc((t.artist || '未知歌手') + (t.qualityLabel ? ' · ' + t.qualityLabel : '')) + '</div></div>' +
+      '<div class="dl-prog"><div class="dl-bar"><div class="dl-fill"></div></div><span class="dl-pct">0%</span></div>' +
+      '<div class="dl-status"></div>' +
+      '<button class="row-btn" data-do="toggle"></button>' +
+      '<button class="row-btn" data-do="remove" title="从列表移除">' + SVG.x + '</button>';
+    r.querySelector('[data-do=toggle]').onclick = function (e) { e.stopPropagation(); dlToggle(t.id); };
+    r.querySelector('[data-do=remove]').onclick = function (e) { e.stopPropagation(); NE.post({ type: 'dl_remove', id: t.id }); };
+    updateDlRow(r, t);
+    return r;
+  }
+
+  function dlToggle(id) {
+    var t = dlTasks.filter(function (x) { return x.id === id; })[0];
+    if (!t) return;
+    if (t.status === 'paused' || t.status === 'failed') NE.post({ type: 'dl_resume', id: id });
+    else if (t.status === 'downloading' || t.status === 'queued') NE.post({ type: 'dl_pause', id: id });
+  }
+
+  function updateDlRow(r, t) {
+    var pct = t.status === 'done' ? 100 : Math.round((t.progress || 0) * 100);
+    var fill = r.querySelector('.dl-fill'); if (fill) fill.style.width = pct + '%';
+    var p = r.querySelector('.dl-pct'); if (p) p.textContent = pct + '%';
+    var st = r.querySelector('.dl-status'); if (st) st.textContent = dlStatusText(t);
+    r.classList.toggle('is-done', t.status === 'done');
+    r.classList.toggle('is-failed', t.status === 'failed');
+    var btn = r.querySelector('[data-do=toggle]');
+    if (btn) {
+      var can = t.status !== 'done';
+      var resumable = (t.status === 'paused' || t.status === 'failed');
+      btn.disabled = !can;
+      btn.innerHTML = can ? (resumable ? SVG.play : SVG.pause) : '';
+      btn.title = can ? (resumable ? '继续下载' : '暂停下载') : '';
+    }
+  }
+
+  // 进度推送很频繁：任务集合没变就只就地更新，避免整列重建（滚动位置/按钮状态被冲掉）
+  function syncDlActive() {
+    var list = document.getElementById('dl-active-list');
+    // 列表不存在（刚才是空状态）或任务集合变了 → 整块重画
+    if (!list || list.dataset.ids !== dlIds()) { renderDlBody(); return; }
+    dlTasks.forEach(function (t) {
+      var r = list.querySelector('.dl-row[data-id="' + t.id + '"]');
+      if (r) updateDlRow(r, t);
+    });
+  }
+
+  // ---- 已下载音乐 ----
+  function renderDlDone(body) {
+    var head = el('div', 'dl-hint');
+    head.appendChild(el('span', 'dl-dim', '下载目录：' + (dlDirNow || '（未设置）')));
+    var clr = el('button', 'action-btn ghost', '清除下载历史');
+    clr.type = 'button';
+    clr.title = '只清下载历史记录，磁盘上的音乐文件不动';
+    clr.onclick = function () {
+      if (!clr.dataset.armed) {           // 二次确认
+        clr.dataset.armed = '1';
+        clr.textContent = '再点一次确认清除';
+        clearTimeout(dlClearTimer);
+        dlClearTimer = setTimeout(function () { delete clr.dataset.armed; clr.textContent = '清除下载历史'; }, 4000);
+        return;
+      }
+      clearTimeout(dlClearTimer);
+      delete clr.dataset.armed;
+      clr.textContent = '清除下载历史';
+      NE.post({ type: 'dl_history_clear' });
+    };
+    head.appendChild(clr);
+    body.appendChild(head);
+    if (!dlItems.length) {
+      body.appendChild(el('div', 'big-load', '下载目录里还没有已下载的音乐'));
+      return;
+    }
+    var list = el('div', 'dl-list'); list.id = 'dl-done-list';
+    dlItems.forEach(function (it) {
+      var r = el('div', 'dl-row');
+      r.innerHTML =
+        '<img class="dl-cover" loading="lazy" src="' + esc(dlPic(it.pic)) + '">' +
+        '<div class="dl-meta"><div class="dl-name">' + esc(it.title || it.fileName) + '</div>' +
+        '<div class="dl-sub">' + esc(it.artist || '') + '</div></div>' +
+        '<div class="dl-info"><span class="dl-chip">' + esc(it.qualityLabel || '') + '</span>' +
+        '<span class="dl-dim">' + fmtSize(it.size) + '</span>' +
+        '<span class="dl-dim">' + fmt(it.duration) + '</span>' +
+        '<span class="dl-dim">' + esc(it.finishedAt || '') + '</span></div>' +
+        '<button class="row-btn" data-do="open" title="打开所在文件夹">' + SVG.folder + '</button>' +
+        '<button class="row-btn danger" data-do="del" title="删除文件（移入回收站）">' + SVG.trash + '</button>';
+      r.querySelector('[data-do=open]').onclick = function (e) {
+        e.stopPropagation();
+        NE.post({ type: 'dl_open_file', fileName: it.fileName });
+      };
+      var del = r.querySelector('[data-do=del]');
+      del.onclick = function (e) {
+        e.stopPropagation();
+        if (!del.classList.contains('armed')) {   // 二次确认：第一下只「上膛」
+          del.classList.add('armed');
+          del.title = '再点一次确认删除（移到回收站）';
+          clearTimeout(dlArmTimers[it.fileName]);
+          dlArmTimers[it.fileName] = setTimeout(function () {
+            del.classList.remove('armed');
+            del.title = '删除文件（移入回收站）';
+          }, 4000);
+          return;
+        }
+        clearTimeout(dlArmTimers[it.fileName]);
+        NE.post({ type: 'dl_delete', fileName: it.fileName });
+      };
+      list.appendChild(r);
+    });
+    body.appendChild(list);
+  }
+
+  NE.on('download_state', function (d) {
+    dlTasks = (d && d.tasks) || [];
+    if (dlTab === 'active') syncDlActive();
+  });
+  NE.on('download_list', function (d) {
+    dlDirNow = (d && d.dir) || '';
+    dlItems = (d && d.items) || [];
+    if (dlTab === 'done') renderDlBody();
+  });
 
   // ----- 自定义右键菜单（屏蔽 html 默认右键） -----
   document.addEventListener('contextmenu', e => e.preventDefault());

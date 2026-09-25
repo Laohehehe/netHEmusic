@@ -1,8 +1,6 @@
 using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
-using System.Text.Json;
-using netHEmusic.Core.Model;
 using Microsoft.UI.Dispatching;
 using netHEmusic.Core.Api;
 using netHEmusic.Core.Cache;
@@ -87,7 +85,7 @@ public static class AppServices
         Netease.SetCookie(Config.LoadCookie()); // 恢复登录态
         Cache = new CacheManager(Config);
         Cache.EnsureDir();
-        Download = new DownloadManager(Netease, Config);
+        Download = new DownloadManager(Netease, Config, new DownloadStore(Config));
         Updater = new UpdateManager(Config);
         SelfRepair = new SelfRepair(Config);
         Theme = new ThemeManager(Config);
@@ -97,15 +95,11 @@ public static class AppServices
         // 恢复上次的播放列表（只装载不播放：重启后 dock 与播放列表仍是上次的内容）
         try
         {
-            var saved = Config.GetPlaylist();
-            if (!string.IsNullOrWhiteSpace(saved) && saved != "[]")
+            var list = Config.LoadQueue();
+            if (list is { Count: > 0 })
             {
-                var list = JsonSerializer.Deserialize<List<Song>>(saved);
-                if (list is { Count: > 0 })
-                {
-                    Player.RestoreQueue(list, Config.PlaylistIndex);
-                    LogManager.Log("已恢复播放列表: " + list.Count + " 首，当前第 " + (Config.PlaylistIndex + 1) + " 首");
-                }
+                Player.RestoreQueue(list, Config.PlaylistIndex);
+                LogManager.Log("已恢复播放列表: " + list.Count + " 首，当前第 " + (Config.PlaylistIndex + 1) + " 首");
             }
         }
         catch (Exception e) { LogManager.Debug("恢复播放列表失败: " + e.Message); }

@@ -43,14 +43,14 @@ public sealed partial class SettingsWindow : Window
         DeskLyricTopToggle.IsOn = AppServices.Config.DesktopLyricTopmost;
         DeskSongInfoToggle.IsOn = AppServices.Config.DesktopSongInfo;
         VolumeSlider.Value = AppServices.Config.Volume;
-        var pm = AppServices.Config.Get("Player", "mode", "order");
+        var pm = AppServices.Config.PlayMode;
         PlayModeBox.SelectedIndex = pm switch { "list" => 1, "single" => 2, "random" => 3, _ => 0 };
         ToastToggle.IsOn = AppServices.Config.Get("App", "toast", "true").Equals("true", StringComparison.OrdinalIgnoreCase);
         AboutVer.Text = "netHEmusic 版本 v" + AppServices.Version;
         AboutDesc.Text = "第三方网易云音乐下载/播放器 · WinUI3 + Fluent · MIT 许可证 · 与网易云音乐官方无关，仅供学习交流。" + Environment.NewLine + "构建于 " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
     }
     private void OnVolume(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) { if (sender is Slider sl) AppServices.Player.SetVolume((int)sl.Value); }
-    private void OnPlayMode(object sender, SelectionChangedEventArgs e) { AppServices.Config.Set("Player", "mode", PlayModeBox.SelectedIndex switch { 1 => "list", 2 => "single", 3 => "random", _ => "order" }); }
+    private void OnPlayMode(object sender, SelectionChangedEventArgs e) { AppServices.Config.PlayMode = PlayModeBox.SelectedIndex switch { 1 => "list", 2 => "single", 3 => "random", _ => "order" }; }
     private void OnToast(object sender, RoutedEventArgs e) { AppServices.Config.Set("App", "toast", ToastToggle.IsOn ? "true" : "false"); }
 
     private void ApplyTheme() { AppServices.OnThemeApplied?.Invoke(); }

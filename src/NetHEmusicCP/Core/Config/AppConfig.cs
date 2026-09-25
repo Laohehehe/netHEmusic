@@ -5,13 +5,17 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using netHEmusic.Core.Logging;
+using netHEmusic.Core.Model;
 using netHEmusic.Core.Security;
 
 namespace netHEmusic.Core.Config;
 
 /// <summary>
-/// 配置管理：%APPDATA%\netHEmusic\config.ini + DPAPI 加密的登录 cookie.txt。
-/// 登录 cookie 为敏感数据，经 Windows DPAPI（ProtectedData）加密落盘，禁止明文。
+/// 配置管理，分三个文件（各管一类数据，互不牵连）：
+///   config.ini    程序/界面设置（[App] [Download] [Cache] [Player] [Update] [Network] [Plugins] [Version]）
+///   player.json   播放器状态：播放队列、当前下标、续播位置、播放模式、淡化
+///   downloads.json 下载历史 + 未完成队列
+/// 登录 cookie 单独放 cookie.txt（RSA + AES / DPAPI 加密，禁止明文）。
 /// </summary>
 public sealed class AppConfig
 {
@@ -20,8 +24,10 @@ public sealed class AppConfig
     private readonly string _dir;
     private readonly string _iniPath;
     private readonly string _cookiePath;
+    private readonly string _playerPath;
     // 读写 config.ini 的串行锁：避免多处同时 Set 时“读-改-写”互相覆盖（曾导致 [Version] 段被写丢）
     private readonly object _ioLock = new();
+    private PlayerDoc? _player;
 
     public AppConfig()
     {
@@ -29,13 +35,16 @@ public sealed class AppConfig
         Directory.CreateDirectory(_dir);
         _iniPath = Path.Combine(_dir, "config.ini");
         _cookiePath = Path.Combine(_dir, "cookie.txt");
+        _playerPath = Path.Combine(_dir, "player.json");
         // 初始化敏感数据保护（RSA 密钥对，私钥经 DPAPI 二次保护）
         SecureStore.Init(Path.Combine(_dir, "keys"));
         if (!File.Exists(_iniPath)) CreateDefaultIni();
+        MigratePlayerFile();   // 老配置把播放列表塞在 config.ini 里 → 搬到 player.json（只做一次）
     }
 
     public string DataDir => _dir;
     public string IniPath => _iniPath;
+    public string PlayerPath => _playerPath;
 
     // ---------- INI 读写 ----------
     private sealed class IniDoc
@@ -140,7 +149,7 @@ public sealed class AppConfig
         d.SectionOrder.Add("Download");
         d.Data["Cache"] = new(StringComparer.OrdinalIgnoreCase) { ["limit_mb"] = "1024", ["mem_limit_mb"] = "160", ["dir"] = "" };
         d.SectionOrder.Add("Cache");
-        d.Data["Player"] = new(StringComparer.OrdinalIgnoreCase) { ["volume"] = "100", ["playlist"] = "[]", ["playback"] = "" };
+        d.Data["Player"] = new(StringComparer.OrdinalIgnoreCase) { ["volume"] = "100" };
         d.SectionOrder.Add("Player");
         d.Data["Update"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -244,19 +253,92 @@ public sealed class AppConfig
 
     public string Proxy => Get("Network", "proxy", "");
 
-    // ---------- 播放状态 ----------
+    // ---------- 播放器状态（player.json） ----------
+    // 播放列表动辄几百首，塞在 config.ini 里会让"改任意一个设置 = 重写整份配置"，所以单独放 JSON。
+    private sealed class PlayerDoc
+    {
+        public List<Song> Queue { get; set; } = new();
+        public int Index { get; set; }
+        public long LastSongId { get; set; } = -1;
+        public long LastPos { get; set; }
+        public string Mode { get; set; } = "order";
+        public string Crossfade { get; set; } = "0";
+        public string Playback { get; set; } = "";
+    }
+
+    private PlayerDoc PlayerState()
+    {
+        lock (_ioLock) { return _player ??= JsonFile.Read(_playerPath, () => new PlayerDoc()); }
+    }
+
+    private void SavePlayer() { lock (_ioLock) { if (_player is not null) JsonFile.Write(_playerPath, _player); } }
+
+    /// <summary>把老 config.ini [Player] 里的播放列表 / 续播 / 模式搬到 player.json，然后从 ini 里删掉这些键。</summary>
+    private void MigratePlayerFile()
+    {
+        try
+        {
+            if (File.Exists(_playerPath)) return;
+            var d = Load();
+            if (!d.Data.TryGetValue("Player", out var p)) return;
+
+            var doc = new PlayerDoc();
+            var raw = p.TryGetValue("playlist", out var pl) ? pl : "";
+            if (!string.IsNullOrWhiteSpace(raw) && raw.Trim() != "[]")
+            {
+                try { doc.Queue = System.Text.Json.JsonSerializer.Deserialize<List<Song>>(raw) ?? new List<Song>(); }
+                catch (Exception e) { LogManager.Warn("老播放列表解析失败，已丢弃: " + e.Message); }
+            }
+            if (int.TryParse(p.TryGetValue("playlist_index", out var ix) ? ix : "", out var idx)) doc.Index = Math.Max(0, idx);
+            if (long.TryParse(p.TryGetValue("last_song_id", out var ls) ? ls : "", out var lid)) doc.LastSongId = lid;
+            if (long.TryParse(p.TryGetValue("last_pos", out var lp) ? lp : "", out var lpos)) doc.LastPos = lpos;
+            if (p.TryGetValue("mode", out var md) && !string.IsNullOrWhiteSpace(md)) doc.Mode = md;
+            if (p.TryGetValue("crossfade", out var cf) && !string.IsNullOrWhiteSpace(cf)) doc.Crossfade = cf;
+            if (p.TryGetValue("playback", out var pb)) doc.Playback = pb;
+
+            JsonFile.Write(_playerPath, doc);
+            RemoveKeys("Player", new[] { "playlist", "playlist_index", "last_song_id", "last_pos", "playback", "mode", "crossfade" });
+            LogManager.Log("配置迁移: [Player] 播放列表(" + doc.Queue.Count + " 首)/续播/模式 → player.json");
+        }
+        catch (Exception e) { LogManager.Error("player.json 迁移失败: " + e.Message); }
+    }
+
+    /// <summary>从 ini 里删掉若干键（用于迁移后清掉旧的大 JSON）。</summary>
+    private void RemoveKeys(string section, string[] keys)
+    {
+        try
+        {
+            lock (_ioLock)
+            {
+                var d = Load();
+                if (!d.Data.TryGetValue(section, out var m)) return;
+                var any = false;
+                foreach (var k in keys) any |= m.Remove(k);
+                if (any) Save(d);
+            }
+        }
+        catch (Exception e) { LogManager.Error("清理 config.ini 失败: " + e.Message); }
+    }
+
     /// <summary>上次播放列表播到的下标（重启后恢复用）。</summary>
-    public int PlaylistIndex { get => int.TryParse(Get("Player", "playlist_index", "0"), out var v) ? v : 0; set => Set("Player", "playlist_index", value); }
+    public int PlaylistIndex { get => PlayerState().Index; set { PlayerState().Index = Math.Max(0, value); SavePlayer(); } }
 
     /// <summary>上次听到的曲目 id（-1 = 没记录）。用于下次启动续播。</summary>
-    public long LastSongId { get => long.TryParse(Get("Player", "last_song_id", "-1"), out var v) ? v : -1; set => Set("Player", "last_song_id", value); }
-    /// <summary>上次听到的位置（毫秒）。用于下次启动续播。</summary>
-    public long LastPosition { get => long.TryParse(Get("Player", "last_pos", "0"), out var v) ? v : 0; set => Set("Player", "last_pos", value); }
+    public long LastSongId { get => PlayerState().LastSongId; set { PlayerState().LastSongId = value; SavePlayer(); } }
 
-    public string GetPlaylist() => Get("Player", "playlist", "[]");
-    public void SavePlaylist(string json) => Set("Player", "playlist", json);
-    public string GetPlayback() => Get("Player", "playback", "");
-    public void SavePlayback(string json) => Set("Player", "playback", json);
+    /// <summary>上次听到的位置（毫秒）。用于下次启动续播。</summary>
+    public long LastPosition { get => PlayerState().LastPos; set { PlayerState().LastPos = Math.Max(0, value); SavePlayer(); } }
+
+    /// <summary>播放模式：order / list / single / random。</summary>
+    public string PlayMode { get => PlayerState().Mode; set { PlayerState().Mode = value; SavePlayer(); } }
+
+    /// <summary>启停淡化（交叉淡化）秒数。</summary>
+    public string Crossfade { get => PlayerState().Crossfade; set { PlayerState().Crossfade = value; SavePlayer(); } }
+
+    public List<Song> LoadQueue() => PlayerState().Queue;
+    public void SaveQueue(IReadOnlyList<Song> queue) { PlayerState().Queue = queue.ToList(); SavePlayer(); }
+    public string GetPlayback() => PlayerState().Playback;
+    public void SavePlayback(string json) { PlayerState().Playback = json; SavePlayer(); }
 
     // ---------- 登录凭据（非对称 + 混合加密；旧版 DPAPI 自动迁移） ----------
     private static readonly byte[] DpapiPrefix = Encoding.ASCII.GetBytes("DPAPI1:");

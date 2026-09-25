@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -141,6 +142,8 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) { LogManager.Debug("挂 Closing 失败: " + ex.Message); }
         AppServices.Download.Completed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", kind = "download", text = "下载完成: " + it.Display }));
         AppServices.Download.Failed += it => AppServices.RunOnUi(() => PostToWeb(new { type = "toast", kind = "download", text = "下载失败: " + (it.Error ?? "") }));
+        // 队列/进度变化（C# 侧已节流）→ 推给前端下载管理页刷新
+        AppServices.Download.Changed += () => AppServices.RunOnUi(PostDownloadState);
 
         LogManager.Log("MainWindow 构造完成");
         _ = StartupFlowAsync();
@@ -228,9 +231,9 @@ public sealed partial class MainWindow : Window
         Next = () => { try { _ = AppServices.Player.NextAsync(); } catch { } },
         TogglePlay = () => { try { _ = AppServices.Player.ToggleAsync(); } catch { } },
         IsPlaying = () => { try { return AppServices.Player.Playing; } catch { return false; } },
-        PlayMode = () => AppServices.Config.Get("Player", "mode", "order") ?? "order",
+        PlayMode = () => AppServices.Config.PlayMode,
         // 播放模式是前端的概念（顺序/列表/单曲/随机），这里改完配置再通知前端切一次
-        SetPlayMode = v => { AppServices.Config.Set("Player", "mode", v); PostToWeb(new { type = "playMode", value = v }); },
+        SetPlayMode = v => { AppServices.Config.PlayMode = v; PostToWeb(new { type = "playMode", value = v }); },
         IsLyricOn = () => AppServices.Config.Get("App", "desktop_lyric", "false").Equals("true", StringComparison.OrdinalIgnoreCase),
         SetLyric = on => SetDesktopLyric(on)
     };
@@ -304,13 +307,13 @@ public sealed partial class MainWindow : Window
         catch (Exception e) { LogManager.Debug("保存播放进度失败: " + e.Message); }
     }
 
-    /// <summary>把当前播放队列写进 config，重启后可以恢复。</summary>
+    /// <summary>把当前播放队列写进 player.json，重启后可以恢复。</summary>
     private void SavePlaylist(int index)
     {
         try
         {
             var q = AppServices.Player.Queue;
-            AppServices.Config.SavePlaylist(JsonSerializer.Serialize(q));
+            AppServices.Config.SaveQueue(q);
             AppServices.Config.PlaylistIndex = Math.Max(0, index);
             LogManager.Debug("播放列表已保存: " + q.Count + " 首 @ " + index);
         }
@@ -616,6 +619,17 @@ public sealed partial class MainWindow : Window
                 case "play": HandleWebPlay(doc); break;
                 case "play_list": HandleWebPlayList(doc); break;
                 case "download": HandleWebDownload(doc); break;
+                case "dl_state": PostDownloadState(); break;
+                case "dl_pause": HandleDownloadOp(doc, "pause"); break;
+                case "dl_resume": HandleDownloadOp(doc, "resume"); break;
+                case "dl_remove": HandleDownloadOp(doc, "remove"); break;
+                case "dl_pause_all": AppServices.Download.PauseAll(); PostDownloadState(); break;
+                case "dl_resume_all": AppServices.Download.ResumeAll(); PostDownloadState(); break;
+                case "dl_clear": AppServices.Download.ClearFinished(); PostDownloadState(); break;
+                case "dl_list": PostDownloadedList(); break;
+                case "dl_history_clear": AppServices.Download.ClearHistory(); PostDownloadedList(); PostToWeb(new { type = "toast", text = "下载历史已清除（音乐文件未删除）" }); break;
+                case "dl_delete": HandleDeleteDownloaded(doc); break;
+                case "dl_open_file": HandleOpenDownloaded(doc); break;
                 case "plugins_list": HandlePluginsList(); break;
                 case "plugin_code": HandlePluginCode(doc); break;
                 case "plugin_toggle": HandlePluginToggle(doc); break;
@@ -720,7 +734,60 @@ public sealed partial class MainWindow : Window
         _ = AppServices.Player.LoadQueueAsync(q, idx);
     }
 
-    private void HandleWebDownload(JsonElement doc) { if (doc.TryGetProperty("song", out var s)) { var song = new Song { Id = s.TryGetProperty("Id", out var id) ? id.GetInt64() : 0, Title = s.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "", Artists = new List<Artist> { new Artist { Name = s.TryGetProperty("Artist", out var a) ? a.GetString() ?? "" : "" } }, Album = new Album { Name = s.TryGetProperty("Album", out var al) ? al.GetString() ?? "" : "", PicUrl = s.TryGetProperty("Pic", out var p) ? p.GetString() : "" } }; if (song.Id > 0) _ = AppServices.Download.Download(song, AppServices.Config.DownloadDir, AppServices.Config.Quality); } }
+    private void HandleWebDownload(JsonElement doc)
+    {
+        if (!doc.TryGetProperty("song", out var s)) return;
+        var song = SongFromWeb(s);          // 带全 Duration/Album/Pic，下载历史和列表要用
+        if (song is null || song.Id <= 0) return;
+        AppServices.Download.Enqueue(song, AppServices.Config.DownloadDir, AppServices.Config.Quality);
+        PostDownloadState();
+    }
+
+    // ================= 下载管理（正在下载 / 已下载音乐） =================
+
+    /// <summary>把下载队列快照推给前端。</summary>
+    private void PostDownloadState()
+        => PostToWeb(new { type = "download_state", tasks = AppServices.Download.Snapshot() });
+
+    /// <summary>扫下载目录 + 和下载历史按文件名匹配后的「已下载音乐」列表。</summary>
+    private void PostDownloadedList()
+        => PostToWeb(new { type = "download_list", dir = AppServices.Config.DownloadDir, items = AppServices.Download.DownloadedList() });
+
+    private void HandleDownloadOp(JsonElement doc, string op)
+    {
+        if (!doc.TryGetProperty("id", out var idv) || !idv.TryGetInt64(out var id)) return;
+        switch (op)
+        {
+            case "pause": AppServices.Download.Pause(id); break;
+            case "resume": AppServices.Download.Resume(id); break;
+            case "remove": AppServices.Download.Remove(id); break;
+        }
+        PostDownloadState();
+    }
+
+    /// <summary>删除已下载的音乐（前端已二次确认）→ 移入回收站 + 清历史。</summary>
+    private void HandleDeleteDownloaded(JsonElement doc)
+    {
+        var name = doc.TryGetProperty("fileName", out var f) ? (f.GetString() ?? "") : "";
+        var (ok, msg) = AppServices.Download.DeleteDownloaded(name);
+        LogManager.Log("删除已下载音乐: " + name + " → " + msg + (ok ? "" : "（失败）"));
+        PostToWeb(new { type = "toast", text = msg });
+        PostDownloadedList();
+    }
+
+    /// <summary>在资源管理器里定位已下载的文件。</summary>
+    private void HandleOpenDownloaded(JsonElement doc)
+    {
+        var name = doc.TryGetProperty("fileName", out var f) ? (f.GetString() ?? "") : "";
+        try
+        {
+            var path = Path.Combine(AppServices.Config.DownloadDir, Path.GetFileName(name));
+            if (!File.Exists(path)) { PostToWeb(new { type = "toast", text = "文件不存在：" + name }); PostDownloadedList(); return; }
+            Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + path + "\"") { UseShellExecute = true });
+            LogManager.Log("已在资源管理器中定位: " + path);
+        }
+        catch (Exception e) { PostToWeb(new { type = "toast", text = "打开失败：" + e.Message }); }
+    }
 
     /// <summary>读取 [App] 段的布尔配置（默认值字符串）。</summary>
     private static bool BoolCfg(string key, string def = "false")
@@ -740,8 +807,8 @@ public sealed partial class MainWindow : Window
             ["downloadDir"] = AppServices.Config.DownloadDir,
             ["quality"] = AppServices.Config.Quality,
             ["volume"] = AppServices.Config.Volume,
-            ["crossfade"] = AppServices.Config.Get("Player", "crossfade", "0"),
-            ["playMode"] = AppServices.Config.Get("Player", "mode", "order"),
+            ["crossfade"] = AppServices.Config.Crossfade,
+            ["playMode"] = AppServices.Config.PlayMode,
             ["proxy"] = AppServices.Config.Proxy,
             ["language"] = AppServices.Config.Language,
             ["desktopLyric"] = AppServices.Config.Get("App", "desktop_lyric", "false").Equals("true", StringComparison.OrdinalIgnoreCase),
@@ -800,9 +867,9 @@ public sealed partial class MainWindow : Window
                 break;
             case "downloadDir": try { if (!string.IsNullOrWhiteSpace(value)) AppServices.Config.DownloadDir = value; } catch { } break;
             case "quality": AppServices.Config.Quality = value; break;
-            case "crossfade": AppServices.Config.Set("Player", "crossfade", value); break;
+            case "crossfade": AppServices.Config.Crossfade = value; break;
             case "volume": if (int.TryParse(value, out var vol)) { AppServices.Player.SetVolume(vol); PostToWeb(new { type = "volume_changed", v = AppServices.Player.GetVolume() }); } break;
-            case "playMode": AppServices.Config.Set("Player", "mode", value); break;
+            case "playMode": AppServices.Config.PlayMode = value; break;
             case "updateSource": AppServices.Config.Set("Update", "source", value); break;
             case "proxy": AppServices.Config.Set("Network", "proxy", value); break;
             case "language": AppServices.Lang.SetLanguage(value); AppServices.Config.Language = value; break;

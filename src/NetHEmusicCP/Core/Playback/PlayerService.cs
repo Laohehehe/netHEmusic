@@ -203,7 +203,7 @@ public sealed class PlayerService
     public async Task PrevAsync() => await StepAsync(-1);
 
     /// <summary>播放模式：order 顺序 / list 列表循环 / single 单曲循环 / random 随机。</summary>
-    public string Mode => (_config.Get("Player", "mode", "order") ?? "order").ToLowerInvariant();
+    public string Mode => (_config.PlayMode ?? "order").ToLowerInvariant();
 
     private readonly Random _rand = new();
 
