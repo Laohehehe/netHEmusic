@@ -2603,7 +2603,9 @@ function applyPerfAnim(s) {
     }
   }
 
-  function goDownloads() {
+  // 注意：go() 用 `if (task) { await task; animateView(); }` 判断要不要播入场动画，
+  // 所以每个页面函数都必须返回 Promise（之前这里是普通函数，导致切到下载管理没有过渡动画）
+  async function goDownloads() {
     var html = el('div', 'page');
     html.appendChild(el('h2', 'page-title', '下载管理'));
     var tabs = el('div', 'dl-tabs');
