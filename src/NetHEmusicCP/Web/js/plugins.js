@@ -283,7 +283,7 @@
     acts.appendChild(reloadBtn);
     var un = el('button','plg-btn danger','卸载');
     un.onclick = function () {
-      if (!confirm('卸载插件「' + it.name + '」？\n目录会被移到 plugins\\.trash 下（可手动恢复）。')) return;
+      if (!confirm(I18N('卸载插件「{0}」？\\n\\n目录会被移到 plugins\\.trash 下（可手动恢复）。', it.name))) return;
       post({ type: 'plugin_uninstall', id: it.id });
     };
     acts.appendChild(un);
@@ -304,7 +304,7 @@
     var b = el('button','plg-btn' + (has ? '' : ' primary'), has ? '重新安装' : '安装');
     b.onclick = function () {
       if (!p.download) { toast('这个插件没有提供下载地址'); return; }
-      if (!confirm('安装插件「' + (p.name || p.id) + '」？\n\n它会获得这些权限：' + ((p.permissions || []).join('、') || '无') + '\n\n只安装你信任的插件。')) return;
+      if (!confirm(I18N('安装插件「{0}」？\\n\\n它会获得这些权限：{1}\\n\\n只安装你信任的插件。', (p.name || p.id), ((p.permissions || []).join('、') || I18N('无'))))) return;
       post({ type: 'plugin_install', id: p.id, url: p.download });
     };
     acts.appendChild(b);

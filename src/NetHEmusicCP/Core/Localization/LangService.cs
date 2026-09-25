@@ -20,6 +20,13 @@ public sealed class LangService
     public event Action? LanguageChanged;
     public string CurrentLanguage => _current;
 
+    /// <summary>
+    /// 当前语言的词条表，推给网页端做 i18n：键 = 中文原文，值 = 译文。
+    /// 键里带 {0}{1} 的是动态模板（网页端按正则匹配后替换），例如「已暂停（已下 {0}）」。
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CurrentTable
+        => _tables.TryGetValue(_current, out var t) ? t : new Dictionary<string, string>();
+
     public LangService(AppConfig config, string langRoot)
     {
         _langRoot = langRoot;

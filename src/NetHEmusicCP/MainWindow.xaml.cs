@@ -214,7 +214,7 @@ public sealed partial class MainWindow : Window
             core.NavigationCompleted += (s, e) =>
             {
                 AppServices.Player.ResetFrontendAudio();   // 网页重载后 <audio> 是空的
-                PushTheme(); PostToWeb(new { type = "nav", view = "home" }); CheckVersionNotice();
+                PushTheme(); PushLang(); PostToWeb(new { type = "nav", view = "home" }); CheckVersionNotice();
                 HookWebViewKeys();                         // 导航后 WebView 可能换了子窗口，补挂一次
             };
             WebView.Source = new Uri("https://appassets/index.html");
@@ -574,6 +574,9 @@ public sealed partial class MainWindow : Window
     }
 
     private void PostToWeb(object msg) { try { WebView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(msg)); } catch { } }
+
+    /// <summary>把当前语言的词条表推给网页端（前端 i18n 用）。</summary>
+    private void PushLang() => PostToWeb(new { type = "lang", code = AppServices.Lang.CurrentLanguage, table = AppServices.Lang.CurrentTable });
     private void PushTheme()
     {
         var (mode, pr, se, bg, dk) = AppServices.Theme.GetScheme();
@@ -876,7 +879,7 @@ public sealed partial class MainWindow : Window
             case "playMode": AppServices.Config.PlayMode = value; break;
             case "updateSource": AppServices.Config.Set("Update", "source", value); break;
             case "proxy": AppServices.Config.Set("Network", "proxy", value); break;
-            case "language": AppServices.Lang.SetLanguage(value); AppServices.Config.Language = value; break;
+            case "language": AppServices.Lang.SetLanguage(value); AppServices.Config.Language = value; PushLang(); break;
             case "desktopLyric": AppServices.Config.Set("App", "desktop_lyric", b ? "true" : "false"); break;
             case "desktopLyricTopmost":
                 AppServices.Config.DesktopLyricTopmost = b;

@@ -51,6 +51,156 @@ window.addEventListener('unhandledrejection', function (e) {
       Duration: s.dt || s.duration || s.Duration || 0
     };
   }
+  // ================= 多语言（前端 i18n） =================
+  // 词典由 C# 推来（lang/*.lang）：键 = 中文原文，值 = 译文；键里带 {0}{1} 的是动态模板，正则匹配后替换。
+  // 覆盖三层：文本节点 / title·placeholder·aria-label 属性 / 代码里显式调 T() 的拼接串。
+  // 漏译的保持中文原文并上报日志（[i18n] missing:），方便照单补齐词典。
+  var LANG = { code: 'zh_cn', map: {}, pats: [] };
+  var i18nReported = {}, i18nSweep = null;
+  var curView = 'home', curViewData = null;
+  var DATA_ZONES = '.song-row,#plpanel,.pl-card,.dl-row,#np,#qual-menu,.np-lyric,.cust-opts';   // 数据区（歌名/歌手/歌词/字体名）
+
+  function setLangTable(code, table) {
+    var before = LANG.code;
+    LANG.code = code || 'zh_cn';
+    LANG.map = {}; LANG.pats = [];
+    if (LANG.code !== 'zh_cn' && table) {
+      Object.keys(table).forEach(function (k) {
+        var v = table[k];
+        if (!k || v === undefined || v === null) return;
+        if (k.indexOf('{') >= 0) LANG.pats.push({ k: k, v: String(v) });
+        else LANG.map[k] = String(v);
+      });
+      LANG.pats.sort(function (a, b) { return b.k.length - a.k.length; });   // 长模板先试，免得被短模板抢走
+      LANG.pats.forEach(function (p) {
+        // 先转义正则元字符（含 {}），再把 \{0\} 换成捕获组
+        var re = p.k.replace(/[.*+?^${}()|[\]\\{}]/g, '\\$&').replace(/\\\{(\d+)\\\}/g, '(.+?)');
+        try { p.re = new RegExp('^' + re + '$'); } catch (e) { p.re = null; }
+      });
+    }
+    return before !== LANG.code;
+  }
+
+  function reportMissing(s) {
+    if (LANG.code === 'zh_cn' || i18nReported[s]) return;
+    if (/[\u3040-\u30ff]/.test(s)) return;   // 含日文假名的多半是歌名/歌手，别当漏译报
+    if (Object.keys(i18nReported).length >= 200) return;   // 别刷屏
+    i18nReported[s] = 1;
+    try { NE.post({ type: 'log', msg: '[i18n] missing: ' + s }); } catch (e) { }
+  }
+
+  // 取译文：精确表 → 动态模板 → 原样返回（没译的保持中文，不会变空）
+  // 多行文案（原生 confirm 那种）在词典里写作 \n，所以查表前先把真实换行归一化
+  // quiet=true 表示这块是数据区（歌名/歌手/歌词），翻译但不报漏译
+  function T(s, quiet) {
+    if (!s || LANG.code === 'zh_cn' || !/[\u4e00-\u9fff]/.test(s)) return s;
+    // 词典是「键=值」行文本，键里不能出现 = 和真实换行：查询前统一转义成 \e / \n
+    var key = s.replace(/\r?\n/g, '\\n').split('=').join('\\e');
+    var unesc = function (v) { return v.replace(/\\n/g, '\n').split('\\e').join('='); };
+    var hit = LANG.map[key];
+    if (hit !== undefined) return unesc(hit);
+    for (var i = 0; i < LANG.pats.length; i++) {
+      var p = LANG.pats[i]; if (!p.re) continue;
+      var m = p.re.exec(key);
+      if (m) {
+        var out = p.v;
+        for (var j = 1; j < m.length; j++) {
+          var arg = m[j];
+          if (LANG.map[arg] !== undefined) arg = LANG.map[arg];   // 模板参数本身也可能是词条（如「随机播放」）
+          out = out.split('{' + (j - 1) + '}').join(arg);
+        }
+        return unesc(out);
+      }
+    }
+    // 「中文标签 (数值)」「中文标签 #十六进制」这类拼出来的文案：只翻标签部分
+    var lv = /^(.+?)(\s*\([^()]*\))$/.exec(key);
+    if (lv && LANG.map[lv[1]] !== undefined) return LANG.map[lv[1]] + lv[2];
+    var hx = /^(.+?)(\s*#[0-9A-Fa-f]{3,8})$/.exec(key);
+    if (hx && LANG.map[hx[1]] !== undefined) return LANG.map[hx[1]] + hx[2];
+    if (!quiet) reportMissing(key);
+    return s;
+  }
+
+  // 供 plugins.js 等外部脚本用：先按 {0}{1} 填空，再查词典（{0} 位置对应中文原文，不翻译参数）
+  window.I18N = function (zh) {
+    var s = zh;
+    for (var i = 1; i < arguments.length; i++) s = s.split('{' + (i - 1) + '}').join(arguments[i]);
+    return T(s);
+  };
+
+  // 扫一遍 DOM，把含中文的文本 / 属性换掉（歌名、歌手这些不在词典里，原样保留）
+  function applyI18n(root) {
+    if (LANG.code === 'zh_cn') return;
+    var scope = root || document.body;
+    if (!scope || !scope.querySelectorAll) return;
+    var attrs = ['title', 'placeholder', 'aria-label'];
+    var els = scope.querySelectorAll('[title],[placeholder],[aria-label]');
+    for (var i = 0; i < els.length; i++) {
+      for (var a = 0; a < attrs.length; a++) {
+        var v = els[i].getAttribute(attrs[a]);
+        if (v && /[\u4e00-\u9fff]/.test(v)) { var t = T(v); if (t !== v) els[i].setAttribute(attrs[a], t); }
+      }
+    }
+    var walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null), nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (var n = 0; n < nodes.length; n++) {
+      var raw = nodes[n].nodeValue;
+      if (!raw || !/[\u4e00-\u9fff]/.test(raw)) continue;
+      var core = raw.trim();
+      // 歌名/歌手/歌词这些数据区：照译不误，但不计入漏译上报（否则会把上报额度吃光）
+      var pe = nodes[n].parentElement;
+      var quiet = !!(pe && pe.closest && pe.closest(DATA_ZONES));
+      var tr = T(core, quiet);
+      if (tr !== core) nodes[n].nodeValue = raw.replace(core, tr);   // 首尾空白保留
+    }
+  }
+
+  // index.html 里的静态文案（侧栏/顶栏/播放条/弹窗）被译成英文后就丢掉原文了，
+  // 所以启动时先快照一份，切回中文时照它还原（动态区域每次都是重画的，不用管）
+  var i18nSrcText = [], i18nSrcAttr = [];
+  function snapshotI18n(root) {
+    var scope = root || document.body;
+    if (!scope || !scope.querySelectorAll) return;
+    var walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+    while (walker.nextNode()) {
+      var n = walker.currentNode;
+      if (n.nodeValue && /[\u4e00-\u9fff]/.test(n.nodeValue)) i18nSrcText.push({ n: n, v: n.nodeValue });
+    }
+    var attrs = ['title', 'placeholder', 'aria-label'];
+    var els = scope.querySelectorAll('[title],[placeholder],[aria-label]');
+    for (var i = 0; i < els.length; i++) {
+      for (var a = 0; a < attrs.length; a++) {
+        var v = els[i].getAttribute(attrs[a]);
+        if (v && /[\u4e00-\u9fff]/.test(v)) i18nSrcAttr.push({ e: els[i], a: attrs[a], v: v });
+      }
+    }
+  }
+  function restoreI18n() {
+    i18nSrcText.forEach(function (it) { try { if (it.n.nodeValue !== it.v) it.n.nodeValue = it.v; } catch (e) { } });
+    i18nSrcAttr.forEach(function (it) { try { if (it.e.getAttribute(it.a) !== it.v) it.e.setAttribute(it.a, it.v); } catch (e) { } });
+  }
+  snapshotI18n();
+
+  // 切语言时把不走整页重画的动态文案一起刷新（播放条 / 队列 / 音量 / 播放模式）
+  function refreshDynamicTexts() {
+    try { if (nowPlaying) showSongMeta(nowPlaying); else { var t = $('#pl-title'); if (t) t.textContent = T('未在播放'); } } catch (e) { }
+    try { renderQueue(); } catch (e) { }
+    try { applyMode(curMode, true); } catch (e) { }
+    try { updateVolUI(Number($('#pl-volume').value) || 0); } catch (e) { }
+  }
+
+  // 语言表到了：切了语言就重画当前页（页面文案是渲染时写死的），没切就只扫一遍
+  NE.on('lang', function (d) {
+    var changed = setLangTable(d && d.code, d && d.table);
+    if (LANG.code === 'zh_cn') restoreI18n(); else applyI18n(document.body);
+    refreshDynamicTexts();
+    if (changed) { try { go(curView, curViewData); } catch (e) { } }
+    // en 模式下加个兜底轮询：播放条/进度/toast 这类动态文案不走整页重渲染也能跟上
+    if (LANG.code !== 'zh_cn') {
+      if (!i18nSweep) i18nSweep = setInterval(function () { if (!document.hidden) applyI18n(document.body); }, 1000);
+    } else if (i18nSweep) { clearInterval(i18nSweep); i18nSweep = null; }
+  });
+
   // ================= 快捷键 =================
   var HK_DEFAULTS = {
     hk_play:  'Space',                 // 播放 / 暂停
@@ -620,7 +770,7 @@ function applyPerfAnim(s) {
     h.style.setProperty("--nm-ripple-dur", Math.max(0.3, Math.min(1.0, 0.62 * k)).toFixed(2) + "s");
   } catch (e) { }
 }
-  function toast(t) { const el=$('#toast'); el.textContent=t; el.style.display='block'; setTimeout(()=>el.style.display='none',2000); }
+  function toast(t) { const el=$('#toast'); el.textContent=T(t); el.style.display='block'; setTimeout(()=>el.style.display='none',2000); }
   function loading() { view.innerHTML = '<div class="big-load">正在加载…</div>'; }
 
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
@@ -916,9 +1066,11 @@ function applyPerfAnim(s) {
   function animateView() {
     var el = view.firstElementChild; if (!el) return;
     el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
+    applyI18n(view); applyI18n($('#topbar'));   // 页面渲染完顺手把中文换掉（en 模式）
   }
   async function go(viewName, data) {
     try {
+      curView = viewName; curViewData = data;   // 切语言时要按当前页重画
       // 离开设置页：顶栏换回搜索框（设置导航只在设置页存在）
       if (viewName !== 'settings') clearSetNavTopbar();
       var task = null;
@@ -944,7 +1096,7 @@ function applyPerfAnim(s) {
     var prof = (st && st.data && st.data.profile) || (st && st.profile) || {};
     var nick = prof.nickname || '朋友';
     var h = new Date().getHours();
-    var tw = h < 5 ? '凌晨' : h < 9 ? '早' : h < 12 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : '晚上';
+    var tw = T(h < 5 ? '凌晨' : h < 9 ? '早' : h < 12 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : '晚上');
     const html = el('div','page');
     html.appendChild(el('h2','greet-title', esc(nick) + '，' + tw + '好！想听点什么？'));
     html.appendChild(el('h3','sec-title','每日推荐'));
@@ -2243,7 +2395,7 @@ function applyPerfAnim(s) {
   function modeInfo(v) { for (var i = 0; i < MODES.length; i++) if (MODES[i].v === v) return MODES[i]; return MODES[0]; }
   function applyMode(v, silent) {
     var m = modeInfo(v); curMode = m.v;
-    var b = $('#pb-mode'); if (b) { b.innerHTML = SVG[m.ic]; b.title = '播放模式：' + m.t + '（点击切换）'; }
+    var b = $('#pb-mode'); if (b) { b.innerHTML = SVG[m.ic]; b.title = T('播放模式：' + m.t + '（点击切换）'); }
     if (!silent) { NE.setSetting('playMode', curMode); toast(m.t); }
   }
   // 托盘菜单里切了播放模式：C# 已经写好配置，这里只负责把界面切过去
@@ -2378,7 +2530,7 @@ function applyPerfAnim(s) {
     if (ic) {
       ic.innerHTML = v <= 0 ? SVG.volMute : SVG.volOn;
       ic.classList.toggle('muted', v <= 0);
-      ic.title = v <= 0 ? '已静音（点击恢复音量 ' + lastVol + '%）' : '音量 ' + v + '%（点击静音）';
+      ic.title = T(v <= 0 ? '已静音（点击恢复音量 ' + lastVol + '%）' : '音量 ' + v + '%（点击静音）');
     }
   }
   function applyVolume(v, post) {
@@ -2656,6 +2808,7 @@ function applyPerfAnim(s) {
     if (!body) return;
     body.textContent = '';
     if (dlTab === 'active') renderDlActive(body); else renderDlDone(body);
+    applyI18n(body);
   }
 
   // ---- 正在下载 ----
@@ -2706,7 +2859,7 @@ function applyPerfAnim(s) {
     var pct = t.status === 'done' ? 100 : Math.round((t.progress || 0) * 100);
     var fill = r.querySelector('.dl-fill'); if (fill) fill.style.width = pct + '%';
     var p = r.querySelector('.dl-pct'); if (p) p.textContent = pct + '%';
-    var st = r.querySelector('.dl-status'); if (st) st.textContent = dlStatusText(t);
+    var st = r.querySelector('.dl-status'); if (st) st.textContent = T(dlStatusText(t));
     r.classList.toggle('is-done', t.status === 'done');
     r.classList.toggle('is-failed', t.status === 'failed');
     var btn = r.querySelector('[data-do=toggle]');
@@ -2715,7 +2868,7 @@ function applyPerfAnim(s) {
       var resumable = (t.status === 'paused' || t.status === 'failed');
       btn.disabled = !can;
       btn.innerHTML = can ? (resumable ? SVG.play : SVG.pause) : '';
-      btn.title = can ? (resumable ? '继续下载' : '暂停下载') : '';
+      btn.title = can ? T(resumable ? '继续下载' : '暂停下载') : '';
     }
   }
 
