@@ -34,6 +34,9 @@ public sealed class PlayerService
     /// <summary>每首歌已重试过几次（直链失效时用；换一首歌或重新播到它就清零，避免无限重试）。</summary>
     private readonly Dictionary<long, int> _retryCount = new();
     private long _lastHandedOffSongId = -1;
+    /// <summary>实际交给前端的那条直链（失败取证用；可能是新解析的，不一定在内存环里）。</summary>
+    private string _lastHandedUrl = "";
+    private long _lastHandedUrlSongId = -1;
 
     public event Action<Song?>? SongChanged;
     public event Action<bool>? PlaybackChanged;
@@ -337,6 +340,7 @@ public sealed class PlayerService
             {
                 UpdateSmtc(s);
                 _frontendLoadedIndex = _index;
+                _lastHandedUrl = url; _lastHandedUrlSongId = s.Id;   // 失败取证要探这一条
                 FrontendLoad?.Invoke(new FrontendAudioLoad(s, url, _index, startMs));
                 LogManager.Log("交给前端播放: " + s.DisplayName + (fromCache ? "（直链来自缓存）" : "（直链新解析）") + (startMs > 0 ? "（续播 " + (startMs / 1000) + "s）" : ""));
                 return;
@@ -409,10 +413,41 @@ public sealed class PlayerService
         _retryCount.TryGetValue(s.Id, out var n);
         if (n >= 1) return false;
         _retryCount[s.Id] = n + 1;
+        // 取证：探"实际交给前端的那条直链"（可能是新解析的、也可能来自内存环），看 CDN 当时回了什么
+        var bad = (_lastHandedUrlSongId == s.Id && !string.IsNullOrEmpty(_lastHandedUrl))
+            ? _lastHandedUrl
+            : (_memoryRing.TryGetValue(s.Id, out var cachedUrl) ? cachedUrl : "");
+        if (!string.IsNullOrEmpty(bad)) _ = ProbeUrlAsync(bad);
         _memoryRing.Remove(s.Id);                    // 关键：可能已经过期/失效的直链必须丢掉
         LogManager.Log("[重试] 直链失效，清掉缓存重新解析: " + s.DisplayName);
         await PlayCurrentAsync();                    // 同一首重放，不推进队列
         return true;
+    }
+
+    /// <summary>
+    /// 诊断用：探测一条"播放失败的直链"实际返回什么（HTTP 状态 / Content-Type / 前几个字节）。
+    /// 正常音频应该是 206 + audio/mpeg|flac + ID3/fLaC 之类的魔数；若是 200 + text/html 就说明
+    /// CDN 给的是错误页（防盗链/限流），而不是音频。
+    /// </summary>
+    private static async Task ProbeUrlAsync(string url)
+    {
+        try
+        {
+            var host = "";
+            try { host = new Uri(url).Host; } catch { }
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            var req = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, url);
+            req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 255);
+            using var resp = await http.SendAsync(req, System.Net.Http.HttpCompletionOption.ResponseHeadersRead);
+            var buf = new byte[256];
+            int n = 0;
+            try { using var st = await resp.Content.ReadAsStreamAsync(); n = await st.ReadAsync(buf, 0, buf.Length); } catch { }
+            var magic = new System.Text.StringBuilder();
+            for (int i = 0; i < n && i < 8; i++) magic.Append(buf[i] >= 32 && buf[i] < 127 ? (char)buf[i] : '.');
+            LogManager.Warn("[诊断] 失败直链探测 host=" + host + " → HTTP " + (int)resp.StatusCode
+                + " type=" + resp.Content.Headers.ContentType + " 首字节=" + magic);
+        }
+        catch (Exception e) { LogManager.Warn("[诊断] 失败直链探测异常: " + e.Message); }
     }
 
     public void Seek(TimeSpan t)
