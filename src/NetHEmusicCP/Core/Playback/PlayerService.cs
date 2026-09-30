@@ -31,6 +31,10 @@ public sealed class PlayerService
     /// <summary>3 首内存环：prev/current/next 的音源（Uri 或本地文件）。</summary>
     private readonly Dictionary<long, string> _memoryRing = new();
 
+    /// <summary>每首歌已重试过几次（直链失效时用；换一首歌或重新播到它就清零，避免无限重试）。</summary>
+    private readonly Dictionary<long, int> _retryCount = new();
+    private long _lastHandedOffSongId = -1;
+
     public event Action<Song?>? SongChanged;
     public event Action<bool>? PlaybackChanged;
     public event Action<TimeSpan>? PositionChanged;
@@ -310,9 +314,12 @@ public sealed class PlayerService
 
         try
         {
-            // 解析播放直链（内存环缓存优先，其次即时请求）
+            // 解析播放直链（内存环缓存优先，其次即时请求）。
+            // ⚠ 网易直链有时效（/song/url 返回的 expi，实测约 20 分钟），缓存命中不等于还能用，
+            //   所以播放失败（前端 code 4）时会清掉缓存重试一次，见 RetryCurrentAsync。
             string? url = null;
-            if (_memoryRing.TryGetValue(s.Id, out var cached) && !string.IsNullOrEmpty(cached)) url = cached;
+            var fromCache = false;
+            if (_memoryRing.TryGetValue(s.Id, out var cached) && !string.IsNullOrEmpty(cached)) { url = cached; fromCache = true; }
             if (string.IsNullOrEmpty(url))
             {
                 var sm = await AppServices.Netease.SongUrl(s.Id.ToString(), DownloadManager.BitRate(_config.Quality));
@@ -322,13 +329,16 @@ public sealed class PlayerService
 
             var startMs = TakeResumeMs(s.Id);   // 续播位置（仅启动后第一次、且就是这首）
 
+            // 换到别的歌 = 新一轮播放 → 这首歌的重试额度清零（同一首连续失败时不会无限重试）
+            if (_lastHandedOffSongId != s.Id) { _retryCount.Remove(s.Id); _lastHandedOffSongId = s.Id; }
+
             // 前端播放模式：直链交给网页，由 <audio> + Web Audio 播放（可拿真实频谱）
             if (FrontendAudio)
             {
                 UpdateSmtc(s);
                 _frontendLoadedIndex = _index;
                 FrontendLoad?.Invoke(new FrontendAudioLoad(s, url, _index, startMs));
-                LogManager.Log("交给前端播放: " + s.DisplayName + (startMs > 0 ? "（续播 " + (startMs / 1000) + "s）" : ""));
+                LogManager.Log("交给前端播放: " + s.DisplayName + (fromCache ? "（直链来自缓存）" : "（直链新解析）") + (startMs > 0 ? "（续播 " + (startMs / 1000) + "s）" : ""));
                 return;
             }
 
@@ -385,6 +395,24 @@ public sealed class PlayerService
             var c = Current;
             return c is null ? TimeSpan.Zero : TimeSpan.FromMilliseconds(c.Duration);
         }
+    }
+
+    /// <summary>
+    /// 前端报「源不支持」（错误码 4，多半是直链过期）时调一次：
+    /// 丢掉这首歌的缓存直链 → 重新解析 → 重放同一首。每首歌只重试一次，
+    /// 返回 false 表示别再试了（调用方去切歌，避免无限循环）。
+    /// </summary>
+    public async Task<bool> RetryCurrentAsync()
+    {
+        var s = Current;
+        if (s is null) return false;
+        _retryCount.TryGetValue(s.Id, out var n);
+        if (n >= 1) return false;
+        _retryCount[s.Id] = n + 1;
+        _memoryRing.Remove(s.Id);                    // 关键：可能已经过期/失效的直链必须丢掉
+        LogManager.Log("[重试] 直链失效，清掉缓存重新解析: " + s.DisplayName);
+        await PlayCurrentAsync();                    // 同一首重放，不推进队列
+        return true;
     }
 
     public void Seek(TimeSpan t)

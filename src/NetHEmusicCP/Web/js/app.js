@@ -426,9 +426,10 @@ window.addEventListener('unhandledrejection', function (e) {
     el.addEventListener('ended', function () { if (p !== AU.ps[AU.cur]) return; AU.playing = false; auPostState(true); NE.post({ type: 'audio_ended' }); });
     el.addEventListener('error', function () {
       if (p !== AU.ps[AU.cur]) return;
+      var code = (el.error && el.error.code) || 0;          // 4 = MEDIA_ERR_SRC_NOT_SUPPORTED（直链失效/拿到的不是音频）
       var msg = (el.error && el.error.message) || 'unknown';
-      try { NE.post({ type: 'log', msg: '[au] error ' + (el.error && el.error.code) + ' ' + msg }); } catch (e) { }
-      NE.post({ type: 'audio_error', message: msg });
+      try { NE.post({ type: 'log', msg: '[au] error ' + code + ' ' + msg }); } catch (e) { }
+      NE.post({ type: 'audio_error', code: code, message: msg });
     });
     return p;
   }

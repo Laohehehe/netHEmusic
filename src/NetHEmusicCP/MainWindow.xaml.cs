@@ -676,9 +676,13 @@ public sealed partial class MainWindow : Window
                         break;
                     }
                 case "audio_error":
-                    LogManager.Warn("前端播放失败: " + (doc.TryGetProperty("message", out var em) ? em.GetString() : ""));
-                    _ = AppServices.Player.AutoNextAsync();
-                    break;
+                    {
+                        var emsg = doc.TryGetProperty("message", out var em) ? (em.GetString() ?? "") : "";
+                        int ecode = doc.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecc) ? ecc : 0;
+                        LogManager.Warn("前端播放失败(code=" + ecode + "): " + emsg);
+                        _ = HandleAudioErrorAsync(ecode);
+                        break;
+                    }
                 case "seek": { if (doc.TryGetProperty("pos", out var sk) && sk.TryGetInt64(out var skn)) AppServices.Player.Seek(TimeSpan.FromMilliseconds(skn)); break; }
                 case "queue_remove": { if (doc.TryGetProperty("index", out var ri) && ri.TryGetInt32(out var rn)) AppServices.Player.RemoveAt(rn); break; }
                 case "queue_next": { if (doc.TryGetProperty("index", out var ni) && ni.TryGetInt32(out var nn)) AppServices.Player.MoveToNext(nn); break; }
@@ -791,6 +795,29 @@ public sealed partial class MainWindow : Window
             LogManager.Log("已在资源管理器中定位: " + path);
         }
         catch (Exception e) { PostToWeb(new { type = "toast", text = "打开失败：" + e.Message }); }
+    }
+
+    /// <summary>
+    /// 前端媒体错误：code 4（源不支持，多半是直链过期）先清掉缓存直链、重新解析并重放同一首；
+    /// 仍失败（或不是 code 4）才切歌。以前这里无条件 AutoNext，于是"直链过期"表现成"这首歌被跳过"。
+    /// </summary>
+    private async Task HandleAudioErrorAsync(int code)
+    {
+        var cur = AppServices.Player.Current;
+        if (code == 4)
+        {
+            try
+            {
+                if (await AppServices.Player.RetryCurrentAsync())
+                {
+                    LogManager.Log("已用重新解析的直链重试当前曲目" + (cur is null ? "" : "：" + cur.DisplayName));
+                    return;
+                }
+            }
+            catch (Exception e) { LogManager.Error("重试播放失败: " + e.Message); }
+        }
+        LogManager.Warn("跳过当前曲目" + (cur is null ? "" : "：" + cur.DisplayName) + "（code=" + code + "，重试未成功）");
+        await AppServices.Player.AutoNextAsync();
     }
 
     /// <summary>读取 [App] 段的布尔配置（默认值字符串）。</summary>
