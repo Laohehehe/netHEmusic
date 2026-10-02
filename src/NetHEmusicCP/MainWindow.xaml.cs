@@ -972,7 +972,7 @@ public sealed partial class MainWindow : Window
                 {
                     AppServices.Config.CacheLimitMb = lm;
                     AppServices.Cache.EnforceLimit();          // 调小了立刻按新上限清理
-                    PostToWeb(new { type = "settings", data = new Dictionary<string, object?> { ["cacheSizeMb"] = Math.Round(AppServices.Cache.SizeMb(), 2), ["cacheLimitMb"] = AppServices.Config.CacheLimitMb } });
+                    PostToWeb(new { type = "cache_stat", sizeMb = Math.Round(AppServices.Cache.SizeMb(), 2), limitMb = AppServices.Config.CacheLimitMb });
                 }
                 break;
             case "quality": AppServices.Config.Quality = value; break;

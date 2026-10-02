@@ -2196,12 +2196,35 @@ function applyPerfAnim(s) {
     // 自定义范围的滑条（用于动画速率这类非 0-100 的项）
     function rng2(label, key, val, min, max, suffix, step) {
       suffix = suffix || '';
-      var r = el('div','set-row'); var lb = el('label','',label+' ('+val+suffix+')'); r.appendChild(lb);
+      var r = el('div','set-row'); r.appendChild(el('label','',label));
       var i2 = el('input'); i2.type='range'; i2.min=min; i2.max=max; i2.step=step||5; i2.value=val;
-      i2.oninput = function(){ lb.textContent = label+' ('+i2.value+suffix+')'; NE.setSetting(key, i2.value); applyLiveSetting(key, i2.value); };
-      r.appendChild(i2); return r;
+      var vEl = el('span','set-value', val + suffix);      // 数值放右边（不再塞进设置名里）
+      i2.oninput = function(){ vEl.textContent = i2.value + suffix; NE.setSetting(key, i2.value); applyLiveSetting(key, i2.value); };
+      r.appendChild(i2); r.appendChild(vEl); return r;
     }
-    function rng(label, key, val) { var r = el('div','set-row'); var lb=el('label','',label+' ('+(val||80)+')'); r.appendChild(lb); var i=el('input'); i.type='range'; i.min=0; i.max=100; i.value=val||80; i.oninput=function(){ lb.textContent=label+' ('+i.value+')'; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
+    // 数字输入框：比滑块精确；非法输入弹提示并还原
+    function numRow(label, key, val, min, max, suffix) {
+      suffix = suffix || '';
+      var r = el('div','set-row'); r.appendChild(el('label','',label));
+      var i = el('input'); i.type='number'; i.className='set-num'; i.step=1; i.min=min; i.max=max; i.value=val;
+      var unit = el('span','set-value', suffix);
+      i.onchange = function () {
+        var v = parseInt(i.value, 10);
+        if (!isFinite(v) || v < min || v > max) { i.value = String(val); toast('请输入 ' + min + ' ~ ' + max + ' 之间的整数'); return; }
+        val = v; i.value = String(v);
+        NE.setSetting(key, v);
+        applyLiveSetting(key, v);
+      };
+      r.appendChild(i); r.appendChild(unit); return r;
+    }
+    function rng(label, key, val) {
+      var v0 = (val === undefined || val === null || val === '') ? 80 : Number(val);
+      var r = el('div','set-row'); r.appendChild(el('label','',label));
+      var i = el('input'); i.type='range'; i.min=0; i.max=100; i.value=v0;
+      var vEl = el('span','set-value', String(v0));
+      i.oninput = function(){ vEl.textContent = i.value; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); };
+      r.appendChild(i); r.appendChild(vEl); return r;
+    }
     function info(label, value) {
       var r = el('div','set-row');
       r.appendChild(el('label','',label));
@@ -2448,10 +2471,11 @@ function applyPerfAnim(s) {
     }
     function fxRng(label, key, val, fk) {
       var v = (val===undefined||val===null||val==='') ? 50 : Number(val);
-      var r = el('div','set-row'); var lb = el('label','',label+' ('+v+')'); r.appendChild(lb);
+      var r = el('div','set-row'); r.appendChild(el('label','',label));
       var i = el('input'); i.type='range'; i.min=0; i.max=100; i.value=v;
-      i.oninput = function(){ lb.textContent = label+' ('+i.value+')'; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); var p={}; p[fk]=Number(i.value); fxApply(p); };
-      r.appendChild(i); return r;
+      var vEl = el('span','set-value', String(v));
+      i.oninput = function(){ vEl.textContent = i.value; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); var p={}; p[fk]=Number(i.value); fxApply(p); };
+      r.appendChild(i); r.appendChild(vEl); return r;
     }
     function fxColorRow(colorVal, autoVal) {
       var PALETTE = ['#e23535', '#07c160', '#1d6eff', '#5865f2', '#9b59b6', '#f0a020', '#00bcd4', '#ffffff'];
@@ -2549,14 +2573,13 @@ function applyPerfAnim(s) {
     html.appendChild(fxGroup(s));
     html.appendChild(group('下载', [ dirRow(), sel('音乐命名格式','ui_name_format', String(cfgGet(s,'ui_name_format','title-artist')), [{v:'title-artist',t:'歌曲名 - 歌手（默认）'},{v:'artist-title',t:'歌手 - 歌曲名'},{v:'title',t:'歌曲名'} ]), sel('音质','quality', s.quality, zhOpts('quality', ['standard','exhigh','lossless'])) ]));
     function rngXfade() {
-      var r = el('div','set-row'); var lb = el('label','','歌曲切换淡化 (秒)');
+      var r = el('div','set-row'); r.appendChild(el('label','','歌曲切换淡化'));
       var cur = Math.max(0, Math.min(12, Number(s.crossfade || 0) || 0));
-      lb.textContent = '歌曲切换淡化 (' + cur + ')';
-      r.appendChild(lb);
       var i = el('input'); i.type='range'; i.min=0; i.max=12; i.step=1; i.value=cur;
-      i.oninput = function(){ lb.textContent = '歌曲切换淡化 (' + i.value + ')'; AU.xfade = Number(i.value); };
+      var vEl = el('span','set-value', cur + ' 秒');
+      i.oninput = function(){ vEl.textContent = i.value + ' 秒'; AU.xfade = Number(i.value); };
       i.onchange = function(){ NE.setSetting('crossfade', i.value); };
-      r.appendChild(i); return r;
+      r.appendChild(i); r.appendChild(vEl); return r;
     }
     html.appendChild(group('播放', [
       rng('默认音量','volume', s.volume),
@@ -2647,7 +2670,7 @@ function applyPerfAnim(s) {
         { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
       ]),
       cacheDirRow(),
-      rng2('缓存上限','cacheLimitMb', Number(s.cacheLimitMb) || 1024, 128, 4096, 'MB', 128),
+      numRow('缓存上限','cacheLimitMb', Number(s.cacheLimitMb) || 1024, 64, 16384, 'MB'),
       cacheUsageRow()
     ]));
     html.appendChild(group('网络 / 代理', [
@@ -2713,6 +2736,13 @@ function applyPerfAnim(s) {
     // 设置页有了专属 headtop：这排分组按钮铺到顶栏上（替换搜索框），不再占内容区高度
     if (navItems.length > 1) mountSetNavTopbar(navItems);
   }
+
+  // 缓存占用变化（C# 改上限后回传）
+  NE.on('cache_stat', function (d) {
+    if (!d) return;
+    try { appSettings.cacheSizeMb = d.sizeMb; appSettings.cacheLimitMb = d.limitMb; } catch (e) { }
+    renderCacheUsage();
+  });
 
   // C# 的图形化文件夹选择器选完后回传
   NE.on('folder_picked', function (d) {
