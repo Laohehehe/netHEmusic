@@ -47,6 +47,7 @@ public sealed partial class MainWindow : Window
             // Mica 打开时原生根背景必须透明，否则会把材质挡住（面板底色另由 PushTheme 输出半透明）
             Root.Background = mica ? null : new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.SurfaceColor(dark));
             Headbar.Background = mica ? null : new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.SurfaceDarken(dark));
+            WindowHelper.SyncBackdropTheme(dark);   // 材质的深浅跟着应用配色走（否则切浅色后标题栏还是深的）
         }
         catch (Exception e) { LogManager.Debug("原生配色失败: " + e.Message); }
     }
@@ -68,7 +69,7 @@ public sealed partial class MainWindow : Window
             AppWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
         }
         catch (Exception e) { LogManager.Debug("标题栏: " + e.Message); }
-        WindowHelper.ApplyBackdrop(this, AppServices.Config.Mica);
+        WindowHelper.ApplyBackdrop(this, AppServices.Config.Mica, AppServices.Theme.IsDark);
         // 隐藏标题栏的系统菜单（右键 / Alt+Space）
         try { WindowMenuBlocker.Attach(WinRT.Interop.WindowNative.GetWindowHandle(this)); } catch (Exception ex) { LogManager.Debug("Attach 标题栏菜单屏蔽失败: " + ex.Message); }
 
@@ -962,7 +963,7 @@ public sealed partial class MainWindow : Window
                 break;
             case "mica":
                 AppServices.Config.Mica = b;
-                WindowHelper.ApplyBackdrop(this, b);
+                WindowHelper.ApplyBackdrop(this, b, AppServices.Theme.IsDark);
                 ApplyNativeTheme();     // Mica 开/关时原生根背景要在透明/实色之间切换
                 PushTheme();            // 面板底色跟着变成半透明/实色
                 break;

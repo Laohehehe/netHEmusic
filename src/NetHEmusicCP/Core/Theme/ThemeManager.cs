@@ -64,7 +64,10 @@ public sealed class ThemeManager
     public event Action? ThemeChanged;
     public string CurrentScheme => _config.Scheme;
     public string CurrentTheme => _config.Theme;
-    public bool IsDark => _config.Theme != "light";
+    /// <summary>当前算不算深色 —— 以【配色方案自己的 mode】为准（每个方案的第一个字段）。
+    /// 原来读的是 [App] theme 设置，但界面上没有任何地方在写它（默认 dark），
+    /// 于是选了浅色配色后网页是浅的、原生标题栏/Mica 还是深的。</summary>
+    public bool IsDark => GetScheme().mode != "light";
 
     public ThemeManager(AppConfig config) => _config = config;
 
@@ -103,9 +106,9 @@ public sealed class ThemeManager
     public void Apply(FrameworkElement root)
     {
         if (root is null) return;
-        var theme = _config.Theme == "light" ? ElementTheme.Light : ElementTheme.Dark;
+        var theme = IsDark ? ElementTheme.Dark : ElementTheme.Light;
         root.RequestedTheme = theme;
-        bool dark = theme == ElementTheme.Dark;
+        bool dark = IsDark;
         var accent = AccentColor(dark);
 
         SetResource(root, "AccentFillColorDefaultBrush", new SolidColorBrush(accent));
@@ -115,7 +118,7 @@ public sealed class ThemeManager
         SetResource(root, "AppSurfaceDarkenBrush", new SolidColorBrush(SurfaceDarken(dark)));
         SetResource(root, "AppTextBrush", new SolidColorBrush(TextColor(dark)));
 
-        LogManager.Log("应用主题: " + _config.Theme + " scheme=" + _config.Scheme + " accent=#" + accent.ToString());
+        LogManager.Log("应用主题: " + (IsDark ? "dark" : "light") + " scheme=" + _config.Scheme + " accent=#" + accent.ToString());
         ThemeChanged?.Invoke();
     }
 
