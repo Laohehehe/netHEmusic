@@ -722,10 +722,8 @@ html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
 .np.ly-char .np-line.on .ly-ch.sung{color:#fff;}
 
 /* ================= 无原生标题栏（标题栏 0px） ================= */
-/* 窗口最上面一条由网页充当标题栏：拖拽带（JS 里 mousedown → win_drag）、配色渐变、留出系统按钮的位置 */
+/* 窗口最上面一条由网页充当标题栏：拖拽带（JS 里 mousedown → win_drag），并给系统按钮让位。\n   标题栏设置项已随原生标题栏一起删除，这里不再有配色渐变。 */
 #topbar{padding-right:152px;}            /* 右上角三个系统按钮铺在网页上，别压到搜索框 */
-html[data-tb="surface"]  #topbar{background-image:linear-gradient(90deg,rgba(var(--md-accent-color-bg-darken-rgb),var(--tb-a,.65)),rgba(var(--md-accent-color-bg-rgb),var(--tb-a,.65)));}
-html[data-tb="accent"]   #topbar{background-image:linear-gradient(90deg,rgba(var(--md-accent-color-bg-darken-rgb),var(--tb-a,.65)),rgba(var(--md-accent-color-rgb),var(--tb-a,.65)));}
 
 /* ================= 液态玻璃（材质 = liquid） ================= */
 /* 底层仍是原生亚克力（能透看后方窗口），这里给【浮动】面板叠折射+高光：

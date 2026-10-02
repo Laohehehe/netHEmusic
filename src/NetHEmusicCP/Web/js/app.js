@@ -769,22 +769,17 @@ function applyLiveSetting(key, val) {
     else if (key === 'volume') applyVolume(Number(val) || 0, false);
     else if (key === 'playMode') applyMode(String(val), true);
     else if (key.indexOf('hk_') === 0) hotkeysFromSettings(appSettings);
-    if (key === 'ui_material' || key === 'ui_titlebar' || key === 'ui_titlebar_alpha') applyGlassUI();
+    if (key === 'ui_material') applyGlassUI();
   } catch (e) { }
 }
 function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
   function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
 
-  // ---- 顶部标题条（原生标题栏已是 0px，这条现在由网页自己画）+ 液态玻璃开关 ----
+  // ---- 液态玻璃开关（顶部标题条已随原生标题栏一起取消，不再有标题栏设置项）----
   function applyGlassUI() {
     try {
       var s = appSettings || {};
       var root = document.documentElement;
-      var tb = String(cfgGet(s, 'ui_titlebar', 'surface'));
-      var a = Number(cfgGet(s, 'ui_titlebar_alpha', 65));
-      if (!isFinite(a)) a = 65;
-      root.setAttribute('data-tb', tb);
-      root.style.setProperty('--tb-a', String(Math.max(0, Math.min(100, a)) / 100));
       root.classList.toggle('liquid', String(cfgGet(s, 'ui_material', 'acrylic')) === 'liquid');
       if (window.neGlassRefresh) window.neGlassRefresh();
     } catch (e) { }
@@ -2686,12 +2681,6 @@ function applyPerfAnim(s) {
           { v: 'micaAlt', t: 'Mica Alt' },
           { v: 'liquid', t: '液态玻璃' }
         ]),
-        sel('标题栏','ui_titlebar', String(cfgGet(s,'ui_titlebar','surface')), [
-          { v: 'surface', t: '配色渐变' },
-          { v: 'accent', t: '强调色渐变' },
-          { v: 'none', t: '不着色' }
-        ]),
-        rng2('标题栏着色强度','ui_titlebar_alpha', Number(cfgGet(s,'ui_titlebar_alpha',65))||65, 0, 100, '%', 1),
         rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1)
       ]),
       sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
