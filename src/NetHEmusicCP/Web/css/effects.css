@@ -405,12 +405,34 @@ html.no-fx .fx-shake{animation:none;}
 /* 非当前行模糊：按与当前行的距离逐行计算，由 JS 写进内联 filter */
 /* 旋转弧形排列时的行变换由 JS 写进 style.transform，这里只给原点 */
 .np.ly-curved .np-line{transform-origin:left center;}
-/* 逐字动画 */
+/* 逐字动画：动画名由设置写进 --ly-ch-anim（默认字符上跳），
+   每个字的延迟 = 该字在整句里的位置 × --beat-step（JS 按“整句时长 ÷ 字数”算，见 npLayout）。
+   注意 fill-mode 用 backwards：延迟期间保持起始态，动画放完后回到基础样式（逐字填充的暗/亮色）。 */
 .ly-ch{display:inline-block;white-space:pre;}
 .np.ly-char .np-line.on .ly-ch{
-  animation:ly-ch-in .42s var(--ly-ease) both;
-  animation-delay:calc(var(--i) * 26ms);
+  animation:var(--ly-ch-anim,ly-beat-up) .5s var(--ly-ease) backwards;
+  animation-delay:calc(var(--i) * var(--beat-step,40ms));
 }
+/* 字符上跳（默认档） */
+@keyframes ly-beat-up{
+  0%{transform:none;}
+  38%{transform:translateY(calc(-.42em * var(--ly-ch-power,.6))) scale(calc(1 + .08 * var(--ly-ch-power,.6)));}
+  100%{transform:none;}
+}
+/* 缩放脉冲 */
+@keyframes ly-beat-pulse{
+  0%{transform:none;}
+  38%{transform:scale(calc(1 + .38 * var(--ly-ch-power,.6)));}
+  100%{transform:none;}
+}
+/* 颜色高亮 */
+@keyframes ly-beat-glow{
+  0%{text-shadow:none;}
+  32%{text-shadow:0 0 calc(5px + 12px * var(--ly-ch-power,.6)) rgba(255,255,255,.95),
+                    0 0 calc(14px + 28px * var(--ly-ch-power,.6)) var(--md-accent-color,rgba(150,180,255,.9));}
+  100%{text-shadow:none;}
+}
+/* 逐字浮现 */
 @keyframes ly-ch-in{
   from{opacity:0;transform:translateY(8px) scale(.86);}
   to{opacity:1;transform:none;}

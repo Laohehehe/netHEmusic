@@ -1224,6 +1224,7 @@ function applyPerfAnim(s) {
   var lyStyles = {
     glow: false, shadow: true,
     layout: 'vertical', curve: 50, charAnim: false,
+    charStyle: 'jump', charPower: 60,
     blur: false, blurAmt: 40, ease: 'smooth',
     showTr: true, showRo: true,
     fontSize: 22,
@@ -1237,6 +1238,14 @@ function applyPerfAnim(s) {
     gentle: 'cubic-bezier(.25,.46,.45,.94)',   // 温和
     easeout:'cubic-bezier(.15,.6,.35,1)'       // 缓出
   };
+  // 逐字动画样式 → CSS 动画名（默认「字符上跳」；每个字的延迟按整句时长平均分配，见 npLayout）
+  var LY_CH_ANIM = {
+    jump:  'ly-beat-up',      // 字符上跳
+    pulse: 'ly-beat-pulse',   // 缩放脉冲
+    glow:  'ly-beat-glow',    // 颜色高亮
+    fade:  'ly-ch-in',        // 逐字浮现
+    fill:  'none'             // 仅逐字填充（KTV 进度色，没有跳动）
+  };
 
   function npApplyLyricSettings(s) {
     lyStyles.glow = cfgBool(s, 'lyric_glow', false);
@@ -1244,6 +1253,8 @@ function applyPerfAnim(s) {
     lyStyles.layout = String(cfgGet(s, 'lyric_layout', 'vertical'));
     lyStyles.curve = Number(cfgGet(s, 'lyric_curve', 50)) || 0;
     lyStyles.charAnim = cfgBool(s, 'lyric_char_anim', false);
+    lyStyles.charStyle = String(cfgGet(s, 'lyric_char_style', 'jump'));
+    lyStyles.charPower = Math.max(0, Math.min(100, Number(cfgGet(s, 'lyric_char_power', 60)) || 0));
     lyStyles.blur = cfgBool(s, 'lyric_blur', false);
     lyStyles.blurAmt = Number(cfgGet(s, 'lyric_blur_amount', 40)) || 0;
     lyStyles.ease = String(cfgGet(s, 'lyric_ease', 'smooth'));
@@ -1278,6 +1289,8 @@ function applyPerfAnim(s) {
     VZ_FRAME_MS = Math.round(1000 / (lyStyles.vzFps || 33));
     np.style.setProperty('--ly-blur', (s.blurAmt / 100 * 5).toFixed(2) + 'px');
     np.style.setProperty('--np-bg-blur', (lyStyles.bgBlurAmt / 100 * 40).toFixed(1) + 'px');   // 歌词页背景模糊量（0% = 不模糊，30% ≈ 原来的 12px）
+    np.style.setProperty('--ly-ch-anim', LY_CH_ANIM[s.charStyle] || LY_CH_ANIM.jump);          // 逐字动画样式
+    np.style.setProperty('--ly-ch-power', (s.charPower / 100).toFixed(2));                     // 跳动强度 0~1
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
     np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 字号（行高与排版会跟着重算）
     npLayout();
@@ -1381,6 +1394,19 @@ function applyPerfAnim(s) {
       n.style.transitionDelay = dly + 'ms';
       n.classList.toggle('on', i === cur && npIndex >= 0);
     }
+    // 逐字动画的节奏：把这一句的时长（到下一句为止）平均分给每个字，写进 --beat-step
+    try {
+      if (lyStyles.charAnim && npLines[cur]) {
+        var lnCur = nodes[cur];
+        var nch = lnCur.querySelectorAll ? lnCur.querySelectorAll('.ly-ch').length : 0;
+        if (nch > 0) {
+          var t0 = npLines[cur].t, nxtL = npLines[cur + 1];
+          var t1 = (nxtL && nxtL.t > t0) ? nxtL.t : (t0 + (npLines[cur].d || 4000));
+          var step = Math.max(45, Math.min(700, (t1 - t0) / nch));
+          lnCur.style.setProperty('--beat-step', step.toFixed(0) + 'ms');
+        }
+      }
+    } catch (e21) { }
     // 容器整体滑动，使当前行居中（这一层是有过渡的，换行不再瞬移）
     box.style.transform = 'translateY(' + (centerY - base[cur] - h[cur] / 2).toFixed(1) + 'px)';
     lyPrevIndex = cur;
@@ -1656,6 +1682,11 @@ function applyPerfAnim(s) {
     addSwitch('显示翻译', 'lyric_show_translation', 'showTr');
     addSwitch('显示罗马音', 'lyric_show_romaji', 'showRo');
     addSwitch('逐字动画', 'lyric_char_anim', 'charAnim');
+    addSelect('逐字动画样式', 'lyric_char_style', 'charStyle', [
+      { v: 'jump', t: '字符上跳' }, { v: 'pulse', t: '缩放脉冲' }, { v: 'glow', t: '颜色高亮' },
+      { v: 'fade', t: '逐字浮现' }, { v: 'fill', t: '仅逐字填充' }
+    ]);
+    addRange('跳动强度', 'lyric_char_power', 'charPower', 0, 100);
     addSwitch('非当前行模糊', 'lyric_blur', 'blur');
     addRange('模糊程度', 'lyric_blur_amount', 'blurAmt', 0, 100);
     addSelect('动画曲线', 'lyric_ease', 'ease', [
