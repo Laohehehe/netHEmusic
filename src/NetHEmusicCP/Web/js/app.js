@@ -2154,6 +2154,26 @@ function applyPerfAnim(s) {
   // 下载目录：路径框引用（folder_picked 回来后原地刷新，不用整页重绘）
   let dlDirEl = null;
   let dlDir = '';
+  // 缓存（[Cache] 段）：位置框 + 占用条引用
+  let cacheDirPath = '', cacheDirEl = null, cacheUsageEl = null;
+  function renderCacheUsage() {
+    if (!cacheUsageEl) return;
+    var used = Number((appSettings && appSettings.cacheSizeMb) || 0) || 0;
+    var lim = Number((appSettings && appSettings.cacheLimitMb) || 1024) || 1024;
+    var pct = Math.max(0, Math.min(100, lim > 0 ? (used / lim * 100) : 0));
+    cacheUsageEl.fill.style.width = pct.toFixed(1) + '%';
+    cacheUsageEl.fill.classList.toggle('warn', pct >= 85);
+    cacheUsageEl.txt.textContent = used.toFixed(1) + ' MB / ' + lim + ' MB（' + pct.toFixed(0) + '%）';
+  }
+  function refreshCacheUsage() {
+    NE.getSettings().then(function (ns) {
+      if (!ns) return;
+      try { appSettings.cacheSizeMb = ns.cacheSizeMb; appSettings.cacheLimitMb = ns.cacheLimitMb; if (ns.cacheDir) appSettings.cacheDir = ns.cacheDir; } catch (e) { }
+      cacheDirPath = ns.cacheDir || cacheDirPath;
+      if (cacheDirEl) { cacheDirEl.textContent = cacheDirPath || '（默认 temp）'; cacheDirEl.title = cacheDirPath; }
+      renderCacheUsage();
+    }).catch(function () { });
+  }
   async function goSettings() {
     loading();
     var s = await NE.getSettings();
@@ -2256,6 +2276,43 @@ function applyPerfAnim(s) {
       return box;
     }
     // 下载目录：路径显示框 + 「选择…」（C# 弹图形化文件夹选择器）+「打开文件夹」
+    // 缓存（[Cache] 段）：位置 + 上限 + 实际占用条
+    function cacheDirRow() {
+      var r = el('div','set-row');
+      r.appendChild(el('label','','缓存位置'));
+      var ctl = el('div','dir-ctl');
+      cacheDirPath = s.cacheDir || '';
+      var box = el('div','dir-path', cacheDirPath || '（默认 temp）');
+      box.title = cacheDirPath;
+      cacheDirEl = box;
+      var bPick = el('button','dir-btn','选择…');
+      bPick.onclick = function (e) { e.stopPropagation(); NE.post({ type: 'pick_folder', key: 'cacheDir' }); };
+      var bClear = el('button','dir-btn','清空缓存');
+      bClear.onclick = function (e) {
+        e.stopPropagation();
+        NE.post({ type: 'cache_clear' });
+        setTimeout(function () { try { appSettings.cacheSizeMb = 0; renderCacheUsage(); } catch (er) { } }, 60);
+        setTimeout(refreshCacheUsage, 500);
+      };
+      ctl.appendChild(box); ctl.appendChild(bPick); ctl.appendChild(bClear);
+      r.appendChild(ctl);
+      return r;
+    }
+    function cacheUsageRow() {
+      var r = el('div','set-row');
+      r.appendChild(el('label','','缓存占用'));
+      var wrap = el('div','cache-usage');
+      var bar = el('div','cache-bar');
+      var fill = el('div','cache-fill');
+      bar.appendChild(fill);
+      var txt = el('span','cache-txt','—');
+      wrap.appendChild(bar); wrap.appendChild(txt);
+      cacheUsageEl = { fill: fill, txt: txt };
+      renderCacheUsage();
+      setTimeout(refreshCacheUsage, 80);       // 进设置页刷一次真实占用
+      r.appendChild(wrap);
+      return r;
+    }
     function dirRow() {
       var r = el('div','set-row');
       r.appendChild(el('label','','下载目录'));
@@ -2588,7 +2645,10 @@ function applyPerfAnim(s) {
       ]),
       sel('频谱帧率','perf_vz_fps', String(cfgGet(s, 'perf_vz_fps', 33)), [
         { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
-      ])
+      ]),
+      cacheDirRow(),
+      rng2('缓存上限','cacheLimitMb', Number(s.cacheLimitMb) || 1024, 128, 4096, 'MB', 128),
+      cacheUsageRow()
     ]));
     html.appendChild(group('网络 / 代理', [
       txt('代理地址','proxy', s.proxy),
@@ -2656,7 +2716,16 @@ function applyPerfAnim(s) {
 
   // C# 的图形化文件夹选择器选完后回传
   NE.on('folder_picked', function (d) {
-    if (!d || !d.ok || d.key !== 'downloadDir') return;
+    if (!d || !d.ok) return;
+    if (d.key === 'cacheDir') {
+      cacheDirPath = d.path || '';
+      if (cacheDirEl) { cacheDirEl.textContent = cacheDirPath || '（默认 temp）'; cacheDirEl.title = cacheDirPath; }
+      if (appSettings) appSettings.cacheDir = cacheDirPath;
+      toast('缓存目录已改为：' + cacheDirPath);
+      refreshCacheUsage();
+      return;
+    }
+    if (d.key !== 'downloadDir') return;
     dlDir = d.path || '';
     if (dlDirEl) { dlDirEl.textContent = dlDir || '（未设置）'; dlDirEl.title = dlDir; }
     if (appSettings) appSettings.downloadDir = dlDir;

@@ -656,7 +656,7 @@ public sealed partial class MainWindow : Window
                 case "open_settings": AppServices.RunOnUi(() => { try { new SettingsWindow().Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }); break;
                 case "open_repo": OpenRepo(doc); break;
                 case "get_settings": HandleGetSettings(); break;
-                case "pick_folder": PickFolder(); break;
+                case "pick_folder": PickFolder(doc); break;
                 case "open_folder": OpenDownloadDir(); break;
                 case "release_notes": _ = HandleReleaseNotes(doc); break;
                 case "notice_seen": AppServices.Config.VersionSeen = AppServices.Version; LogManager.Log("[Version] version 已更新为 " + AppServices.Version); break;
@@ -914,6 +914,10 @@ public sealed partial class MainWindow : Window
             ["repoGitee"] = "https://gitee.com/" + AppServices.Config.UpdateGiteeRepo,
             ["toast"] = AppServices.Config.Get("App", "toast", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
             ["version"] = AppServices.Version,
+            // 缓存（[Cache] 段）：设置-性能 里显示位置/上限，以及当前实际占用
+            ["cacheDir"] = AppServices.Config.CacheDir,
+            ["cacheLimitMb"] = AppServices.Config.CacheLimitMb,
+            ["cacheSizeMb"] = Math.Round(AppServices.Cache.SizeMb(), 2),
             ["fonts"] = SystemFonts.Families(),   // 本机字体列表，设置里的字体下拉用
         };
         PostToWeb(new { type = "settings", data = s });
@@ -962,6 +966,15 @@ public sealed partial class MainWindow : Window
                 }
                 break;
             case "downloadDir": try { if (!string.IsNullOrWhiteSpace(value)) AppServices.Config.DownloadDir = value; } catch { } break;
+            case "cacheDir": try { if (!string.IsNullOrWhiteSpace(value)) { AppServices.Config.CacheDir = value; AppServices.Cache.EnsureDir(); } } catch { } break;
+            case "cacheLimitMb":
+                if (long.TryParse(value, out var lm))
+                {
+                    AppServices.Config.CacheLimitMb = lm;
+                    AppServices.Cache.EnforceLimit();          // 调小了立刻按新上限清理
+                    PostToWeb(new { type = "settings", data = new Dictionary<string, object?> { ["cacheSizeMb"] = Math.Round(AppServices.Cache.SizeMb(), 2), ["cacheLimitMb"] = AppServices.Config.CacheLimitMb } });
+                }
+                break;
             case "quality": AppServices.Config.Quality = value; break;
             case "crossfade": AppServices.Config.Crossfade = value; break;
             case "volume": if (int.TryParse(value, out var vol)) { AppServices.Player.SetVolume(vol); PostToWeb(new { type = "volume_changed", v = AppServices.Player.GetVolume() }); } break;
@@ -1012,22 +1025,27 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>弹出图形化文件夹选择器（资源管理器风格），选完回传前端。</summary>
-    private void PickFolder()
+    /// <summary>弹出图形化文件夹选择器（资源管理器风格），选完回传前端。key = downloadDir / cacheDir</summary>
+    private void PickFolder(JsonElement doc)
     {
+        var key = doc.TryGetProperty("key", out var kv) ? (kv.GetString() ?? "downloadDir") : "downloadDir";
         try
         {
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            var picked = FolderPickerDialog.Pick(hwnd, AppServices.Config.DownloadDir, "选择下载目录");
+            var isCache = key.Equals("cacheDir", StringComparison.OrdinalIgnoreCase);
+            var start = isCache ? AppServices.Config.CacheDir : AppServices.Config.DownloadDir;
+            var title = isCache ? "选择缓存目录" : "选择下载目录";
+            var picked = FolderPickerDialog.Pick(hwnd, start, title);
             if (string.IsNullOrWhiteSpace(picked)) { LogManager.Debug("用户取消了文件夹选择"); return; }
-            AppServices.Config.DownloadDir = picked;
-            PostToWeb(new { type = "folder_picked", ok = true, key = "downloadDir", path = picked });
-            LogManager.Log("下载目录已改为: " + picked);
+            if (isCache) { AppServices.Config.CacheDir = picked; AppServices.Cache.EnsureDir(); }
+            else AppServices.Config.DownloadDir = picked;
+            PostToWeb(new { type = "folder_picked", ok = true, key = key, path = picked });
+            LogManager.Log((isCache ? "缓存目录" : "下载目录") + "已改为: " + picked);
         }
         catch (Exception ex)
         {
-            LogManager.Error("选择下载目录失败: " + ex.GetType().Name + " hresult=0x" + ex.HResult.ToString("X8") + " " + ex.Message);
-            PostToWeb(new { type = "folder_picked", ok = false, error = ex.Message });
+            LogManager.Error("选择目录失败(" + key + "): " + ex.GetType().Name + " hresult=0x" + ex.HResult.ToString("X8") + " " + ex.Message);
+            PostToWeb(new { type = "folder_picked", ok = false, key = key, error = ex.Message });
             PostToWeb(new { type = "toast", text = "打开文件夹选择器失败：" + ex.Message });
         }
     }

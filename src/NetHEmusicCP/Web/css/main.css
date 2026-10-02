@@ -127,6 +127,12 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .set-detail{margin-left:14px;padding-left:12px;border-left:1px solid rgba(var(--md-accent-color-grey-base-rgb),.13);}
 .set-detail.hidden{display:none;}
 .set-detail .set-row{padding:8px;}
+/* 缓存占用条（设置-性能） */
+.cache-usage{flex:1;display:flex;align-items:center;gap:10px;min-width:0;}
+.cache-bar{flex:1;height:6px;border-radius:3px;background:rgba(var(--md-accent-color-grey-base-rgb),.16);overflow:hidden;min-width:80px;}
+.cache-fill{height:100%;width:0;border-radius:3px;background:var(--md-accent-color);transition:width .3s ease,background .3s ease;}
+.cache-fill.warn{background:#e2564d;}
+.cache-txt{font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);white-space:nowrap;font-variant-numeric:tabular-nums;}
 .set-row input[type=text],.set-row select{background:var(--md-accent-color-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);border-radius:8px;color:var(--md-accent-color-secondary);padding:7px 10px;font-size:13px;min-width:200px;outline:none;}
 .set-row input[type=range]{width:200px;accent-color:var(--md-accent-color);}
 /* 下载目录：路径显示框 + 选择 / 打开文件夹按钮 */
