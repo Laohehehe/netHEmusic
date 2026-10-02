@@ -193,6 +193,19 @@ public sealed partial class MainWindow : Window
                 browserArgs += " --disable-gpu --disable-gpu-compositing --disable-accelerated-2d-canvas --disable-accelerated-video-decode";
                 LogManager.Log("GPU 加速已关闭（软件渲染）");
             }
+#if DEBUG
+            // 仅 Debug 构建：设了 NETHE_DEV_CDP=1 才开远程调试端口，供自动化测试（读 DOM / 按选择器点击 / 只截页面）。
+            // Release 构建这段整个被编译掉，发布的 EXE 里没有任何调试代码。
+            try
+            {
+                if (Environment.GetEnvironmentVariable("NETHE_DEV_CDP") == "1")
+                {
+                    browserArgs += " --remote-debugging-port=9222";
+                    LogManager.Log("[DEV] 远程调试端口已开启: 9222");
+                }
+            }
+            catch { }
+#endif
             var envOptions = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions
             {
                 AdditionalBrowserArguments = browserArgs
