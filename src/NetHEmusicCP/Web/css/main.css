@@ -112,7 +112,10 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 /* 只有真的带控件的行才给悬停底色，纯说明行不闪 */
 .set-row:has(input,.set-switch,.cust-select,button,.dir-ctl):hover{background:rgba(var(--md-accent-color-grey-base-rgb),.06);}
 .set-row label{color:rgba(var(--md-accent-color-grey-base-rgb),.82);}
-.set-value{color:rgba(var(--md-accent-color-grey-base-rgb),.72);font-size:13.5px;min-width:58px;text-align:right;font-variant-numeric:tabular-nums;}
+/* 滑块/输入框 + 数值作为一个整体靠右：数值紧贴控件（滑块控件规范），
+   固定宽度 + 左对齐 → 既有统一间隙、各行的控件又能对齐 */
+.set-ctl{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
+.set-value{color:rgba(var(--md-accent-color-grey-base-rgb),.72);font-size:13.5px;width:56px;text-align:left;font-variant-numeric:tabular-nums;}
 /* 设置组里的说明文字（和快捷键那段的 .muted 同一个样式） */
 .set-group p.muted{margin:0 8px 10px;line-height:1.75;}
 /* 颜色行：一排预设色块 + 取色器 */

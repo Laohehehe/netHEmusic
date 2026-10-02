@@ -2194,13 +2194,19 @@ function applyPerfAnim(s) {
     function sel(label, key, val, opts) { return custSel(label, key, val, opts); }
     function txt(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var i=el('input'); i.type='text'; i.value=val||''; i.onchange=function(){ NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
     // 自定义范围的滑条（用于动画速率这类非 0-100 的项）
+    // 滑块 + 数值作为一个整体靠右（数值紧贴滑块，符合滑块控件规范）
+    function ctlRow(ctrl, valEl) {
+      var g = el('div','set-ctl');
+      g.appendChild(ctrl); if (valEl) g.appendChild(valEl);
+      return g;
+    }
     function rng2(label, key, val, min, max, suffix, step) {
       suffix = suffix || '';
       var r = el('div','set-row'); r.appendChild(el('label','',label));
       var i2 = el('input'); i2.type='range'; i2.min=min; i2.max=max; i2.step=step||5; i2.value=val;
-      var vEl = el('span','set-value', val + suffix);      // 数值放右边（不再塞进设置名里）
+      var vEl = el('span','set-value', val + suffix);
       i2.oninput = function(){ vEl.textContent = i2.value + suffix; NE.setSetting(key, i2.value); applyLiveSetting(key, i2.value); };
-      r.appendChild(i2); r.appendChild(vEl); return r;
+      r.appendChild(ctlRow(i2, vEl)); return r;
     }
     // 数字输入框：比滑块精确；非法输入弹提示并还原
     function numRow(label, key, val, min, max, suffix) {
@@ -2215,7 +2221,7 @@ function applyPerfAnim(s) {
         NE.setSetting(key, v);
         applyLiveSetting(key, v);
       };
-      r.appendChild(i); r.appendChild(unit); return r;
+      r.appendChild(ctlRow(i, unit)); return r;
     }
     function rng(label, key, val) {
       var v0 = (val === undefined || val === null || val === '') ? 80 : Number(val);
@@ -2223,7 +2229,7 @@ function applyPerfAnim(s) {
       var i = el('input'); i.type='range'; i.min=0; i.max=100; i.value=v0;
       var vEl = el('span','set-value', String(v0));
       i.oninput = function(){ vEl.textContent = i.value; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); };
-      r.appendChild(i); r.appendChild(vEl); return r;
+      r.appendChild(ctlRow(i, vEl)); return r;
     }
     function info(label, value) {
       var r = el('div','set-row');
@@ -2475,7 +2481,7 @@ function applyPerfAnim(s) {
       var i = el('input'); i.type='range'; i.min=0; i.max=100; i.value=v;
       var vEl = el('span','set-value', String(v));
       i.oninput = function(){ vEl.textContent = i.value; NE.setSetting(key, i.value); applyLiveSetting(key, i.value); var p={}; p[fk]=Number(i.value); fxApply(p); };
-      r.appendChild(i); r.appendChild(vEl); return r;
+      r.appendChild(ctlRow(i, vEl)); return r;
     }
     function fxColorRow(colorVal, autoVal) {
       var PALETTE = ['#e23535', '#07c160', '#1d6eff', '#5865f2', '#9b59b6', '#f0a020', '#00bcd4', '#ffffff'];
@@ -2579,7 +2585,7 @@ function applyPerfAnim(s) {
       var vEl = el('span','set-value', cur + ' 秒');
       i.oninput = function(){ vEl.textContent = i.value + ' 秒'; AU.xfade = Number(i.value); };
       i.onchange = function(){ NE.setSetting('crossfade', i.value); };
-      r.appendChild(i); r.appendChild(vEl); return r;
+      r.appendChild(ctlRow(i, vEl)); return r;
     }
     html.appendChild(group('播放', [
       rng('默认音量','volume', s.volume),
@@ -2711,7 +2717,7 @@ function applyPerfAnim(s) {
           var lb = el('span','set-value', String(i2.value));
           i2.oninput = function () { lb.textContent = i2.value; };
           i2.onchange = function () { window.PLUGHOST.setPluginSetting(p.pid, p.key, Number(i2.value)); };
-          row.appendChild(i2); row.appendChild(lb);
+          row.appendChild(ctlRow(i2, lb));
         } else {
           var tx = el('input'); tx.type = 'text'; tx.value = p.value == null ? '' : String(p.value);
           tx.onchange = function () { window.PLUGHOST.setPluginSetting(p.pid, p.key, tx.value); };
