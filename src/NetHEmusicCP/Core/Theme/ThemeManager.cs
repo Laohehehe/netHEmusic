@@ -138,15 +138,22 @@ public sealed class ThemeManager
     public void SetScheme(string scheme) { _config.Scheme = scheme; LogManager.Log("方案切换: " + scheme); }
     public void ToggleTheme() { _config.Theme = _config.Theme == "light" ? "dark" : "light"; LogManager.Log("主题切换: " + _config.Theme); }
 
-    /// <summary>给 Web UI 生成一套 Material You CSS 变量声明（用于注入样式）。</summary>
-    public static string ToCssVars(string mode, string primary, string secondary, string bg, string bgDarken)
+    /// <summary>
+    /// 给 Web UI 生成一套 Material You CSS 变量声明（用于注入样式）。
+    /// surfaceAlpha &lt; 1 时把「面板底色」输出成半透明，让窗口材质（Mica Alt）透上来。
+    /// </summary>
+    public static string ToCssVars(string mode, string primary, string secondary, string bg, string bgDarken, double surfaceAlpha = 1.0)
     {
         var pr = HexToRgb(primary); var se = HexToRgb(secondary); var bgc = HexToRgb(bg); var bd = HexToRgb(bgDarken);
         var grey = mode == "light" ? "0,0,0" : "255,255,255";
+        var a = Math.Max(0.2, Math.Min(1.0, surfaceAlpha));
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        var bgOut = a >= 0.999 ? bg : $"rgba({bgc.Item1},{bgc.Item2},{bgc.Item3},{a.ToString("0.###", ci)})";
+        var bdOut = a >= 0.999 ? bgDarken : $"rgba({bd.Item1},{bd.Item2},{bd.Item3},{a.ToString("0.###", ci)})";
         return $"--md-accent-color:{primary};--md-accent-color-rgb:{pr.Item1},{pr.Item2},{pr.Item3};" +
                $"--md-accent-color-secondary:{secondary};--md-accent-color-secondary-rgb:{se.Item1},{se.Item2},{se.Item3};" +
-               $"--md-accent-color-bg:{bg};--md-accent-color-bg-rgb:{bgc.Item1},{bgc.Item2},{bgc.Item3};" +
-               $"--md-accent-color-bg-darken:{bgDarken};--md-accent-color-bg-darken-rgb:{bd.Item1},{bd.Item2},{bd.Item3};" +
+               $"--md-accent-color-bg:{bgOut};--md-accent-color-bg-rgb:{bgc.Item1},{bgc.Item2},{bgc.Item3};" +
+               $"--md-accent-color-bg-darken:{bdOut};--md-accent-color-bg-darken-rgb:{bd.Item1},{bd.Item2},{bd.Item3};" +
                $"--md-accent-color-grey-base:rgb({grey});--md-accent-color-grey-base-rgb:{grey};";
     }
 }

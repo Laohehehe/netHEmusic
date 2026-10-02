@@ -43,9 +43,10 @@ public sealed partial class MainWindow : Window
         try
         {
             bool dark = AppServices.Theme.IsDark;
-            // ThemeResource 在运行期不会因资源字典里换对象而重新解析，这里直接给元素换刷子，标题栏才会跟着配色走
-            Root.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.SurfaceColor(dark));
-            Headbar.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.SurfaceDarken(dark));
+            bool mica = AppServices.Config.Mica;
+            // Mica 打开时原生根背景必须透明，否则会把材质挡住（面板底色另由 PushTheme 输出半透明）
+            Root.Background = mica ? null : new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.SurfaceColor(dark));
+            Headbar.Background = mica ? null : new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.SurfaceDarken(dark));
         }
         catch (Exception e) { LogManager.Debug("原生配色失败: " + e.Message); }
     }
@@ -215,6 +216,8 @@ public sealed partial class MainWindow : Window
             try { Directory.CreateDirectory(webviewData); } catch { }
             var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, webviewData, envOptions);
             await WebView.EnsureCoreWebView2Async(env);
+            // 页面自己绘制所有面板；WebView 背景透明，窗口材质（Mica Alt）才能从面板后面透出来
+            try { WebView.DefaultBackgroundColor = global::Windows.UI.Color.FromArgb(0, 0, 0, 0); } catch (Exception wb) { LogManager.Debug("WebView 透明背景失败: " + wb.Message); }
             var core = WebView.CoreWebView2;
             var webFolder = FindWebFolder();
             core.SetVirtualHostNameToFolderMapping("appassets", webFolder, CoreWebView2HostResourceAccessKind.Allow);
@@ -593,7 +596,14 @@ public sealed partial class MainWindow : Window
     private void PushTheme()
     {
         var (mode, pr, se, bg, dk) = AppServices.Theme.GetScheme();
-        PostToWeb(new { type = "theme", dark = mode == "dark", vars = ThemeManager.ToCssVars(mode, pr, se, bg, dk) });
+        // Mica 打开时面板底色转半透明（界面不透明度设置，默认 78%），让窗口材质透上来
+        double alpha = 1.0;
+        if (AppServices.Config.Mica)
+        {
+            double.TryParse(AppServices.Config.Get("App", "ui_mica_alpha", "78"), out var a);
+            alpha = Math.Max(0.55, Math.Min(1.0, (a > 0 ? a : 78) / 100.0));
+        }
+        PostToWeb(new { type = "theme", dark = mode == "dark", vars = ThemeManager.ToCssVars(mode, pr, se, bg, dk, alpha) });
     }
     private object ToSongDto(Song s) => new { s.Id, Title = s.Title, Artist = s.ArtistsName, Album = s.AlbumName, Pic = s.PicUrl, Duration = s.Duration };
 
@@ -950,7 +960,16 @@ public sealed partial class MainWindow : Window
                 // 等水波扫过窗口顶部(约 0.24s)后再换原生标题栏/根背景色，避免标题栏抢跑变色
                 _ = Task.Delay(300).ContinueWith(_ => AppServices.RunOnUi(() => { try { ApplyNativeTheme(); } catch { } }));
                 break;
-            case "mica": AppServices.Config.Mica = b; WindowHelper.ApplyBackdrop(this, b); break;
+            case "mica":
+                AppServices.Config.Mica = b;
+                WindowHelper.ApplyBackdrop(this, b);
+                ApplyNativeTheme();     // Mica 开/关时原生根背景要在透明/实色之间切换
+                PushTheme();            // 面板底色跟着变成半透明/实色
+                break;
+            case "ui_mica_alpha":
+                AppServices.Config.Set("App", "ui_mica_alpha", value);
+                PushTheme();            // 只重算 CSS 变量，不用重启
+                break;
             case "closeToTray": AppServices.Config.Set("App", "close_to_tray", b ? "true" : "false"); break;
             case "uiEffects": AppServices.Config.Set("App", "ui_effects", b ? "true" : "false"); break;
             case "custom_accent":

@@ -2585,7 +2585,10 @@ function applyPerfAnim(s) {
       }),
       accentDetail,
       fontRow('界面字体','ui_font', String(cfgGet(s,'ui_font','')), applyAppFont),
-      sw('Mica 背景','mica', s.mica),
+      masterSw('Mica 背景（Mica Alt 材质）','mica', s.mica, [
+        rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1),
+        hint('打开后窗口会用 Mica Alt 材质（桌面模糊透上来），面板底色按上面的不透明度变半透明；关掉即恢复实色。')
+      ]),
       sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
     ]));
     html.appendChild(fxGroup(s));

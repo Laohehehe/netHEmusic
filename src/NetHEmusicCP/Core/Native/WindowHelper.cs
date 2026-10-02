@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Microsoft.UI;
+using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
@@ -63,13 +64,21 @@ public static class WindowHelper
         catch (Exception e) { LogManager.Debug("居中失败: " + e.Message); }
     }
 
-    /// <summary>应用 Mica 背景（禁用时回退为实色背景）。</summary>
+    /// <summary>应用 Mica 背景（禁用时回退为实色背景）。用 Mica Alt：着色更强的变体，适合带自定义标题栏/选项卡的应用。</summary>
     public static void ApplyBackdrop(Window w, bool enableMica)
     {
         try
         {
-            if (enableMica) w.SystemBackdrop = new MicaBackdrop();
-            else w.SystemBackdrop = null;
+            if (enableMica)
+            {
+                w.SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+                LogManager.Log("背景材质: Mica Alt（系统支持=" + MicaController.IsSupported() + "）");
+            }
+            else
+            {
+                w.SystemBackdrop = null;
+                LogManager.Log("背景材质: 已关闭（实色）");
+            }
         }
         catch (Exception e) { LogManager.Debug("背景应用失败: " + e.Message); }
     }
