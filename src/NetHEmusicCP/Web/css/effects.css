@@ -411,7 +411,8 @@ html.no-fx .fx-shake{animation:none;}
 .ly-ch{display:inline-block;white-space:pre;}
 .np.ly-char .np-line.on .ly-ch{
   animation:var(--ly-ch-anim,ly-beat-up) .5s var(--ly-ease) backwards;
-  animation-delay:calc(var(--i) * var(--beat-step,40ms));
+  /* 有逐字时间(--beat-delay，逐字写在 span 上)就用真实起唱时间，否则按整句平均分配 */
+  animation-delay:var(--beat-delay,calc(var(--i) * var(--beat-step,40ms)));
 }
 /* 字符上跳（默认档） */
 @keyframes ly-beat-up{

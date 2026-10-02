@@ -1423,7 +1423,15 @@ function applyPerfAnim(s) {
       var main = el('div', 'np-orig');
       if (chars) {
         var txt = l.s, frag = '';
-        for (var i = 0; i < txt.length; i++) frag += '<span class="ly-ch" style="--i:' + i + '">' + esc(txt.charAt(i)) + '</span>';
+        // 有逐字时间(yrc)就用真实起唱时间当每个字的延迟，跳动与点亮就落在同一时刻；
+        // 没有(yrc 缺失或对不上字)就退回 npLayout 写的 --beat-step（整句时长平均分配）
+        var ct = null;
+        try { var u0 = yrcMap[l.t]; if (u0 && u0.length) ct = charTimesFor(txt, u0); } catch (e23) { }
+        for (var i = 0; i < txt.length; i++) {
+          var stl = '--i:' + i;
+          if (ct && ct[i] != null) stl += ';--beat-delay:' + Math.max(0, Math.round(ct[i] - l.t)) + 'ms';
+          frag += '<span class="ly-ch" style="' + stl + '">' + esc(txt.charAt(i)) + '</span>';
+        }
         main.innerHTML = frag;
       } else {
         main.textContent = l.s;
@@ -1453,6 +1461,22 @@ function applyPerfAnim(s) {
       });
     } catch (e) { }
     return map;
+  }
+  // 把 yrc 的字（词/音节）摊平成「每个显示字符的起唱时间」，并逐字核对文本对不对得上。
+  // 对得上 → 返回和 text 等长的数组（空格位 null）；对不上 → null（调用方退回平均分配）
+  function charTimesFor(text, units) {
+    try {
+      var flat = [];
+      units.forEach(function (u) { var s = String(u.ch || ""); for (var i = 0; i < s.length; i++) flat.push({ c: s.charAt(i), t: u.t }); });
+      var out = [], fi = 0;
+      for (var i = 0; i < text.length; i++) {
+        var c = text.charAt(i);
+        if (c === " " || c === "\u3000") { out.push(null); continue; }
+        if (fi < flat.length && flat[fi].c === c) { out.push(flat[fi].t); fi++; continue; }
+        return null;
+      }
+      return out;
+    } catch (e) { return null; }
   }
   // 把 yrc 的字（可能是词/音节）摊平成"每个显示字符对应的时间"，与歌词行按顺序对齐
   function alignCharTimes(spans, units) {
@@ -1491,13 +1515,14 @@ function applyPerfAnim(s) {
       if (times && times.length === spans.length) {
         for (var q = 0; q < times.length; q++) {
           var e = times[q]; if (!e) { sung = q + 1; continue; }
-          if (pos >= e.t + e.d) sung = q + 1;              // 这个字已经唱完
+          if (pos >= e.t) sung = q + 1;                       // 这个字一开始唱就点亮（和跳动同一时刻）
           else break;
         }
       } else {
         var r = (pos - t0) / Math.max(1, t1 - t0);
         r = Math.max(0, Math.min(1, r));
-        sung = Math.floor(r * n + 1e-6);                    // 没有逐字数据时按行内均匀分配
+        // 与跳动的延迟 i*(句长/字数) 对齐：第 i 个字在 r > i/n 时点亮（原来 floor(r*n) 会整整晚一格）
+        sung = Math.min(n, Math.ceil(r * n - 1e-6));
       }
       if (sung === npFillCache.sung) return;
       for (var i2 = 0; i2 < spans.length; i2++) {
