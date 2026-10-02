@@ -34,6 +34,23 @@ public static class WindowHelper
             };
             foreach (var c in candidates) if (c is not null && File.Exists(c)) { ico = c; break; }
             if (ico is not null) w.AppWindow.SetIcon(ico);
+            // 任务栏缩略图 / Alt+Tab 的标题用的是窗口的【小图标】(WM_SETICON)，AppWindow.SetIcon 只管任务栏大图标。
+            // 开发时的 exe 在 bin 深处，找不到 Assets\*.ico 时就用 exe 自带的图标（否则缩略图左上角是一格白板）。
+            var h = Hwnd(w);
+            IntPtr small = IntPtr.Zero, big = IntPtr.Zero;
+            if (ico is not null)
+            {
+                small = LoadImage(IntPtr.Zero, ico, IMAGE_ICON, GetSystemMetrics(49), GetSystemMetrics(50), LR_LOADFROMFILE);
+                big = LoadImage(IntPtr.Zero, ico, IMAGE_ICON, GetSystemMetrics(11), GetSystemMetrics(12), LR_LOADFROMFILE);
+            }
+            if (small == IntPtr.Zero || big == IntPtr.Zero)
+            {
+                try { ExtractIconEx(Environment.ProcessPath ?? "", 0, out var eb, out var es, 1); if (big == IntPtr.Zero) big = eb; if (small == IntPtr.Zero) small = es; }
+                catch { }
+            }
+            if (small != IntPtr.Zero) SendMessage(h, WM_SETICON, (IntPtr)ICON_SMALL, small);
+            if (big != IntPtr.Zero) SendMessage(h, WM_SETICON, (IntPtr)ICON_BIG, big);
+            LogManager.Debug($"窗口图标: file={ico ?? "(无)"} small={small} big={big}");
         }
         catch (Exception e) { LogManager.Debug("设置图标失败: " + e.Message); }
     }
@@ -63,6 +80,12 @@ public static class WindowHelper
     [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X; public int Y; }
     [DllImport("user32.dll")] private static extern bool ReleaseCapture();
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr LoadImage(IntPtr hinst, string name, uint type, int cx, int cy, uint load);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern uint ExtractIconEx(string file, int index, out IntPtr large, out IntPtr small, uint count);
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    private const uint IMAGE_ICON = 1, LR_LOADFROMFILE = 0x0010;
+    private const int WM_SETICON = 0x0080, ICON_SMALL = 0, ICON_BIG = 1;
     private static POINT _dragStart; private static PointInt32 _winStart; private static bool _dragging;
 
     /// <summary>网页拖拽带按下：记录光标与窗口起点（最大化时先还原，符合系统习惯）。</summary>
