@@ -27,14 +27,14 @@ public sealed class ThemeManager
         ["dark-red"]       = new[]{"dark","#fdb4b4","#fdb4b4","#271b1b","#1e1515"},
         ["dark-pink"]      = new[]{"dark","#ffd9e4","#ffd9e4","#362929","#211a1a"},
         ["dark-rose-pine"] = new[]{"dark","#ebbcba","#e0def4","#232136","#393552"},
-        ["light-blue"]     = new[]{"light","#22c5fd","#123354","#f7fafd","#e6eef6"},
-        ["light-gray"]     = new[]{"light","#61717c","#29292a","#fafafa","#ececec"},
-        ["light-green"]    = new[]{"light","#2ae18e","#19483e","#f8fbfa","#e6efec"},
-        ["light-orange"]   = new[]{"light","#ff8265","#563b25","#fdf9f7","#f3e9e3"},
-        ["light-purple"]   = new[]{"light","#9f74e7","#402b4d","#fbf8fd","#eee7f5"},
-        ["light-red"]      = new[]{"light","#ff5966","#572920","#fdf8f7","#f5e7e5"},
-        ["light-pink"]     = new[]{"light","#ff82ab","#630a27","#fdf8fa","#f7e6ee"},
-        ["light-rose-pine"]= new[]{"light","#d7827e","#575279","#faf4ed","#f0e4d9"},
+        ["light-blue"]     = new[]{"light","#22c5fd","#123354","#eef4fb","#dce8f7"},
+        ["light-gray"]     = new[]{"light","#61717c","#29292a","#f2f2f2","#e3e3e3"},
+        ["light-green"]    = new[]{"light","#2ae18e","#19483e","#eef5f2","#dcebe5"},
+        ["light-orange"]   = new[]{"light","#ff8265","#563b25","#fbf4f0","#f2e2d8"},
+        ["light-purple"]   = new[]{"light","#9f74e7","#402b4d","#f6f1fa","#e9def5"},
+        ["light-red"]      = new[]{"light","#ff5966","#572920","#fbf3f1","#f2dedb"},
+        ["light-pink"]     = new[]{"light","#ff82ab","#630a27","#fbf2f5","#f3dde6"},
+        ["light-rose-pine"]= new[]{"light","#d7827e","#575279","#f6ece4","#ebdac9"},
         ["tokyo-night"]    = new[]{"dark","#b5b9d6","#b5b9d6","#242638","#1c1d2b"},
         ["one-dark-blue"]  = new[]{"dark","#71bdf2","#abb2bf","#282c34","#21252b"},
         ["one-dark-green"] = new[]{"dark","#a7cb8b","#abb2bf","#282c34","#21252b"},
@@ -52,10 +52,10 @@ public sealed class ThemeManager
         ["cyberpunk"]      = new[]{"dark","#fcec0c","#fcec0c","#136377","#084a5a"},
         ["matrix"]         = new[]{"dark","#00ff41","#00ff41","#060208","#001600"},
         ["dracula-mint"]   = new[]{"dark","#2fdeb6","#e2e2e4","#292d3e","#212432"},
-        ["cerulean"]       = new[]{"light","#428db9","#212121","#f5fafd","#e2eef5"},
+        ["cerulean"]       = new[]{"light","#428db9","#212121","#eef6fb","#d9e9f3"},
         ["discord"]        = new[]{"dark","#5865f2","#ffffff","#36393f","#2f3136"},
-        ["wechat"]         = new[]{"light","#07c160","#222222","#f7f7f7","#e9e9e9"},
-        ["tim"]            = new[]{"light","#1d6eff","#222222","#f7f9fb","#e8eef5"},
+        ["wechat"]         = new[]{"light","#07c160","#222222","#f2f2f2","#e0e0e0"},
+        ["tim"]            = new[]{"light","#1d6eff","#222222","#eef3f9","#dde8f3"},
         ["pure-black"]     = new[]{"dark","#f0f0f0","#f0f0f0","#000000","#141414"},
         ["netease-default"]= new[]{"dark","#e23535","#e23535","#151719","#1f2226"},
         ["dynamic-auto"]   = new[]{"dark","#2563eb","#2563eb","#151719","#1f2226"},
@@ -151,8 +151,10 @@ public sealed class ThemeManager
         var grey = mode == "light" ? "0,0,0" : "255,255,255";
         var a = Math.Max(0.2, Math.Min(1.0, surfaceAlpha));
         var ci = System.Globalization.CultureInfo.InvariantCulture;
+        // bg = 页面/窗口底色：带 alpha → 窗口材质透上来；
+        // bg-darken = 面板/行/卡片底色：保持【实色】，配色才不会被材质冲淡成一团白
         var bgOut = a >= 0.999 ? bg : $"rgba({bgc.Item1},{bgc.Item2},{bgc.Item3},{a.ToString("0.###", ci)})";
-        var bdOut = a >= 0.999 ? bgDarken : $"rgba({bd.Item1},{bd.Item2},{bd.Item3},{a.ToString("0.###", ci)})";
+        var bdOut = bgDarken;
         return $"--md-accent-color:{primary};--md-accent-color-rgb:{pr.Item1},{pr.Item2},{pr.Item3};" +
                $"--md-accent-color-secondary:{secondary};--md-accent-color-secondary-rgb:{se.Item1},{se.Item2},{se.Item3};" +
                $"--md-accent-color-bg:{bgOut};--md-accent-color-bg-rgb:{bgc.Item1},{bgc.Item2},{bgc.Item3};" +

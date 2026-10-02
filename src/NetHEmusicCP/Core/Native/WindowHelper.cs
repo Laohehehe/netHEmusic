@@ -67,43 +67,45 @@ public static class WindowHelper
         catch (Exception e) { LogManager.Debug("居中失败: " + e.Message); }
     }
 
-    // Mica 控制器（用控制器而不是简单版 MicaBackdrop：简单版的深浅只跟系统主题走，
-    // 应用内切换到浅色配色后标题栏那块材质还是深的 —— 这就是"标题栏颜色对不上"的 bug）
-    private static MicaController? _mica;
+    // 窗口材质控制器（用控制器而不是简单版 SystemBackdrop：简单版的深浅只跟系统主题走，
+    // 应用内切换到浅色配色后标题栏那块材质还是深的）
+    private static object? _backdrop;                  // MicaController / DesktopAcrylicController
     private static SystemBackdropConfiguration? _micaCfg;
-    private static Window? _micaWin;
 
-    /// <summary>应用 Mica 背景（禁用时回退为实色背景）。用 Mica Alt：着色更强的变体，适合带自定义标题栏/选项卡的应用。
-    /// dark 用应用自己的深浅色传入：启动时元素还没进可视树，ActualTheme 报的是系统主题，会让材质和应用配色对不上。</summary>
-    public static void ApplyBackdrop(Window w, bool enableMica, bool dark)
+    /// <summary>应用窗口材质。material = "acrylic"（亚克力：能透看后方其它窗口）/ "micaAlt"（Mica Alt：只取桌面壁纸）。
+    /// dark 用应用自己的深浅色传入：启动时元素还没进可视树，ActualTheme 报的是系统主题。</summary>
+    public static void ApplyBackdrop(Window w, bool enable, bool dark, string material = "acrylic")
     {
         try
         {
-            if (!enableMica)
-            {
-                DetachMica();
-                w.SystemBackdrop = null;
-                LogManager.Log("背景材质: 已关闭（实色）");
-                return;
-            }
-            if (!MicaController.IsSupported() || w.Content is not FrameworkElement root)
-            {
-                w.SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };   // 退路（系统不支持时等于没效果）
-                LogManager.Log("背景材质: MicaController 不可用，退回 MicaBackdrop");
-                return;
-            }
-            DetachMica();
-            _micaWin = w;
+            DetachBackdrop();
+            if (!enable) { w.SystemBackdrop = null; LogManager.Log("背景材质: 关闭（实色）"); return; }
+            w.SystemBackdrop = null;
+            var support = w.As<Microsoft.UI.Composition.ICompositionSupportsSystemBackdrop>();
             _micaCfg = new SystemBackdropConfiguration
             {
                 IsInputActive = true,
                 Theme = dark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light
             };
-            _mica = new MicaController { Kind = MicaKind.BaseAlt };
-            _mica.AddSystemBackdropTarget(w.As<Microsoft.UI.Composition.ICompositionSupportsSystemBackdrop>());
-            _mica.SetSystemBackdropConfiguration(_micaCfg);
-            w.SystemBackdrop = null;                       // 用控制器接管，别同时挂简单版
-            LogManager.Log("背景材质: Mica Alt 控制器已接管（深浅=" + (dark ? "Dark" : "Light") + "）");
+            if ((material ?? "").Equals("acrylic", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!DesktopAcrylicController.IsSupported()) { LogManager.Log("背景材质: 系统不支持亚克力"); return; }
+                var c = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
+                c.AddSystemBackdropTarget(support);
+                c.SetSystemBackdropConfiguration(_micaCfg);
+                _backdrop = c;
+                LogManager.Log("背景材质: 亚克力 DesktopAcrylic(Thin) 已接管（深浅=" + (dark ? "Dark" : "Light") + "）");
+            }
+            else
+            {
+                if (!MicaController.IsSupported()) { LogManager.Log("背景材质: 系统不支持 Mica"); return; }
+                var c = new MicaController { Kind = MicaKind.BaseAlt };
+                c.AddSystemBackdropTarget(support);
+                c.SetSystemBackdropConfiguration(_micaCfg);
+                _backdrop = c;
+                LogManager.Log("背景材质: Mica Alt 已接管（深浅=" + (dark ? "Dark" : "Light") + "）");
+            }
+            SyncBackdropTheme(dark);
         }
         catch (Exception e)
         {
@@ -117,7 +119,7 @@ public static class WindowHelper
     {
         try
         {
-            if (_micaCfg is null || _mica is null) return;
+            if (_micaCfg is null || _backdrop is null) return;
             var want = dark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
             if (_micaCfg.Theme != want) { _micaCfg.Theme = want; LogManager.Debug("材质主题同步: " + want); }
             // 材质用【配色自己的 bg】着色（页面底色那一档），面板是 bg-darken 那一档 ——
@@ -125,18 +127,25 @@ public static class WindowHelper
             var scheme = AppServices.Theme.GetScheme();
             var c = ThemeManager.HexToColor(scheme.bg);
             var wc = global::Windows.UI.Color.FromArgb(255, c.R, c.G, c.B);
-            _mica.TintColor = wc;
-            _mica.TintOpacity = 0.45f;
-            _mica.FallbackColor = wc;
-            _mica.LuminosityOpacity = dark ? 0.0f : 1.0f;
+            switch (_backdrop)
+            {
+                case MicaController m:
+                    m.TintColor = wc; m.TintOpacity = 0.45f; m.FallbackColor = wc;
+                    m.LuminosityOpacity = dark ? 0.0f : 1.0f;
+                    break;
+                case DesktopAcrylicController a:
+                    a.TintColor = wc; a.TintOpacity = 0.30f; a.FallbackColor = wc;
+                    a.LuminosityOpacity = dark ? 0.0f : 1.0f;
+                    break;
+            }
         }
         catch (Exception e) { LogManager.Debug("材质主题同步失败: " + e.Message); }
     }
 
-    private static void DetachMica()
+    private static void DetachBackdrop()
     {
-        try { _mica?.Dispose(); } catch { }
-        _mica = null; _micaCfg = null; _micaWin = null;
+        try { (_backdrop as IDisposable)?.Dispose(); } catch { }
+        _backdrop = null; _micaCfg = null;
     }
 
     /// <summary>启用自定义标题栏：内容扩展到标题栏区域并设置拖拽区。返回可用于拖拽的标题栏根元素。</summary>

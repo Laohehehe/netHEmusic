@@ -13,7 +13,7 @@
             <!-- 仅品牌标识，无交互控件（标题栏区域为拖拽区，按钮无法点击）；搜索/设置均移入 HTML -->
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Padding="14,0" IsHitTestVisible="False">
                 <Image x:Name="LogoImg" Width="22" Height="22" Source="Assets/logo.png"/>
-                <TextBlock Text="netHEmusic" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" Foreground="{ThemeResource AppTextBrush}"/>
+                <TextBlock x:Name="AppTitle" Text="netHEmusic" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" Foreground="{ThemeResource AppTextBrush}"/>
             </StackPanel>
         </Grid>
 

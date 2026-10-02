@@ -138,6 +138,18 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .cache-fill{height:100%;width:0;border-radius:3px;background:var(--md-accent-color);transition:width .3s ease,background .3s ease;}
 .cache-fill.warn{background:#e2564d;}
 .cache-txt{font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);white-space:nowrap;font-variant-numeric:tabular-nums;}
+/* 滑块：显式画轨道和滑块头（不依赖 WebView 的原生控件着色 —— 浅色配色下原生轨道会发黑）；
+   自绘轨道后 Chromium 不再自动画「已填充」段，用 --range-p 变量补一条 accent 渐变（见 app.js syncRangeFill） */
+.set-row input[type=range],#pl-volume{
+  -webkit-appearance:none;appearance:none;height:6px;border-radius:3px;outline:none;cursor:pointer;
+  background:
+    linear-gradient(var(--md-accent-color),var(--md-accent-color)) left center/var(--range-p,0%) 100% no-repeat,
+    rgba(var(--md-accent-color-grey-base-rgb),.20);
+}
+.set-row input[type=range]::-webkit-slider-thumb,#pl-volume::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--md-accent-color);box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:pointer;
+}
 .set-row input[type=text],.set-row select{background:var(--md-accent-color-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);border-radius:8px;color:var(--md-accent-color-secondary);padding:7px 10px;font-size:13px;min-width:200px;outline:none;}
 .set-row input[type=range]{width:200px;accent-color:var(--md-accent-color);}
 /* 数字输入框（缓存上限这类需要精确输入的值） */

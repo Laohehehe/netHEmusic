@@ -8,6 +8,61 @@
 <link rel="stylesheet" href="css/effects.css">
 </head>
 <body>
+<script>
+/* 脚本错误可视化：任何未捕获的 JS 错误都会直接在界面上显示，避免只看到「加载中…」却不知原因。
+   这里是纯内联实现（不依赖任何外部 CSS/JS），保证即使其它脚本挂了也能显示。 */
+(function () {
+  window.__NE_ERR = [];
+  function box() {
+    var b = document.getElementById('js-error-box');
+    if (b) return b;
+    b = document.createElement('div');
+    b.id = 'js-error-box';
+    b.setAttribute('style', 'position:fixed;left:10px;bottom:10px;z-index:2147483647;max-width:70vw;max-height:45vh;overflow:auto;' +
+      'background:#5c1111;color:#ffe3e3;border:1px solid #ff6b6b;border-radius:8px;padding:8px 30px 8px 10px;' +
+      'font:12px/1.5 Consolas,monospace;white-space:pre-wrap;word-break:break-all;box-shadow:0 6px 24px rgba(0,0,0,.5)');
+    var x = document.createElement('span');
+    x.textContent = '×';
+    x.setAttribute('style', 'position:absolute;right:6px;top:2px;cursor:pointer;font-size:16px;color:#ffb3b3');
+    x.onclick = function () { window.__NE_ERR = []; b.remove(); };
+    b.appendChild(x);
+    (document.body || document.documentElement).appendChild(b);
+    return b;
+  }
+  function show(kind, msg, where, stack) {
+    var rec = { kind: kind, msg: String(msg), where: String(where || ''), stack: String(stack || '') };
+    window.__NE_ERR.push(rec);
+    try { console.error('[NE-JS-ERROR]', kind, rec.msg, rec.where, rec.stack); } catch (e) { }
+    try {
+      if (window.chrome && chrome.webview && chrome.webview.postMessage) {
+        chrome.webview.postMessage(JSON.stringify({ type: 'log', msg: 'JS错误: ' + kind + ' ' + rec.msg + ' @' + rec.where + '\n' + rec.stack.split('\n').slice(0, 4).join('\n') }));
+      }
+    } catch (e) { }
+    var b = box();
+    var p = document.createElement('div');
+    p.textContent = '[' + kind + '] ' + rec.msg + (rec.where ? '\n  @ ' + rec.where : '') +
+      (rec.stack ? '\n' + rec.stack.split('\n').slice(0, 4).join('\n') : '');
+    p.setAttribute('style', 'margin:0 0 6px;border-bottom:1px dashed rgba(255,255,255,.25);padding-bottom:4px');
+    b.appendChild(p);
+  }
+  window.NE_showErr = show;
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t !== window && t.tagName && (t.src || t.href)) {
+      var url = t.src || t.href;
+      window.__NE_ERR.push({ kind: '资源加载失败', msg: t.tagName + ' ' + url, where: '', stack: '' });
+      try { console.warn('[NE-RES-ERROR]', t.tagName, url); } catch (x) { }
+      if (t.tagName === 'SCRIPT' || t.tagName === 'LINK') show('资源加载失败', t.tagName + ' ' + url, '', '');
+      return;
+    }
+    show('运行时错误', e.message, (e.filename || '?') + ':' + e.lineno + ':' + e.colno, (e.error && e.error.stack) || '');
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    show('Promise 未处理', (r && (r.message || r)) || 'unknown', '', (r && r.stack) || '');
+  });
+})();
+</script>
 <div id="app">
   <!-- 侧栏：默认收起(仅图标)，鼠标悬停展开 -->
   <aside id="sidebar">
@@ -42,7 +97,7 @@
         <div class="np-left">
           <div class="np-cover-wrap">
             <i class="ic np-cover-ph">&#xE8D6;</i>
-            <img class="np-cover" id="np-cover" src="" alt="">
+            <img class="np-cover" id="np-cover" alt="">
           </div>
           <div class="np-title" id="np-title">未在播放</div>
           <div class="np-artist" id="np-artist">—</div>
@@ -101,7 +156,7 @@
       <div class="pl-left">
         <div class="pl-cover-wrap" id="pl-cover-wrap">
           <i class="ic pl-cover-ph">&#xE8D6;</i>
-          <img id="pl-cover" class="pl-cover" src="" title="点击查看歌词">
+          <img id="pl-cover" class="pl-cover" title="点击查看歌词">
         </div>
         <div class="pl-meta"><div id="pl-title">未在播放</div><div id="pl-artist">—</div></div>
       </div>

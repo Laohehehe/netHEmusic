@@ -27,6 +27,36 @@ window.addEventListener('unhandledrejection', function (e) {
 })();
 
 (function () {
+  // ---- 滑块「已填充」进度：轨道由 CSS 自绘（见 main.css），Chromium 自绘后不再画填充段，
+  //      这里把进度写进 --range-p，任何 input[type=range]（含动态渲染出来的）都自动生效。
+  function syncRangeFill(i) {
+    var mn = Number(i.min === '' || i.min === undefined ? 0 : i.min);
+    var mx = Number(i.max === '' || i.max === undefined ? 100 : i.max);
+    var v = Number(i.value);
+    if (!isFinite(mn)) mn = 0; if (!isFinite(mx)) mx = 100; if (!isFinite(v)) v = mn;
+    var p = mx > mn ? Math.max(0, Math.min(100, (v - mn) / (mx - mn) * 100)) : 0;
+    i.style.setProperty('--range-p', p + '%');
+  }
+  function syncRangeFillAll() {
+    var l = document.querySelectorAll('input[type=range]');
+    for (var k = 0; k < l.length; k++) syncRangeFill(l[k]);
+  }
+  window.neSyncRangeFill = syncRangeFill;
+  document.addEventListener('input', function (e) { if (e.target && e.target.type === 'range') syncRangeFill(e.target); }, true);
+  document.addEventListener('change', function (e) { if (e.target && e.target.type === 'range') syncRangeFill(e.target); }, true);
+  var pending = false;
+  function queue() {
+    if (pending) return; pending = true;
+    requestAnimationFrame(function () { pending = false; try { syncRangeFillAll(); } catch (x) { } });
+  }
+  function boot() {
+    queue();
+    try { new MutationObserver(queue).observe(document.body, { childList: true, subtree: true }); } catch (x) { }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+
+(function () {
   const NE = window.NE; const $ = s => document.querySelector(s);
   const view = $('#view');
   let queue = []; let playingIndex = -1; let currentList = []; let nowPlaying = null; let appSettings = {};
@@ -34,6 +64,8 @@ window.addEventListener('unhandledrejection', function (e) {
   function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
   function fmt(ms) { if (!ms || ms <= 0) return '00:00'; const s = Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
   function esc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  // 没有封面时不要输出 src="" —— 空 src 会让浏览器去请求页面自己(index.html)，控制台/日志里全是无谓的加载失败
+  function imgSrc(u, param) { u = String(u || '').replace(/\^\d+\^/, ''); return u ? ' src="' + esc(u + (param || '')) + '"' : ''; }
   // 兼容两种字段：网易云接口的 snake_case（name/ar/al）与 C# 队列 DTO 的 PascalCase（Title/Artist/...）
   function normSong(s) {
     if (!s) return null;
@@ -1055,7 +1087,7 @@ function applyPerfAnim(s) {
   function songRow(ns, i) {
     const r = el('div','song-row');
     r.innerHTML = '<div class="sr-idx">'+String(i+1).padStart(2,'0')+'</div>'+
-      '<img class="sr-cover" loading="lazy" src="'+(ns.Pic?ns.Pic.replace(/\^\d+\^/,'')+'?param=80y80':'')+'">'+
+      '<img class="sr-cover" loading="lazy"'+imgSrc(ns.Pic,'?param=80y80')+'>'+
       '<div class="sr-title">'+esc(ns.Title)+'</div><div class="sr-artist">'+esc(ns.Artist)+'</div>'+
       '<div class="sr-album">'+esc(ns.Album)+'</div><div class="sr-dur">'+fmt(ns.Duration)+'</div>'+
       '<button class="row-btn primary" data-do="play" title="播放">'+SVG.play+'</button>'+
@@ -1081,7 +1113,7 @@ function applyPerfAnim(s) {
   }
   function playlistCard(p, mine) {
     const c = el('div','pl-card');
-    c.innerHTML = '<img loading="lazy" src="'+(p.coverImgUrl||p.picUrl||'').replace(/\^\d+\^/,'')+'?param=200y200"><div class="plc-name">'+esc(p.name||'')+'</div><div class="plc-count">'+(p.trackCount||'')+' 首</div>';
+    c.innerHTML = '<img loading="lazy"'+imgSrc(p.coverImgUrl||p.picUrl,'?param=200y200')+'><div class="plc-name">'+esc(p.name||'')+'</div><div class="plc-count">'+(p.trackCount||'')+' 首</div>';
     c.onclick = () => go('playlist', { id:p.id, name:p.name });
     c.oncontextmenu = function (e) { e.preventDefault(); e.stopPropagation(); showPlCardMenu(e.clientX, e.clientY, p, !!mine); };
     return c;
@@ -2092,7 +2124,7 @@ function applyPerfAnim(s) {
       const p = d.profile || {};
       if (p.userId) {
         html.appendChild(el('div','account-info',
-          '<img class="acc-avatar" src="' + (p.avatarUrl || '') + '?param=120y120" alt="">'
+          '<img class="acc-avatar"' + imgSrc(p.avatarUrl, '?param=120y120') + ' alt="">'
           + '<div><div class="acc-nick">' + esc(p.nickname || '') + '</div>'
           + '<div class="acc-sub">已登录 · uid=' + p.userId + '</div></div>'));
         const out = el('button','action-btn','退出登录');
@@ -2593,9 +2625,13 @@ function applyPerfAnim(s) {
       }),
       accentDetail,
       fontRow('界面字体','ui_font', String(cfgGet(s,'ui_font','')), applyAppFont),
-      masterSw('Mica 背景（Mica Alt 材质）','mica', s.mica, [
+      masterSw('窗口材质（半透明背景）','mica', s.mica, [
+        sel('材质','ui_material', String(cfgGet(s,'ui_material','acrylic')), [
+          { v: 'acrylic', t: '亚克力（能透看后方窗口）' },
+          { v: 'micaAlt', t: 'Mica Alt（只取桌面壁纸）' }
+        ]),
         rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1),
-        hint('打开后窗口会用 Mica Alt 材质（桌面模糊透上来），面板底色按上面的不透明度变半透明；关掉即恢复实色。')
+        hint('打开后窗口用半透明材质：亚克力能透看后方其它窗口（Windows 原生材质本来就不支持，Mica 只取壁纸）；面板底色按上面的不透明度变半透明。')
       ]),
       sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
     ]));
@@ -3408,7 +3444,7 @@ function applyPerfAnim(s) {
     var r = el('div', 'dl-row');
     r.dataset.id = t.id;
     r.innerHTML =
-      '<img class="dl-cover" loading="lazy" src="' + esc(dlPic(t.pic)) + '">' +
+      '<img class="dl-cover" loading="lazy"' + imgSrc(dlPic(t.pic)) + '>' +
       '<div class="dl-meta"><div class="dl-name">' + esc(t.title || '未知歌曲') + '</div>' +
       '<div class="dl-sub">' + esc((t.artist || '未知歌手') + (t.qualityLabel ? ' · ' + t.qualityLabel : '')) + '</div></div>' +
       '<div class="dl-prog"><div class="dl-bar"><div class="dl-fill"></div></div><span class="dl-pct">0%</span></div>' +
@@ -3486,7 +3522,7 @@ function applyPerfAnim(s) {
     dlItems.forEach(function (it) {
       var r = el('div', 'dl-row');
       r.innerHTML =
-        '<img class="dl-cover" loading="lazy" src="' + esc(dlPic(it.pic)) + '">' +
+        '<img class="dl-cover" loading="lazy"' + imgSrc(dlPic(it.pic)) + '>' +
         '<div class="dl-meta"><div class="dl-name">' + esc(it.title || it.fileName) + '</div>' +
         '<div class="dl-sub">' + esc(it.artist || '') + '</div></div>' +
         '<div class="dl-info"><span class="dl-chip">' + esc(it.qualityLabel || '') + '</span>' +
