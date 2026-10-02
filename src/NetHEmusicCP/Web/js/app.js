@@ -1148,6 +1148,80 @@ function applyPerfAnim(s) {
   }
   function renderSongs(arr, container) { currentList = arr.map(normSong); container.innerHTML=''; container.classList.add('song-list'); currentList.forEach((ns,i)=>container.appendChild(songRow(ns, i))); return currentList; }
 
+  // ---- 长名称走马灯：鼠标悬停到某一行时，把放不下的歌名/歌手/专辑滚动显示完整 ----
+  //   · 只有真的溢出（scrollWidth > clientWidth）才动手，短名字保持静止
+  //   · 单向循环：把内容复制一份拼成 track，动画走 -50% 正好是一份的宽度 → 无缝
+  //   · 系统开了「减少动态效果」就直接不滚（保持省略号）
+  var MQ_GAP = 48;                                   // 两份之间留出的间隔(px)
+  function mqEnabled() {
+    try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false; } catch (e) { }
+    return cfgBool(appSettings, 'ui_marquee', true);
+  }
+  function mqSpeed() {
+    var v = Number(cfgGet(appSettings, 'ui_marquee_speed', 40));
+    if (!(v >= 10)) v = 40;
+    return Math.max(10, Math.min(200, v));
+  }
+  function mqCells(row) { return row ? row.querySelectorAll('.sr-title,.sr-artist,.sr-album') : []; }
+  // 量文字的真实宽度：拿同 class 的空元素塞进同一个父级（继承同样的字体/变量），
+  // 绝对定位 + width:auto → 收缩到内容宽度，用 getBoundingClientRect 取亚像素精度。
+  // （不能用 scrollWidth：ellipsis 元素在 Chromium 上会报成 clientWidth）
+  function mqTextWidth(c, txt) {
+    var clone = c.cloneNode(false);
+    clone.textContent = txt;
+    clone.removeAttribute('data-mq-text');
+    clone.style.cssText = 'position:absolute;left:-99999px;top:0;width:auto;max-width:none;min-width:0;flex:none;visibility:hidden;pointer-events:none;';
+    (c.parentNode || document.body).appendChild(clone);
+    var w = clone.getBoundingClientRect().width;
+    clone.parentNode.removeChild(clone);
+    return w;
+  }
+  function mqStart(row) {
+    if (!row || row.dataset.mqOn === '1' || !mqEnabled()) return;
+    row.dataset.mqOn = '1';
+    var speed = mqSpeed();
+    Array.prototype.forEach.call(mqCells(row), function (c) {
+      if (c.querySelector('.mq-track')) return;
+      var txt = c.textContent || '';
+      c.dataset.mqText = txt;
+      var tw = txt ? mqTextWidth(c, txt) : 0;
+      var cw = c.getBoundingClientRect().width;                    // 精确宽度（clientWidth 会被取整）
+      if (!txt || tw <= cw + 0.1) return;                          // 放得下就不滚
+      var w = tw;                                                  // 单份文字的宽度
+      var track = document.createElement('span');
+      track.className = 'mq-track';
+      for (var k = 0; k < 2; k++) {
+        var one = document.createElement('span');
+        one.className = 'mq-one';
+        one.textContent = txt;
+        one.style.paddingRight = MQ_GAP + 'px';
+        if (k === 1) one.setAttribute('aria-hidden', 'true');      // 复制的那份不给读屏念
+        track.appendChild(one);
+      }
+      c.textContent = '';
+      c.appendChild(track);
+      c.classList.add('sr-mq');
+      track.style.animationDuration = Math.max(1.2, (w + MQ_GAP) / speed).toFixed(2) + 's';
+    });
+  }
+  function mqStop(row) {
+    if (!row) return;
+    Array.prototype.forEach.call(mqCells(row), function (c) {
+      if (!c.querySelector('.mq-track')) return;
+      c.classList.remove('sr-mq');
+      c.textContent = c.dataset.mqText || '';
+    });
+    row.dataset.mqOn = '';
+  }
+  view.addEventListener('mouseover', function (e) {
+    var row = e.target.closest && e.target.closest('.song-row');
+    if (row) mqStart(row);
+  });
+  view.addEventListener('mouseout', function (e) {
+    var row = e.target.closest && e.target.closest('.song-row');
+    if (row && !(e.relatedTarget && row.contains(e.relatedTarget))) mqStop(row);
+  });
+
   // 选项卡切换动画：新内容渲染完后播一次入场（淡入 + 轻微上移）
   function animateView() {
     var el = view.firstElementChild; if (!el) return;
@@ -2399,6 +2473,8 @@ function applyPerfAnim(s) {
       ]),
       sw('歌词页背景模糊','perf_bg_blur', cfgBool(s, 'perf_bg_blur', true)),
       rng2('背景模糊程度','perf_bg_blur_amount', bgBlurAmt, 0, 100, '%', 5),
+      sw('长名称走马灯（悬停时滚动显示全名）','ui_marquee', cfgBool(s,'ui_marquee',true)),
+      rng2('走马灯速度','ui_marquee_speed', Number(cfgGet(s,'ui_marquee_speed',40))||40, 20, 120, 'px/s', 5),
       sel('频谱帧率','perf_vz_fps', String(cfgGet(s, 'perf_vz_fps', 33)), [
         { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
       ])

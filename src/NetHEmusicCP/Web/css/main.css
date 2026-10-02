@@ -158,6 +158,12 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .sr-title{flex:2;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sr-artist{flex:1.4;min-width:0;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sr-album{flex:1.4;min-width:0;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 长名称走马灯：悬停整行时由 app.js 插入 .mq-track（两份内容），走 -50% 无缝循环 */
+.song-row .mq-track{display:inline-flex;align-items:baseline;will-change:transform;}
+.song-row .mq-one{white-space:nowrap;}
+.song-row .sr-mq .mq-track{animation-name:mq-scroll;animation-timing-function:linear;animation-iteration-count:infinite;}
+@keyframes mq-scroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+@media (prefers-reduced-motion: reduce){ .song-row .sr-mq .mq-track{animation:none;} }
 .sr-dur{width:46px;font-size:11px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);}
 /* 歌曲行内的单图标 SVG 按钮 */
 /* 歌曲行内的单图标 SVG 按钮（外观在 effects.css 里统一覆盖） */
