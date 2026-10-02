@@ -38,6 +38,7 @@ public sealed partial class DesktopLyricWindow : Window
     private bool _topmost = true;
     private bool _dragging;
     private PointInt32 _dragGap;
+    private double _strokeW = 1.0;      // 描边粗细（设置键 dl_stroke_width，0 = 不描边）
     private readonly StrokeText _main;
     private readonly StrokeText _sub;
     private readonly FontFamily _baseFont;
@@ -127,6 +128,10 @@ public sealed partial class DesktopLyricWindow : Window
             double subSize = Clamp(ParseNum(cfg.Get("App", "dl_sub_size", ""), 20), 10, 64);
             var fill = ParseColor(cfg.Get("App", "dl_color", ""), Colors.White);
             var stroke = ParseColor(cfg.Get("App", "dl_stroke_color", ""), Color.FromArgb(255, 0, 0, 0));
+            // 描边粗细：原来是按字号算死的（主行 size/20 = 1.7px），字小的时候描边糊成一团，
+            // 现在改成设置里自由调（0 = 完全不描边）
+            double strokeW = Clamp(ParseNum(cfg.Get("App", "dl_stroke_width", ""), 1.0), 0, 6);
+            _strokeW = strokeW;
             double opacity = Clamp(ParseNum(cfg.Get("App", "dl_opacity", ""), 100), 10, 100) / 100.0;
             bool bold = !(cfg.Get("App", "dl_bold", "true") ?? "true").Equals("false", StringComparison.OrdinalIgnoreCase);
             bool showSub = !(cfg.Get("App", "dl_show_sub", "true") ?? "true").Equals("false", StringComparison.OrdinalIgnoreCase);
@@ -139,15 +144,15 @@ public sealed partial class DesktopLyricWindow : Window
 
             _main.FontFamily = ff;
             _sub.FontFamily = ff;
-            _main.SetStyle(mainSize, bold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal, fill, stroke, Math.Max(1.2, mainSize / 20.0));
-            _sub.SetStyle(subSize, Microsoft.UI.Text.FontWeights.Normal, fill, stroke, Math.Max(1.0, subSize / 14.0));
+            _main.SetStyle(mainSize, bold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal, fill, stroke, strokeW);
+            _sub.SetStyle(subSize, Microsoft.UI.Text.FontWeights.Normal, fill, stroke, strokeW);
             _main.Opacity = opacity;
             _sub.Opacity = opacity;
             SubHost.Visibility = showSub ? Visibility.Visible : Visibility.Collapsed;
 
             FitToContent();
             LogManager.Debug("桌面歌词外观: font=" + (font.Length > 0 ? font : "(默认)") + " main=" + mainSize + " sub=" + subSize +
-                             " color=" + fill + " stroke=" + stroke + " opacity=" + opacity + " bold=" + bold + " sub=" + showSub);
+                             " color=" + fill + " stroke=" + stroke + " strokeW=" + strokeW + " opacity=" + opacity + " bold=" + bold + " sub=" + showSub);
         }
         catch (Exception e) { LogManager.Debug("桌面歌词应用设置失败: " + e.Message); }
     }
@@ -266,7 +271,7 @@ public sealed partial class DesktopLyricWindow : Window
             var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
             var work = area.WorkArea;                                 // 物理像素
             var k = RasterScale();                                    // XAML 量出来的是 DIP，AppWindow 收的是物理像素
-            int pad = (int)Math.Ceiling(k) * 2 + 8;                   // 描边 + DIP→px 取整的富余量
+            int pad = (int)Math.Ceiling((_strokeW * 2 + 4) * k) + 8;   // 描边（粗细可调，粗了要留够）+ DIP→px 取整的富余量
             _fittedScale = k;
 
             // 1) 先按「不换行」量一次，拿到这一句真正需要多宽（DIP）
@@ -534,6 +539,7 @@ public sealed partial class DesktopLyricWindow : Window
         public void SetStyle(double size, FontWeight weight, Color fill, Color stroke, double strokeWidth)
         {
             var lh = LineHeightOf(size);
+            var hasStroke = strokeWidth > 0.05;                  // 0 = 不描边：8 个描边层直接隐藏，省掉排版/合成开销
             for (var i = 0; i < _strokes.Count; i++)
             {
                 var t = _strokes[i];
@@ -541,6 +547,7 @@ public sealed partial class DesktopLyricWindow : Window
                 t.LineHeight = lh;
                 t.FontWeight = weight;
                 t.Foreground = new SolidColorBrush(stroke);
+                t.Visibility = hasStroke ? Visibility.Visible : Visibility.Collapsed;
                 t.RenderTransform = new TranslateTransform { X = Ring[i].X * strokeWidth, Y = Ring[i].Y * strokeWidth };
             }
             _front.FontSize = size;

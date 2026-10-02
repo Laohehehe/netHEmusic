@@ -1222,11 +1222,12 @@ function applyPerfAnim(s) {
 
   // ---- 歌词页外观设置（辉光/阴影/描边/排列/逐字/模糊/曲线）----
   var lyStyles = {
-    glow: false, shadow: true, stroke: false,
+    glow: false, shadow: true,
     layout: 'vertical', curve: 50, charAnim: false,
     blur: false, blurAmt: 40, ease: 'smooth',
     showTr: true, showRo: true,
     fontSize: 22,
+    bgBlur: true, bgBlurAmt: 30,
     vz: false, vzStyle: 'bars', vzStrength: 60, vzSens: 100
   };
   // 曲线取值参考 refined-now-playing-netease
@@ -1240,7 +1241,6 @@ function applyPerfAnim(s) {
   function npApplyLyricSettings(s) {
     lyStyles.glow = cfgBool(s, 'lyric_glow', false);
     lyStyles.shadow = cfgBool(s, 'lyric_shadow', true);
-    lyStyles.stroke = cfgBool(s, 'lyric_stroke', false);
     lyStyles.layout = String(cfgGet(s, 'lyric_layout', 'vertical'));
     lyStyles.curve = Number(cfgGet(s, 'lyric_curve', 50)) || 0;
     lyStyles.charAnim = cfgBool(s, 'lyric_char_anim', false);
@@ -1252,6 +1252,7 @@ function applyPerfAnim(s) {
     lyStyles.fontSize = Math.max(12, Math.min(64, Number(cfgGet(s, 'lyric_font_size', 22)) || 22));
     // 性能开关
     lyStyles.bgBlur = cfgBool(s, 'perf_bg_blur', true);
+    lyStyles.bgBlurAmt = Math.max(0, Math.min(100, Number(cfgGet(s, 'perf_bg_blur_amount', 30)) || 0));
     lyStyles.playAnim = cfgBool(s, 'perf_play_anim', true);
     lyStyles.vzFps = Math.max(10, Math.min(120, Number(cfgGet(s, 'perf_vz_fps', 33)) || 33));
     lyStyles.vz = cfgBool(s, 'vz_enabled', false);
@@ -1267,7 +1268,6 @@ function applyPerfAnim(s) {
     var s = lyStyles;
     np.classList.toggle('ly-glow', !!s.glow && !s.shadow);
     np.classList.toggle('ly-shadow', !!s.shadow && !s.glow);
-    np.classList.toggle('ly-stroke', !!s.stroke);
     np.classList.toggle('ly-blur', !!s.blur);
     np.classList.toggle('ly-curved', s.layout === 'curved');
     np.classList.toggle('ly-char', !!s.charAnim);
@@ -1277,6 +1277,7 @@ function applyPerfAnim(s) {
     document.documentElement.classList.toggle('no-play-anim', !lyStyles.playAnim);
     VZ_FRAME_MS = Math.round(1000 / (lyStyles.vzFps || 33));
     np.style.setProperty('--ly-blur', (s.blurAmt / 100 * 5).toFixed(2) + 'px');
+    np.style.setProperty('--np-bg-blur', (lyStyles.bgBlurAmt / 100 * 40).toFixed(1) + 'px');   // 歌词页背景模糊量（0% = 不模糊，30% ≈ 原来的 12px）
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
     np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 字号（行高与排版会跟着重算）
     npLayout();
@@ -1294,9 +1295,11 @@ function applyPerfAnim(s) {
   function lyBlurPx(off) {
     if (!lyStyles.blur) return 0;
     var a = Math.abs(off); if (a === 0) return 0;
-    var maxB = Math.max(0.5, lyStyles.blurAmt / 100 * 7);
-    // 平滑递增（原来是 0.5+|off| 起步，第一行就 1.5px，和当前行之间有明显分界）
-    return Math.min(Math.pow(a, 0.8) * 0.8, maxB);
+    // 模糊程度 0~100 → 最远行 0~10px，最近的相邻行拿到 1/3 强度。
+    // （原来上限只有 7px 且按 pow(a,.8)*0.8 递增：相邻行仅 0.8px，肉眼几乎看不出，等于开关没生效）
+    var maxB = lyStyles.blurAmt / 100 * 10;
+    if (maxB < 0.3) return 0;
+    return Math.min(a * maxB / 3, maxB);
   }
   function lyOpacity(off) {
     var a = Math.abs(off);
@@ -1647,7 +1650,6 @@ function applyPerfAnim(s) {
     }
     addSwitch('字体辉光', 'lyric_glow', 'glow');
     addSwitch('字体阴影', 'lyric_shadow', 'shadow');
-    addSwitch('字体描边', 'lyric_stroke', 'stroke');
     addSelect('歌词排列', 'lyric_layout', 'layout', [{ v: 'vertical', t: '竖向' }, { v: 'curved', t: '旋转弧形' }]);
     addRange('排列曲率', 'lyric_curve', 'curve', 0, 100);
     addRange('字体大小', 'lyric_font_size', 'fontSize', 14, 56);
@@ -1842,10 +1844,10 @@ function applyPerfAnim(s) {
     function sel(label, key, val, opts) { return custSel(label, key, val, opts); }
     function txt(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var i=el('input'); i.type='text'; i.value=val||''; i.onchange=function(){ NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
     // 自定义范围的滑条（用于动画速率这类非 0-100 的项）
-    function rng2(label, key, val, min, max, suffix) {
+    function rng2(label, key, val, min, max, suffix, step) {
       suffix = suffix || '';
       var r = el('div','set-row'); var lb = el('label','',label+' ('+val+suffix+')'); r.appendChild(lb);
-      var i2 = el('input'); i2.type='range'; i2.min=min; i2.max=max; i2.step=5; i2.value=val;
+      var i2 = el('input'); i2.type='range'; i2.min=min; i2.max=max; i2.step=step||5; i2.value=val;
       i2.oninput = function(){ lb.textContent = label+' ('+i2.value+suffix+')'; NE.setSetting(key, i2.value); applyLiveSetting(key, i2.value); };
       r.appendChild(i2); return r;
     }
@@ -2151,6 +2153,8 @@ function applyPerfAnim(s) {
       rngXfade(),
       sw('听歌打卡（切歌时上报一次）','ui_scrobble', cfgBool(s,'ui_scrobble',false))
     ]));
+    var dlStrokeW = Number(cfgGet(s, 'dl_stroke_width', 1));
+    if (!(dlStrokeW >= 0)) dlStrokeW = 1;            // 0 是合法值（= 不描边），不能被 || 吃掉
     html.appendChild(group('桌面歌词', [
       masterSw('启用桌面歌词','desktopLyric', s.desktopLyric, [
         sw('锁定桌面歌词','desktopLyricTopmost', s.desktopLyricTopmost),
@@ -2160,6 +2164,7 @@ function applyPerfAnim(s) {
         rng2('副行字号','dl_sub_size', Number(cfgGet(s,'dl_sub_size',20))||20, 10, 64, 'px'),
         colorRow2('歌词颜色','dl_color', String(cfgGet(s,'dl_color','#ffffff')), DL_TEXT_COLORS, '#ffffff'),
         colorRow2('描边颜色','dl_stroke_color', String(cfgGet(s,'dl_stroke_color','#000000')), DL_STROKE_COLORS, '#000000'),
+        rng2('描边粗细','dl_stroke_width', dlStrokeW, 0, 5, 'px', 0.1),   // 0 = 不描边
         rng2('不透明度','dl_opacity', Number(cfgGet(s,'dl_opacity',100))||100, 10, 100, '%'),
         sw('主行加粗','dl_bold', cfgBool(s,'dl_bold',true)),
         sw('显示下一句 / 译文','dl_show_sub', cfgBool(s,'dl_show_sub',true))
@@ -2203,6 +2208,8 @@ function applyPerfAnim(s) {
         { v: 'linear', t: '匀速' }
       ], function (v) { applyLiveSetting('perf_anim_curve', v); })
     ], animEase === 'custom');
+    var bgBlurAmt = Number(cfgGet(s, 'perf_bg_blur_amount', 30));
+    if (!(bgBlurAmt >= 0)) bgBlurAmt = 30;
     html.appendChild(group('性能', [
       sw('GPU 加速（硬件渲染，改动需重启）','perf_gpu', cfgBool(s, 'perf_gpu', true)),
       masterSw('界面动画总开关','perf_anim', cfgBool(s, 'perf_anim', true), [
@@ -2220,6 +2227,7 @@ function applyPerfAnim(s) {
         sw('配色切换水波纹','perf_anim_ripple', cfgBool(s, 'perf_anim_ripple', true))
       ]),
       sw('歌词页背景模糊','perf_bg_blur', cfgBool(s, 'perf_bg_blur', true)),
+      rng2('背景模糊程度','perf_bg_blur_amount', bgBlurAmt, 0, 100, '%', 5),
       sel('频谱帧率','perf_vz_fps', String(cfgGet(s, 'perf_vz_fps', 33)), [
         { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
       ])

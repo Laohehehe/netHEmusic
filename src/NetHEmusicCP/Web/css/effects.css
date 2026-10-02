@@ -300,7 +300,7 @@ html.no-fx .fx-shake{animation:none;}
 /* 背景：模糊放大封面 + 暗色渐层 */
 .np-bg{
   position:absolute;inset:-8%;background-size:cover;background-position:center;
-  filter:blur(12px) saturate(1.7) brightness(.95);transform:scale(1.08);
+  filter:blur(var(--np-bg-blur,12px)) saturate(1.7) brightness(.95);transform:scale(1.08);
   will-change:transform;
   transition:background-image .4s ease;
 }
@@ -401,9 +401,7 @@ html.no-fx .fx-shake{animation:none;}
 /* 字体阴影（与辉光互斥） */
 .np.ly-shadow .np-line.on{ text-shadow:0 2px 10px rgba(0,0,0,.65), 0 1px 3px rgba(0,0,0,.55); }
 .np.ly-shadow .np-line{ text-shadow:0 1px 6px rgba(0,0,0,.45); }
-/* 字体描边 */
-.np.ly-stroke .np-line{ -webkit-text-stroke:1px rgba(0,0,0,.55); }
-.np.ly-stroke .np-line.on{ -webkit-text-stroke:1.2px rgba(0,0,0,.75); }
+/* 字体描边：按要求移除（歌词页不再提供描边设置；描边粗细滑块只服务桌面歌词） */
 /* 非当前行模糊：按与当前行的距离逐行计算，由 JS 写进内联 filter */
 /* 旋转弧形排列时的行变换由 JS 写进 style.transform，这里只给原点 */
 .np.ly-curved .np-line{transform-origin:left center;}
