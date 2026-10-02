@@ -2103,6 +2103,31 @@ function applyPerfAnim(s) {
       if (value !== undefined) r.appendChild(el('span','set-value', esc(String(value))));
       return r;
     }
+    // 反馈：设置页只放一个入口按钮，点了弹二级窗口，再点按钮用系统浏览器打开 GitHub 新建 issue 页
+    function feedbackRow() {
+      var r = el('div','set-row');
+      r.appendChild(el('label','','反馈'));
+      var b = el('button','action-btn','反馈');
+      b.type = 'button';
+      b.onclick = function (e) { e.stopPropagation(); feedbackDialog(); };
+      r.appendChild(b);
+      return r;
+    }
+    function feedbackDialog() {
+      var mask = el('div','modal-mask show');
+      mask.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true">'
+        + '<div class="modal-head"><span class="modal-dot"></span><h3>' + esc(T('反馈')) + '</h3></div>'
+        + '<div class="modal-body"><p>' + esc(T('点击下方按钮将打开浏览器进入反馈界面,若无法访问请尝试使用魔法')) + '</p></div>'
+        + '<div class="modal-foot"><button class="action-btn" data-x="open">' + esc(T('打开反馈')) + '</button></div></div>';
+      document.body.appendChild(mask);
+      function close() { try { document.body.removeChild(mask); } catch (e) { } }
+      mask.querySelector('[data-x=open]').onclick = function () {
+        close();
+        NE.post({ type: 'open_repo', name: 'github', page: 'issues' });
+      };
+      mask.onclick = function (e) { if (e.target === mask) close(); };   // 只有一个按钮，留个点遮罩关闭的退路
+      return mask;
+    }
     // 开源仓库：两个圆形品牌图标按钮，点了让 C# 用系统默认浏览器打开（前端不传任意 URL）
     function repoRow(s) {
       var r = el('div','set-row');
@@ -2493,6 +2518,7 @@ function applyPerfAnim(s) {
     html.appendChild(group('语言', [ sel('界面语言','language', s.language, zhOpts('language', ['zh_cn','en_US'])) ]));
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
     html.appendChild(group('高级', [
+      feedbackRow(),
       sw('开发者工具（F12 打开）','ui_devtools', cfgBool(s,'ui_devtools',false)),
       hint('打开后按 F12 就能查看网页端控制台，排查界面问题时用；开关一拨立刻生效，不用重启。平时建议关着。')
     ]));

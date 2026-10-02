@@ -954,17 +954,26 @@ public sealed partial class MainWindow : Window
         LogManager.Log("设置更新: " + key + "=" + value);
     }
 
-    /// <summary>在默认浏览器里打开开源仓库（关于页的 GitHub / Gitee 圆形按钮）。</summary>
+    /// <summary>在默认浏览器里打开开源仓库（关于页的 GitHub / Gitee 圆形按钮、设置页的反馈入口）。</summary>
     private void OpenRepo(JsonElement doc)
     {
         var name = doc.TryGetProperty("name", out var n) ? (n.GetString() ?? "").ToLowerInvariant() : "";
-        var url = name switch
+        var page = doc.TryGetProperty("page", out var pg) ? (pg.GetString() ?? "").ToLowerInvariant() : "";
+        var repoUrl = name switch
         {
             "github" => "https://github.com/" + AppServices.Config.UpdateRepo,
             "gitee" => "https://gitee.com/" + AppServices.Config.UpdateGiteeRepo,
             _ => ""
         };
-        if (url.Length == 0) return;
+        if (repoUrl.Length == 0) return;
+        // page 只认白名单里的固定页面 —— 前端依旧不能传任意 URL
+        var url = page switch
+        {
+            "issues" => repoUrl + "/issues/new",     // 反馈：直接进「新建 issue」页
+            "issueslist" => repoUrl + "/issues",
+            "releases" => repoUrl + "/releases",
+            _ => repoUrl
+        };
         try
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
