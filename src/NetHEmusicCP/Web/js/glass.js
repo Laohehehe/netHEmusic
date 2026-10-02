@@ -19,8 +19,8 @@
     return document.documentElement.classList.contains('liquid');
   }
 
-  // 目标表面：顶部标题条 + 底部 dock + 上滑面板 + 右键菜单
-  var TARGETS = ['#topbar', '#player', '.pl-panel', '.ctx-menu', '.qual-menu'];
+  // 目标表面：底部 dock + 上滑面板 + 右键菜单（顶栏 topbar 是贴边的整条行，不参与玻璃，否则像一圈异常高亮）
+  var TARGETS = ['#player', '.pl-panel', '.ctx-menu', '.qual-menu'];
 
   var host = null;
   function svgHost() {

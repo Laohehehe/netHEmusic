@@ -728,9 +728,10 @@ html[data-tb="surface"]  #topbar{background-image:linear-gradient(90deg,rgba(var
 html[data-tb="accent"]   #topbar{background-image:linear-gradient(90deg,rgba(var(--md-accent-color-bg-darken-rgb),var(--tb-a,.65)),rgba(var(--md-accent-color-rgb),var(--tb-a,.65)));}
 
 /* ================= 液态玻璃（材质 = liquid） ================= */
-/* 底层仍是原生亚克力（能透看后方窗口），这里给界面自身的条/面板叠折射+高光：
-   折射滤镜由 js/glass.js 按元素尺寸生成，用 backdrop-filter: url(#...) 应用 */
-html.liquid #topbar,
+/* 底层仍是原生亚克力（能透看后方窗口），这里给【浮动】面板叠折射+高光：
+   折射滤镜由 js/glass.js 按元素尺寸生成，用 backdrop-filter: url(#...) 应用。
+   注意：#topbar 是贴着卡片顶边的整条行，不是浮动面板 —— 给它加高光描边会像一圈异常高亮，
+   所以它不参与液态玻璃（只保留上面的标题条配色渐变）。 */
 html.liquid #player,
 html.liquid .pl-panel,
 html.liquid .ctx-menu,
@@ -738,4 +739,3 @@ html.liquid .qual-menu{
   border:1px solid rgba(255,255,255,.18);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.30),inset 0 -1px 0 rgba(255,255,255,.08),0 14px 38px rgba(0,0,0,.38);
 }
-html.liquid #topbar{background-color:transparent;}
