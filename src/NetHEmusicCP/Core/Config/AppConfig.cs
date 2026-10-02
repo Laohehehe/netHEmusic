@@ -159,7 +159,7 @@ public sealed class AppConfig
             // 更新源偏好：auto = 按地区自动挑（国内优先 Gitee）；也可以写死 github / gitee
             ["source"] = "auto",
             ["mirrors"] = "gh-proxy.com;ghm.078465.xyz;ghfast.top",
-            ["current_version"] = "26.9.30.2"
+            ["current_version"] = "26.10.3.2"
         };
         d.SectionOrder.Add("Update");
         d.Data["Network"] = new(StringComparer.OrdinalIgnoreCase)
