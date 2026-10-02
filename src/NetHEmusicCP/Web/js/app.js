@@ -1227,7 +1227,7 @@ function applyPerfAnim(s) {
     charStyle: 'jump', charPower: 60,
     blur: false, blurAmt: 40, ease: 'smooth',
     showTr: true, showRo: true,
-    fontSize: 22,
+    fontSize: 22, roSize: 13, trSize: 14,
     bgBlur: true, bgBlurAmt: 30,
     vz: false, vzStyle: 'bars', vzStrength: 60, vzSens: 100
   };
@@ -1261,6 +1261,10 @@ function applyPerfAnim(s) {
     lyStyles.showTr = cfgBool(s, 'lyric_show_translation', true);
     lyStyles.showRo = cfgBool(s, 'lyric_show_romaji', true);
     lyStyles.fontSize = Math.max(12, Math.min(64, Number(cfgGet(s, 'lyric_font_size', 22)) || 22));
+    // 副行字号各自独立设置；没设过就按主行字号的比例给默认（保证老用户观感不变）
+    var dRo = Math.round(lyStyles.fontSize * 0.6), dTr = Math.round(lyStyles.fontSize * 0.64);
+    lyStyles.roSize = Math.max(8, Math.min(48, Number(cfgGet(s, 'lyric_romaji_size', dRo)) || dRo));
+    lyStyles.trSize = Math.max(8, Math.min(48, Number(cfgGet(s, 'lyric_trans_size', dTr)) || dTr));
     // 性能开关
     lyStyles.bgBlur = cfgBool(s, 'perf_bg_blur', true);
     lyStyles.bgBlurAmt = Math.max(0, Math.min(100, Number(cfgGet(s, 'perf_bg_blur_amount', 30)) || 0));
@@ -1292,7 +1296,9 @@ function applyPerfAnim(s) {
     np.style.setProperty('--ly-ch-anim', LY_CH_ANIM[s.charStyle] || LY_CH_ANIM.jump);          // 逐字动画样式
     np.style.setProperty('--ly-ch-power', (s.charPower / 100).toFixed(2));                     // 跳动强度 0~1
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
-    np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 字号（行高与排版会跟着重算）
+    np.style.setProperty('--ly-font-size', s.fontSize + 'px');   // 主行字号（行高与排版会跟着重算）
+    np.style.setProperty('--ly-fs-ro', lyStyles.roSize + 'px');  // 罗马音字号
+    np.style.setProperty('--ly-fs-tr', lyStyles.trSize + 'px');  // 译文字号
     npLayout();
     try { npCharFill(); } catch (e18) { }   // 打开/切行后立即画一次
     vzApply();                                                   // 背景音乐律动
@@ -1543,6 +1549,27 @@ function applyPerfAnim(s) {
     var l = npLines[i];
     plugEmit('lyric', { index: i, time: l ? l.t : 0, text: l ? (l.o || l.t2 || '') : '', next: (npLines[i + 1] && (npLines[i + 1].o || npLines[i + 1].t2)) || '' });
   }
+  // 底部控制条（进度 + 控制键）：鼠标一动就滑出来，停 3 秒自己从底部滑走
+  var npBarIdle = 0;
+  function npBarHide() {
+    var b = document.querySelector('#np .np-bar'); if (b) b.classList.add('bar-away');
+  }
+  function npBarPoke() {
+    var bar = document.querySelector('#np .np-bar'); if (!bar) return;
+    if (bar.classList.contains('bar-away')) bar.classList.remove('bar-away');
+    clearTimeout(npBarIdle);
+    npBarIdle = setTimeout(function () { if (npOpen) npBarHide(); }, 3000);
+  }
+  (function initNpBarAutoHide() {
+    var np = npEl('np'); if (!np) return;
+    np.addEventListener('mousemove', npBarPoke);
+    np.addEventListener('mouseenter', npBarPoke);
+    np.addEventListener('mouseleave', function () {          // 鼠标移出歌词页就早点收起，别等到 3 秒
+      clearTimeout(npBarIdle);
+      npBarIdle = setTimeout(function () { if (npOpen) npBarHide(); }, 1200);
+    });
+  })();
+
   async function openNowPlaying() {
     var np = npEl('np'); if (!np) return;
     var wasOpen = npOpen;
@@ -1550,6 +1577,7 @@ function applyPerfAnim(s) {
     np.classList.remove('hidden');          // 恢复渲染
     void np.offsetWidth;                    // 关键：强制回流一帧，让初始态生效，否则 show 的过渡不会播
     np.classList.add('show'); np.setAttribute('aria-hidden', 'false');
+    npBarPoke();                            // 进歌词页先把控制条显示出来并开始计时
     if (lyStyles.vz) setTimeout(function () { vzApply(); }, 60);
     if (!wasOpen) requestAnimationFrame(npCoverFlip);
     var ns = nowPlaying || queue[playingIndex];
@@ -1703,7 +1731,9 @@ function applyPerfAnim(s) {
     addSwitch('字体阴影', 'lyric_shadow', 'shadow');
     addSelect('歌词排列', 'lyric_layout', 'layout', [{ v: 'vertical', t: '竖向' }, { v: 'curved', t: '旋转弧形' }]);
     addRange('排列曲率', 'lyric_curve', 'curve', 0, 100);
-    addRange('字体大小', 'lyric_font_size', 'fontSize', 14, 56);
+    addRange('主行字号', 'lyric_font_size', 'fontSize', 14, 56);
+    addRange('罗马音字号', 'lyric_romaji_size', 'roSize', 8, 40);
+    addRange('译文字号', 'lyric_trans_size', 'trSize', 8, 40);
     addSwitch('显示翻译', 'lyric_show_translation', 'showTr');
     addSwitch('显示罗马音', 'lyric_show_romaji', 'showRo');
     addSwitch('逐字动画', 'lyric_char_anim', 'charAnim');
