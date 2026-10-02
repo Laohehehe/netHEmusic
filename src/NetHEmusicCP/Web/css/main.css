@@ -235,7 +235,10 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--md-accent-color);color:#000;padding:9px 20px;border-radius:20px;font-weight:600;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:99;animation:toast-in .24s cubic-bezier(.2,.9,.3,1.25);}
 /* 气泡弹出动画：display:none → block 时自动重播（终点态与定位用的 translateX(-50%) 保持一致，避免回弹） */
 @keyframes toast-in{from{opacity:0;transform:translate(-50%,14px) scale(.94);}to{opacity:1;transform:translate(-50%,0) scale(1);}}
-@media (prefers-reduced-motion: reduce){ .toast{animation:none;} }
+/* 消失动画：2 秒后淡出 + 下沉（forwards 保持到 display:none） */
+@keyframes toast-out{from{opacity:1;transform:translate(-50%,0) scale(1);}to{opacity:0;transform:translate(-50%,10px) scale(.96);}}
+.toast.toast-out{animation:toast-out .22s cubic-bezier(.4,0,.6,1) forwards;}
+@media (prefers-reduced-motion: reduce){ .toast{animation:none;} .toast.toast-out{animation:none;opacity:0;} }
 /* ---- 细滚动条（4px 可见宽度，悬停变亮）---- */
 ::-webkit-scrollbar{width:6px;height:6px;}
 ::-webkit-scrollbar-track{background:transparent;}

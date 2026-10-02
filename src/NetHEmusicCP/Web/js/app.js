@@ -771,7 +771,19 @@ function applyPerfAnim(s) {
     h.style.setProperty("--nm-ripple-dur", Math.max(0.3, Math.min(1.0, 0.62 * k)).toFixed(2) + "s");
   } catch (e) { }
 }
-  function toast(t) { const el=$('#toast'); el.textContent=T(t); el.style.display='block'; setTimeout(()=>el.style.display='none',2000); }
+  var toastTimer = 0, toastOutTimer = 0;
+  function toast(t) {
+    const el = $('#toast'); if (!el) return;
+    el.textContent = T(t);
+    el.classList.remove('toast-out');
+    el.style.display = 'block';
+    void el.offsetWidth;                        // 重排一次，让进场动画在连点时也能重播
+    clearTimeout(toastTimer); clearTimeout(toastOutTimer);
+    toastTimer = setTimeout(function () {
+      el.classList.add('toast-out');            // 退场动画（淡出 + 下沉）
+      toastOutTimer = setTimeout(function () { el.style.display = 'none'; el.classList.remove('toast-out'); }, 240);
+    }, 2000);
+  }
   function loading() { view.innerHTML = '<div class="big-load">正在加载…</div>'; }
 
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
