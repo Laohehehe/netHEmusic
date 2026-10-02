@@ -2630,8 +2630,14 @@ function applyPerfAnim(s) {
           { v: 'acrylic', t: '亚克力（能透看后方窗口）' },
           { v: 'micaAlt', t: 'Mica Alt（只取桌面壁纸）' }
         ]),
+        sel('标题栏','ui_titlebar', String(cfgGet(s,'ui_titlebar','surface')), [
+          { v: 'surface', t: '配色渐变（与材质融合）' },
+          { v: 'accent', t: '强调色渐变' },
+          { v: 'none', t: '不着色（纯材质）' }
+        ]),
+        rng2('标题栏着色强度','ui_titlebar_alpha', Number(cfgGet(s,'ui_titlebar_alpha',65))||65, 0, 100, '%', 1),
         rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1),
-        hint('打开后窗口用半透明材质：亚克力能透看后方其它窗口（Windows 原生材质本来就不支持，Mica 只取壁纸）；面板底色按上面的不透明度变半透明。')
+        hint('打开后窗口用半透明材质：亚克力能透看后方其它窗口（Windows 原生材质本来就不支持，Mica 只取壁纸）；标题栏按上面的选择叠加当前配色的渐变，强度越高越接近界面底色、越不容易被背景顶得突兀。')
       ]),
       sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
     ]));
