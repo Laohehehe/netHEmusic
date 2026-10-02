@@ -735,6 +735,32 @@ public sealed partial class MainWindow : Window
                         }
                         break;
                     }
+                case "cache_put":
+                    {
+                        // 页面数据写进 temp 缓存（前端不用了就把内存里的副本丢掉，磁盘上还留着）
+                        var ck = doc.TryGetProperty("key", out var ckv) ? ckv.GetString() ?? "" : "";
+                        var cj = doc.TryGetProperty("json", out var cjv) ? cjv.GetString() ?? "" : "";
+                        if (ck.Length > 0 && cj.Length > 0) AppServices.Cache.WriteText(ck, cj);
+                        break;
+                    }
+                case "cache_get":
+                    {
+                        var ck2 = doc.TryGetProperty("key", out var ck2v) ? ck2v.GetString() ?? "" : "";
+                        var txt = ck2.Length > 0 ? AppServices.Cache.ReadText(ck2) : null;
+                        PostToWeb(new { type = "cache_data", key = ck2, json = txt });
+                        break;
+                    }
+                case "cache_remove":
+                    {
+                        var ck3 = doc.TryGetProperty("key", out var ck3v) ? ck3v.GetString() ?? "" : "";
+                        if (ck3.Length > 0) AppServices.Cache.Remove(ck3);
+                        break;
+                    }
+                case "cache_clear":
+                    AppServices.Cache.Clear();
+                    PostToWeb(new { type = "toast", text = "页面缓存已清空" });
+                    LogManager.Log("页面缓存已清空");
+                    break;
                 case "desktop_lyric": SetDesktopLyric(doc.TryGetProperty("on", out var dlOn) && dlOn.ValueKind == JsonValueKind.True); break;
                 case "set_setting": HandleSetSetting(doc); break;
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;

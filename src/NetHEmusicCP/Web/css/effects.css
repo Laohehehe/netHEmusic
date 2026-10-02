@@ -100,9 +100,11 @@ html.no-fx .fx-shake{animation:none;}
 .modal-mask{
   position:fixed;inset:0;z-index:6000;display:flex;align-items:center;justify-content:center;
   background:rgba(0,0,0,.45);backdrop-filter:blur(6px);
-  opacity:0;pointer-events:none;transition:opacity .22s ease;
+  /* 隐藏时必须真的不绘制：只给 opacity:0 的话，这个全屏 backdrop-filter 会一直占着合成层白烧性能 */
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .22s ease, visibility 0s linear .22s;
 }
-.modal-mask.show{opacity:1;pointer-events:auto;}
+.modal-mask.show{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .22s ease, visibility 0s;}
 .modal-card{
   width:min(520px,86vw);max-height:80vh;overflow:auto;
   background:var(--md-accent-color-bg-darken);

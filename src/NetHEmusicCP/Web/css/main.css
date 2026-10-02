@@ -151,19 +151,23 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .sec-title{font-size:15px;font-weight:600;margin:22px 0 12px;opacity:.9;}
 .muted{color:rgba(var(--md-accent-color-grey-base-rgb),.55);font-size:13px;}
 .song-list{border-radius:var(--radius);overflow:hidden;}
-.song-row{display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;background:var(--md-accent-color-bg-darken);border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.04);transition:background .15s;}
+.song-row{display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;background:var(--md-accent-color-bg-darken);border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.04);transition:background .15s;
+  /* 长列表：屏幕外的行跳过布局与绘制（含 hover/切页动画时的重绘），行高用实测值兜底 */
+  content-visibility:auto;contain-intrinsic-size:auto 52px;}
+/* 分批加载的哨兵：只占 1px，靠 rootMargin 提前触发 */
+.song-list .list-more{height:1px;}
 .song-row:hover{background:var(--nm-fill-hover);}
 .sr-idx{width:26px;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);text-align:right;font-variant-numeric:tabular-nums;}
 .sr-cover{width:38px;height:38px;border-radius:6px;object-fit:cover;background:rgba(var(--md-accent-color-grey-base-rgb),.1);}
 .sr-title{flex:2;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sr-artist{flex:1.4;min-width:0;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sr-album{flex:1.4;min-width:0;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-/* 长名称走马灯：悬停整行时由 app.js 插入 .mq-track（两份内容），走 -50% 无缝循环 */
-.song-row .mq-track{display:inline-flex;align-items:baseline;will-change:transform;}
-.song-row .mq-one{white-space:nowrap;}
-.song-row .sr-mq .mq-track{animation-name:mq-scroll;animation-timing-function:linear;animation-iteration-count:infinite;}
+/* 长名称走马灯：悬停整行/悬停 dock 信息区时由 app.js 插入 .mq-track（两份内容），走 -50% 无缝循环 */
+.mq-track{display:inline-flex;align-items:baseline;will-change:transform;}
+.mq-one{white-space:nowrap;}
+.sr-mq .mq-track{animation-name:mq-scroll;animation-timing-function:linear;animation-iteration-count:infinite;}
 @keyframes mq-scroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
-@media (prefers-reduced-motion: reduce){ .song-row .sr-mq .mq-track{animation:none;} }
+@media (prefers-reduced-motion: reduce){ .sr-mq .mq-track{animation:none;} }
 .sr-dur{width:46px;font-size:11px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);}
 /* 歌曲行内的单图标 SVG 按钮 */
 /* 歌曲行内的单图标 SVG 按钮（外观在 effects.css 里统一覆盖） */
@@ -208,7 +212,10 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 #pl-fill{height:100%;width:0;background:var(--md-accent-color);border-radius:3px;}
 .pl-right{display:flex;align-items:center;gap:10px;width:210px;justify-content:flex-end;}
 #pl-volume{width:90px;accent-color:var(--md-accent-color);}
-.ctx-menu{position:fixed;z-index:999;min-width:150px;background:var(--md-accent-color-bg-darken);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.12);border-radius:10px;padding:6px;box-shadow:0 10px 24px rgba(0,0,0,.4);}
+.ctx-menu{position:fixed;z-index:999;min-width:150px;background:var(--md-accent-color-bg-darken);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.12);border-radius:10px;padding:6px;box-shadow:0 10px 24px rgba(0,0,0,.4);transform-origin:top left;animation:ctx-pop .16s cubic-bezier(.2,.8,.3,1.15);}
+/* 右键菜单弹出动画：display:none → block 时 CSS 动画会自动重播 */
+@keyframes ctx-pop{from{opacity:0;transform:translateY(-6px) scale(.96);}to{opacity:1;transform:none;}}
+@media (prefers-reduced-motion: reduce){ .ctx-menu{animation:none;} }
 .ctx-item{padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;color:rgba(var(--md-accent-color-grey-base-rgb),.85);}
 .ctx-item:hover{background:var(--nm-fill);color:var(--md-accent-color);}
 .toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--md-accent-color);color:#000;padding:9px 20px;border-radius:20px;font-weight:600;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:99;}

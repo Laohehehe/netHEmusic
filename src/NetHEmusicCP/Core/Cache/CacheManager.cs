@@ -58,4 +58,56 @@ public sealed class CacheManager
         EnsureDir();
         return Path.Combine(CacheDir, key + ext);
     }
+
+    // ================= 页面数据缓存（列表/搜索结果等）=================
+    // 思路：数据放磁盘（temp 目录），页面打开时读回内存，离开页面就把内存里的副本丢掉。
+
+    /// <summary>写入一段文本缓存；写完按上限清理。key 会被合法化，避免路径穿越。</summary>
+    public void WriteText(string key, string text)
+    {
+        try
+        {
+            EnsureDir();
+            File.WriteAllText(CachePath(SafeKey(key), ".json"), text ?? "", new System.Text.UTF8Encoding(false));
+            EnforceLimit();
+        }
+        catch (Exception e) { LogManager.Debug("写缓存失败 " + key + ": " + e.Message); }
+    }
+
+    /// <summary>读缓存；没有则返回 null。顺手刷新访问时间，便于按 LRU 清理旧文件。</summary>
+    public string? ReadText(string key)
+    {
+        try
+        {
+            var path = CachePath(SafeKey(key), ".json");
+            if (!File.Exists(path)) return null;
+            var txt = File.ReadAllText(path);
+            try { File.SetLastAccessTimeUtc(path, DateTime.UtcNow); } catch { }
+            return txt;
+        }
+        catch (Exception e) { LogManager.Debug("读缓存失败 " + key + ": " + e.Message); return null; }
+    }
+
+    /// <summary>删掉某个缓存文件。</summary>
+    public bool Remove(string key)
+    {
+        try
+        {
+            var path = CachePath(SafeKey(key), ".json");
+            if (!File.Exists(path)) return false;
+            File.Delete(path);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private static string SafeKey(string key)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in (key ?? ""))
+            sb.Append(char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' ? ch : '_');
+        var s = sb.ToString();
+        if (s.Length == 0) return "k";
+        return s.Length > 80 ? s.Substring(0, 80) : s;
+    }
 }

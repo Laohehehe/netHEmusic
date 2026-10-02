@@ -984,6 +984,7 @@ function applyPerfAnim(s) {
   // 只更新歌名/歌手/封面（恢复播放列表时用，不改播放状态）
   function showSongMeta(ns) {
     if(!ns) return;
+    try { mqStop(document.querySelector('.pl-meta')); } catch (eM3) { }   // 换歌前先还原走马灯，免得残留旧内容
     $('#pl-title').textContent = ns.Title;
     $('#pl-artist').textContent = ns.Artist;
     var c = $('#pl-cover'), wrap = $('#pl-cover-wrap');
@@ -1146,7 +1147,37 @@ function applyPerfAnim(s) {
     mask.onclick = function (e) { if (e.target === mask) close(); };
     return mask;
   }
-  function renderSongs(arr, container) { currentList = arr.map(normSong); container.innerHTML=''; container.classList.add('song-list'); currentList.forEach((ns,i)=>container.appendChild(songRow(ns, i))); return currentList; }
+  // 长列表分批渲染：先渲 LIST_CHUNK 条，底部哨兵进视口再追加一批（配合 CSS content-visibility 让屏幕外的行不参与布局/绘制）
+  var LIST_CHUNK = 50;
+  function renderSongs(arr, container) {
+    currentList = arr.map(normSong);
+    container.innerHTML = '';
+    container.classList.add('song-list');
+    var sentinel = el('div', 'list-more');
+    container.appendChild(sentinel);
+    var shown = 0, io = null;
+    function more() {
+      var end = Math.min(shown + LIST_CHUNK, currentList.length);
+      for (var i = shown; i < end; i++) container.insertBefore(songRow(currentList[i], i), sentinel);
+      shown = end;
+      if (shown >= currentList.length) {
+        if (io) { try { io.disconnect(); } catch (e) { } io = null; }
+        try { sentinel.parentNode.removeChild(sentinel); } catch (e2) { }
+      }
+    }
+    more();
+    if (shown < currentList.length) {
+      if (window.IntersectionObserver) {
+        io = new IntersectionObserver(function (es) {
+          for (var k = 0; k < es.length; k++) if (es[k].isIntersecting) { more(); break; }
+        }, { rootMargin: '800px 0px' });
+        try { io.observe(sentinel); } catch (e3) { }
+      } else {
+        while (shown < currentList.length) more();      // 老引擎不支持就直接全渲
+      }
+    }
+    return currentList;
+  }
 
   // ---- 长名称走马灯：鼠标悬停到某一行时，把放不下的歌名/歌手/专辑滚动显示完整 ----
   //   · 只有真的溢出（scrollWidth > clientWidth）才动手，短名字保持静止
@@ -1162,7 +1193,7 @@ function applyPerfAnim(s) {
     if (!(v >= 10)) v = 40;
     return Math.max(10, Math.min(200, v));
   }
-  function mqCells(row) { return row ? row.querySelectorAll('.sr-title,.sr-artist,.sr-album') : []; }
+  function mqCells(scope) { return scope ? scope.querySelectorAll('.sr-title,.sr-artist,.sr-album,#pl-title,#pl-artist') : []; }
   // 量文字的真实宽度：拿同 class 的空元素塞进同一个父级（继承同样的字体/变量），
   // 绝对定位 + width:auto → 收缩到内容宽度，用 getBoundingClientRect 取亚像素精度。
   // （不能用 scrollWidth：ellipsis 元素在 Chromium 上会报成 clientWidth）
@@ -1221,6 +1252,18 @@ function applyPerfAnim(s) {
     var row = e.target.closest && e.target.closest('.song-row');
     if (row && !(e.relatedTarget && row.contains(e.relatedTarget))) mqStop(row);
   });
+  // dock 底部信息区（歌名/歌手）同样悬停走马灯
+  (function initDockMarquee() {
+    var dock = $('#player'); if (!dock) return;
+    dock.addEventListener('mouseover', function (e) {
+      var box = e.target.closest && e.target.closest('.pl-meta');
+      if (box) mqStart(box);
+    });
+    dock.addEventListener('mouseout', function (e) {
+      var box = e.target.closest && e.target.closest('.pl-meta');
+      if (box && !(e.relatedTarget && box.contains(e.relatedTarget))) mqStop(box);
+    });
+  })();
 
   // 选项卡切换动画：新内容渲染完后播一次入场（淡入 + 轻微上移）
   function animateView() {
@@ -1228,9 +1271,39 @@ function applyPerfAnim(s) {
     el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
     applyI18n(view); applyI18n($('#topbar'));   // 页面渲染完顺手把中文换掉（en 模式）
   }
+  // ---- 页面数据缓存：数据落到 %APPDATA%\netHEmusic\temp，打开页面时读回内存，离开页面就把内存副本丢掉 ----
+  var PC_TTL = 10 * 60 * 1000;        // 同一页 10 分钟内直接用缓存，避免数据太旧
+  var pcWaiters = {};
+  NE.on('cache_data', function (d) {
+    var w = pcWaiters[d && d.key];
+    if (w) { delete pcWaiters[d.key]; w(d.json); }
+  });
+  function pcGet(key) {
+    return new Promise(function (res) {
+      var done = false;
+      function finish(v) { if (done) return; done = true; res(v); }
+      pcWaiters[key] = function (json) {
+        if (done) return;
+        try {
+          if (!json) return finish(null);
+          var o = JSON.parse(json);
+          if (!o || !o.t || (Date.now() - o.t) > PC_TTL) return finish(null);
+          finish(o.v || null);
+        } catch (e) { finish(null); }
+      };
+      NE.post({ type: 'cache_get', key: key });
+      setTimeout(function () { if (!done) { delete pcWaiters[key]; finish(null); } }, 4000);
+    });
+  }
+  function pcPut(key, v) {
+    try { NE.post({ type: 'cache_put', key: key, json: JSON.stringify({ t: Date.now(), v: v }) }); } catch (e) { }
+  }
   async function go(viewName, data) {
     try {
+      var prevView = curView;
       curView = viewName; curViewData = data;   // 切语言时要按当前页重画
+      // 离开列表页：把内存里的列表副本丢掉（磁盘缓存里还有，回去时再读）
+      if (prevView && prevView !== viewName) { try { currentList = []; } catch (eCL) { } }
       // 离开设置页：顶栏换回搜索框（设置导航只在设置页存在）
       if (viewName !== 'settings') clearSetNavTopbar();
       var task = null;
@@ -1267,8 +1340,12 @@ function applyPerfAnim(s) {
   }
   async function goRecommend() {
     loading();
-    const r = await NE.recommend();
-    const songs = (r.data && r.data.dailySongs) || [];
+    var songs = await pcGet('recommend');
+    if (!songs) {
+      const r = await NE.recommend();
+      songs = (r.data && r.data.dailySongs) || [];
+      pcPut('recommend', songs);
+    }
     const html = el('div','page');
     html.appendChild(el('h2','page-title','每日推荐 ('+songs.length+')'));
     html.appendChild(allBtns(songs));
@@ -1295,8 +1372,12 @@ function applyPerfAnim(s) {
   }
   async function goPlaylist(id, name) {
     loading();
-    const [ tracks ] = await Promise.all([ NE.playlistTracks(id, 1000, 0) ]);
-    const songs = tracks.songs || [];
+    var songs = await pcGet('pl_' + id);
+    if (!songs) {
+      const tracks = await NE.playlistTracks(id, 1000, 0);
+      songs = (tracks && tracks.songs) || [];
+      pcPut('pl_' + id, songs);
+    }
     const html = el('div','page');
     html.appendChild(el('h2','page-title', name || '歌单'));
     html.appendChild(allBtns(songs));
@@ -1313,7 +1394,11 @@ function applyPerfAnim(s) {
     const doSearch = async () => {
       const kw = input.value.trim(); if(!kw) return;
       loading();
-      try { const r = await NE.search(kw, 50, 0); const songs=(r.result && r.result.songs)||[]; html.innerHTML=''; html.appendChild(el('h2','page-title','“'+esc(kw)+'” ('+songs.length+')')); const dl=el('div'); renderSongs(songs,dl); html.appendChild(dl); view.innerHTML=''; view.appendChild(html); }
+      try {
+        var songs = await pcGet('search_' + kw);
+        if (!songs) { const r = await NE.search(kw, 50, 0); songs = (r.result && r.result.songs) || []; pcPut('search_' + kw, songs); }
+        html.innerHTML=''; html.appendChild(el('h2','page-title','“'+esc(kw)+'” ('+songs.length+')')); const dl=el('div'); renderSongs(songs,dl); html.appendChild(dl); view.innerHTML=''; view.appendChild(html);
+      }
       catch(e){ toast('搜索失败: '+e.message); }
     };
     btn.onclick = doSearch; input.onkeydown = e => { if(e.key==='Enter') doSearch(); };
