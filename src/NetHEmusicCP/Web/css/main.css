@@ -55,7 +55,7 @@ body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-se
 .plg-btn:active{transform:scale(.97);}
 .plg-btn.primary{border-color:var(--md-accent-color);color:var(--md-accent-color);}
 .plg-btn.danger:hover{border-color:#ff7a7a;color:#ff7a7a;}
-#app{height:100vh;display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr;background:transparent;}
+#app{height:100vh;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr;background:transparent;}
 /* 侧栏：默认收起(仅图标)，悬停展开 */
 #sidebar{grid-row:1;background:var(--side-bg);padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .18s ease;overflow:hidden;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
 #sidebar:hover{width:210px;}
@@ -77,14 +77,14 @@ a.nav-bottom{margin-top:auto;margin-bottom:6px;display:flex;align-items:center;g
 a.nav-bottom:hover{background:var(--nm-fill-hover);color:var(--md-accent-color);}
 a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--md-accent-color);font-weight:600;}
 .sidebar-foot{font-size:11px;color:rgba(var(--md-accent-color-grey-base-rgb),.35);padding:12px;position:absolute;bottom:0;}
-#main{grid-row:1;grid-column:2;display:flex;flex-direction:column;min-height:0;position:relative;border-radius:16px;overflow:clip;margin:8px 10px 8px 2px;background:var(--card-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.10);box-shadow:0 14px 34px rgba(0,0,0,.40);}
+#main{grid-row:1;grid-column:2;display:flex;flex-direction:column;min-height:0;min-width:0;position:relative;border-radius:16px;overflow:clip;margin:8px 10px 8px 2px;background:var(--card-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.10);box-shadow:0 14px 34px rgba(0,0,0,.40);}
 #topbar{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
 .tb-search{display:flex;align-items:center;gap:8px;width:min(520px,60vw);background:var(--md-accent-color-bg-darken);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.14);border-radius:20px;padding:7px 14px;}
 .tb-search .ic{color:rgba(var(--md-accent-color-grey-base-rgb),.55);font-size:15px;}
 #topbar-search{flex:1;background:transparent;border:none;outline:none;color:var(--md-accent-color-secondary);font-size:14px;}
 #topbar-search::placeholder{color:rgba(var(--md-accent-color-grey-base-rgb),.4);}
 .tb-search:focus-within{border-color:var(--md-accent-color);}
-#view{flex:1;overflow-y:auto;padding:20px 28px 110px;}
+#view{flex:1;min-width:0;overflow-y:auto;padding:20px 28px 110px;}
 .big-load{color:rgba(var(--md-accent-color-grey-base-rgb),.5);padding:40px;text-align:center;font-size:14px;}
 .page-title{font-size:22px;font-weight:700;margin:0 0 16px;color:var(--md-accent-color-secondary);}
 .greet-title{font-size:24px;font-weight:700;margin:4px 0 20px;color:var(--md-accent-color-secondary);}
@@ -155,9 +155,9 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .song-row:hover{background:var(--nm-fill-hover);}
 .sr-idx{width:26px;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);text-align:right;font-variant-numeric:tabular-nums;}
 .sr-cover{width:38px;height:38px;border-radius:6px;object-fit:cover;background:rgba(var(--md-accent-color-grey-base-rgb),.1);}
-.sr-title{flex:2;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sr-artist{flex:1.4;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sr-album{flex:1.4;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sr-title{flex:2;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sr-artist{flex:1.4;min-width:0;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sr-album{flex:1.4;min-width:0;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sr-dur{width:46px;font-size:11px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);}
 /* 歌曲行内的单图标 SVG 按钮 */
 /* 歌曲行内的单图标 SVG 按钮（外观在 effects.css 里统一覆盖） */
