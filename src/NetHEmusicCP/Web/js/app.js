@@ -2473,8 +2473,9 @@ function applyPerfAnim(s) {
       ]),
       sw('歌词页背景模糊','perf_bg_blur', cfgBool(s, 'perf_bg_blur', true)),
       rng2('背景模糊程度','perf_bg_blur_amount', bgBlurAmt, 0, 100, '%', 5),
-      sw('长名称走马灯（悬停时滚动显示全名）','ui_marquee', cfgBool(s,'ui_marquee',true)),
-      rng2('走马灯速度','ui_marquee_speed', Number(cfgGet(s,'ui_marquee_speed',40))||40, 20, 120, 'px/s', 5),
+      masterSw('长名称走马灯（悬停时滚动显示全名）','ui_marquee', cfgBool(s,'ui_marquee',true), [
+        rng2('走马灯速度','ui_marquee_speed', Number(cfgGet(s,'ui_marquee_speed',40))||40, 20, 120, 'px/s', 5)
+      ]),
       sel('频谱帧率','perf_vz_fps', String(cfgGet(s, 'perf_vz_fps', 33)), [
         { v: '15', t: '15 fps（最省）' }, { v: '24', t: '24 fps' }, { v: '33', t: '33 fps（默认）' }, { v: '60', t: '60 fps（最顺）' }
       ])
