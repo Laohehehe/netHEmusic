@@ -720,3 +720,22 @@ html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
 .np.ly-char .np-line .ly-ch{opacity:.42;transition:opacity .12s linear,color .12s linear;}
 .np.ly-char .np-line .ly-ch.sung{opacity:1;}
 .np.ly-char .np-line.on .ly-ch.sung{color:#fff;}
+
+/* ================= 无原生标题栏（标题栏 0px） ================= */
+/* 窗口最上面一条由网页充当标题栏：拖拽带（JS 里 mousedown → win_drag）、配色渐变、留出系统按钮的位置 */
+#topbar{padding-right:152px;}            /* 右上角三个系统按钮铺在网页上，别压到搜索框 */
+html[data-tb="surface"]  #topbar{background-image:linear-gradient(90deg,rgba(var(--md-accent-color-bg-darken-rgb),var(--tb-a,.65)),rgba(var(--md-accent-color-bg-rgb),var(--tb-a,.65)));}
+html[data-tb="accent"]   #topbar{background-image:linear-gradient(90deg,rgba(var(--md-accent-color-bg-darken-rgb),var(--tb-a,.65)),rgba(var(--md-accent-color-rgb),var(--tb-a,.65)));}
+
+/* ================= 液态玻璃（材质 = liquid） ================= */
+/* 底层仍是原生亚克力（能透看后方窗口），这里给界面自身的条/面板叠折射+高光：
+   折射滤镜由 js/glass.js 按元素尺寸生成，用 backdrop-filter: url(#...) 应用 */
+html.liquid #topbar,
+html.liquid #player,
+html.liquid .pl-panel,
+html.liquid .ctx-menu,
+html.liquid .qual-menu{
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.30),inset 0 -1px 0 rgba(255,255,255,.08),0 14px 38px rgba(0,0,0,.38);
+}
+html.liquid #topbar{background-color:transparent;}

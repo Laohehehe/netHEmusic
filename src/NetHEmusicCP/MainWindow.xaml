@@ -3,23 +3,10 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid x:Name="Root" Background="{ThemeResource AppBackgroundBrush}">
-        <Grid.RowDefinitions>
-            <!-- 硬性要求（用户）：标题栏必须窄，固定 32px = Windows 标题栏按钮的标准高度，
-                 再窄系统的最小化/最大化/关闭会压到网页上；这一行【不做成设置项】，不要改回 48。 -->
-            <RowDefinition Height="32"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
-        <!-- ===== 顶栏（窗口边框 Chrome）：logo + 主题 + 窗口控制 ===== -->
-        <Grid x:Name="Headbar" Grid.Row="0" Background="{ThemeResource AppSurfaceDarkenBrush}">
-            <!-- 仅品牌标识，无交互控件（标题栏区域为拖拽区，按钮无法点击）；搜索/设置均移入 HTML -->
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Padding="12,0" IsHitTestVisible="False">
-                <Image x:Name="LogoImg" Width="16" Height="16" Source="Assets/logo.png"/>
-                <TextBlock x:Name="AppTitle" Text="netHEmusic" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource AppTextBrush}"/>
-            </StackPanel>
-        </Grid>
-
-        <!-- ===== WebView2 完整播放器（YesPlayMusic 风格） ===== -->
-        <WebView2 x:Name="WebView" Grid.Row="1"/>
+        <!-- 无原生标题栏（标题栏高度按用户要求为 0）：窗口内容整块交给 WebView2，
+             系统的最小化/最大化/关闭由系统自己浮在网页右上角（ExtendsContentIntoTitleBar），
+             拖拽由网页顶部拖拽带 → win_drag → WM_NCLBUTTONDOWN 实现（见 WindowHelper.StartDrag）。
+             注意：不要在这里加回任何标题栏行高。 -->
+        <WebView2 x:Name="WebView"/>
     </Grid>
 </Window>

@@ -44,18 +44,9 @@ public sealed partial class MainWindow : Window
         {
             bool dark = AppServices.Theme.IsDark;
             bool mica = AppServices.Config.Mica;
-            // 标题栏叠加层：材质开着时用「当前配色的半透明渐变」压在材质上 ——
-            // 亚克力照旧能透看后方窗口，标题栏却带上了方案自己的颜色，不再是一条跟界面割裂的透明条。
-            string tbKind = AppServices.Config.Get("App", "ui_titlebar", "surface");
-            double tbAlpha = Pct01(AppServices.Config.Get("App", "ui_titlebar_alpha", "65"), 0.65);
-            // Mica 打开时原生根背景必须透明，否则会把材质挡住（面板底色另由 PushTheme 输出半透明）
+            // 标题栏高度为 0（用户要求），配色渐变/液态玻璃都在网页里画，这里只留窗口底色与系统按钮字色
             Root.Background = mica ? null : new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.SurfaceColor(dark));
-            if (!mica) Headbar.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.SurfaceDarken(dark));
-            else if (tbKind == "none") Headbar.Background = null;   // 纯材质：标题栏完全交给材质，不叠加任何颜色
-            else Headbar.Background = TitlebarGradient(dark, tbKind, tbAlpha);
-            // 标题栏那行字用的是 ThemeResource —— 运行期换配色它不会重新解析，必须显式换刷子
-            try { AppTitle.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(AppServices.Theme.TextColor(dark)); } catch { }
-            // 最小化/最大化/关闭三个字的颜色也得跟着配色，否则浅色方案下是白字看不见
+            // 最小化/最大化/关闭三个字的颜色跟着配色，否则浅色方案下是白字看不见
             try
             {
                 var fg = AppServices.Theme.TextColor(dark);
@@ -69,28 +60,6 @@ public sealed partial class MainWindow : Window
         catch (Exception e) { LogManager.Debug("原生配色失败: " + e.Message); }
     }
 
-    /// <summary>标题栏渐变：surface = 面板色→页面色（含蓄、与界面同族）；accent = 面板色→强调色（更跳）。</summary>
-    private static Microsoft.UI.Xaml.Media.Brush TitlebarGradient(bool dark, string kind, double alpha)
-    {
-        var t = AppServices.Theme;
-        var c1 = t.SurfaceDarken(dark);
-        var c2 = kind == "accent" ? t.AccentColor(dark) : t.SurfaceColor(dark);
-        var b = new Microsoft.UI.Xaml.Media.LinearGradientBrush
-        {
-            StartPoint = new global::Windows.Foundation.Point(0, 0.5),
-            EndPoint = new global::Windows.Foundation.Point(1, 0.5)
-        };
-        b.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = WithAlpha(c1, alpha), Offset = 0 });
-        b.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = WithAlpha(c2, alpha), Offset = 1 });
-        return b;
-    }
-
-    private static global::Windows.UI.Color WithAlpha(global::Windows.UI.Color c, double a)
-        => global::Windows.UI.Color.FromArgb((byte)Math.Round(255 * Math.Max(0, Math.Min(1, a))), c.R, c.G, c.B);
-
-    private static double Pct01(string s, double fallback)
-        => double.TryParse(s, out var v) ? Math.Max(0, Math.Min(1, v / 100.0)) : fallback;
-
     public MainWindow()
     {
         InitializeComponent();
@@ -102,8 +71,7 @@ public sealed partial class MainWindow : Window
         WindowHelper.Center(this, 1280, 720);
         try
         {
-            ExtendsContentIntoTitleBar = true;
-            SetTitleBar(Headbar);
+            ExtendsContentIntoTitleBar = true;      // 系统按钮浮在网页上；不再 SetTitleBar（标题栏行高为 0，拖拽走 win_drag）
             AppWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
             AppWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
         }
@@ -826,6 +794,13 @@ public sealed partial class MainWindow : Window
                     break;
                 case "desktop_lyric": SetDesktopLyric(doc.TryGetProperty("on", out var dlOn) && dlOn.ValueKind == JsonValueKind.True); break;
                 case "set_setting": HandleSetSetting(doc); break;
+                // 无原生标题栏：窗口拖动 / 最大化由网页顶部拖拽带发起（原生最小化/最大化/关闭按钮仍由系统绘制）
+                case "win_drag": WindowHelper.StartDrag(this); break;
+                case "win_drag_move": WindowHelper.DragMove(this); break;
+                case "win_drag_end": WindowHelper.EndDrag(); break;
+                case "win_max": WindowHelper.ToggleMaximize(this); break;
+                case "win_min": WindowHelper.Minimize(this); break;
+                case "win_close": Close(); break;
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;
             }
         }
@@ -1014,13 +989,11 @@ public sealed partial class MainWindow : Window
                 AppServices.Config.Set("App", "ui_mica_alpha", value);
                 PushTheme();            // 只重算 CSS 变量，不用重启
                 break;
-            case "ui_titlebar":         // 标题栏渐变样式：surface / accent / none
+            case "ui_titlebar":         // 标题栏渐变样式：surface / accent / none（现在由网页顶部条自己画）
                 AppServices.Config.Set("App", "ui_titlebar", value);
-                ApplyNativeTheme();
                 break;
             case "ui_titlebar_alpha":   // 标题栏渐变强度（%）
                 AppServices.Config.Set("App", "ui_titlebar_alpha", value);
-                ApplyNativeTheme();
                 break;
             case "closeToTray": AppServices.Config.Set("App", "close_to_tray", b ? "true" : "false"); break;
             case "uiEffects": AppServices.Config.Set("App", "ui_effects", b ? "true" : "false"); break;

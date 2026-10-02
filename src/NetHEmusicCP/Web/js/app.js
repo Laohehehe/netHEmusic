@@ -769,10 +769,65 @@ function applyLiveSetting(key, val) {
     else if (key === 'volume') applyVolume(Number(val) || 0, false);
     else if (key === 'playMode') applyMode(String(val), true);
     else if (key.indexOf('hk_') === 0) hotkeysFromSettings(appSettings);
+    if (key === 'ui_material' || key === 'ui_titlebar' || key === 'ui_titlebar_alpha') applyGlassUI();
   } catch (e) { }
 }
 function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
   function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
+
+  // ---- 顶部标题条（原生标题栏已是 0px，这条现在由网页自己画）+ 液态玻璃开关 ----
+  function applyGlassUI() {
+    try {
+      var s = appSettings || {};
+      var root = document.documentElement;
+      var tb = String(cfgGet(s, 'ui_titlebar', 'surface'));
+      var a = Number(cfgGet(s, 'ui_titlebar_alpha', 65));
+      if (!isFinite(a)) a = 65;
+      root.setAttribute('data-tb', tb);
+      root.style.setProperty('--tb-a', String(Math.max(0, Math.min(100, a)) / 100));
+      root.classList.toggle('liquid', String(cfgGet(s, 'ui_material', 'acrylic')) === 'liquid');
+      if (window.neGlassRefresh) window.neGlassRefresh();
+    } catch (e) { }
+  }
+  window.neApplyGlassUI = applyGlassUI;
+
+  // ---- 无原生标题栏：窗口最上面 44px 是拖拽带（空白处按住拖动窗口，双击最大化）----
+  (function () {
+    function interactive(t) {
+      for (var e = t; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+        if (!e.tagName) continue;
+        var tag = e.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a') return true;
+        var cl = e.classList;
+        if (cl && (cl.contains('set-switch') || cl.contains('cust-select') || cl.contains('cs-value') ||
+          cl.contains('song-row') || cl.contains('pl-card') || cl.contains('set-row') || cl.contains('nav-svg'))) return true;
+      }
+      return false;
+    }
+    function inStrip(e) { return e.clientY <= 44; }
+    var dragging = false, dragRaf = false;
+    document.addEventListener('mousedown', function (e) {
+      if (e.button !== 0 || e.detail >= 2 || !inStrip(e) || interactive(e.target)) return;
+      e.preventDefault();
+      try { window.getSelection().removeAllRanges(); } catch (x) { }
+      dragging = true;
+      NE.post({ type: 'win_drag' });
+    }, true);
+    document.addEventListener('mousemove', function () {
+      if (!dragging || dragRaf) return;
+      dragRaf = true;
+      requestAnimationFrame(function () { dragRaf = false; if (dragging) NE.post({ type: 'win_drag_move' }); });
+    }, true);
+    document.addEventListener('mouseup', function () {
+      if (!dragging) return;
+      dragging = false;
+      NE.post({ type: 'win_drag_end' });
+    }, true);
+    document.addEventListener('dblclick', function (e) {
+      if (e.button !== 0 || !inStrip(e) || interactive(e.target)) return;
+      NE.post({ type: 'win_max' });
+    }, true);
+  })();
 
 // ---- 性能：动画总开关 / 分组开关 / 预设与自定义速率 ----
 var ANIM_PRESETS = {
@@ -2628,7 +2683,8 @@ function applyPerfAnim(s) {
       masterSw('窗口材质','mica', s.mica, [
         sel('材质','ui_material', String(cfgGet(s,'ui_material','acrylic')), [
           { v: 'acrylic', t: '亚克力' },
-          { v: 'micaAlt', t: 'Mica Alt' }
+          { v: 'micaAlt', t: 'Mica Alt' },
+          { v: 'liquid', t: '液态玻璃' }
         ]),
         sel('标题栏','ui_titlebar', String(cfgGet(s,'ui_titlebar','surface')), [
           { v: 'surface', t: '配色渐变' },
@@ -3243,6 +3299,7 @@ function applyPerfAnim(s) {
   NE.getSettings().then(function (s) {
     try {
       appSettings = s || {};
+      applyGlassUI();                                          // 顶部标题条渐变 + 液态玻璃
       applyMode(s.playMode || 'order', true);
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
       npApplyLyricSettings(s);                                 // 歌词页外观设置

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
@@ -55,6 +56,59 @@ public static class WindowHelper
         try { w.AppWindow.Resize(new SizeInt32(width, height)); } catch (Exception e) { LogManager.Debug("Resize 失败: " + e.Message); }
     }
 
+    // ---- 无原生标题栏时的窗口拖动 / 最大化（网页发起：win_drag / win_drag_move / win_max / win_min） ----
+    // 说明：把按下转成 WM_NCLBUTTONDOWN(HTCAPTION) 让系统接管拖动的做法，在 WebView2 里
+    // 因为跨进程消息要绕一圈、系统拖动循环启动时鼠标已经抬起，实测窗口纹丝不动；
+    // 所以改成网页每次 mousemove 通知一次，这里按【原生光标位移】移动窗口（两边都用物理坐标，不混 DPI）。
+    [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X; public int Y; }
+    [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT p);
+    private static POINT _dragStart; private static PointInt32 _winStart; private static bool _dragging;
+
+    /// <summary>网页拖拽带按下：记录光标与窗口起点（最大化时先还原，符合系统习惯）。</summary>
+    public static void StartDrag(Window w)
+    {
+        try
+        {
+            if (w.AppWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Maximized) p.Restore();
+            ReleaseCapture();
+            GetCursorPos(out _dragStart);
+            _winStart = w.AppWindow.Position;
+            _dragging = true;
+        }
+        catch (Exception e) { LogManager.Debug("拖动起点失败: " + e.Message); }
+    }
+
+    /// <summary>网页拖拽带移动：把光标位移原样加到窗口起点上。</summary>
+    public static void DragMove(Window w)
+    {
+        if (!_dragging) return;
+        try
+        {
+            if (!GetCursorPos(out var now)) return;
+            w.AppWindow.Move(new PointInt32(_winStart.X + (now.X - _dragStart.X), _winStart.Y + (now.Y - _dragStart.Y)));
+        }
+        catch (Exception e) { LogManager.Debug("拖动失败: " + e.Message); }
+    }
+
+    public static void EndDrag() => _dragging = false;
+
+    public static void ToggleMaximize(Window w)
+    {
+        try
+        {
+            if (w.AppWindow.Presenter is not OverlappedPresenter p) return;
+            if (p.State == OverlappedPresenterState.Maximized) p.Restore(); else p.Maximize();
+        }
+        catch (Exception e) { LogManager.Debug("最大化失败: " + e.Message); }
+    }
+
+    public static void Minimize(Window w)
+    {
+        try { (w.AppWindow.Presenter as OverlappedPresenter)?.Minimize(); }
+        catch (Exception e) { LogManager.Debug("最小化失败: " + e.Message); }
+    }
+
     /// <summary>窗口居中到工作区。</summary>
     public static void Center(Window w, int width = 1280, int height = 720)
     {
@@ -87,14 +141,15 @@ public static class WindowHelper
                 IsInputActive = true,
                 Theme = dark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light
             };
-            if ((material ?? "").Equals("acrylic", StringComparison.OrdinalIgnoreCase))
+            if ((material ?? "").Equals("acrylic", StringComparison.OrdinalIgnoreCase)
+                || (material ?? "").Equals("liquid", StringComparison.OrdinalIgnoreCase))   // 液态玻璃：底层仍是亚克力（网页端再叠折射/高光）
             {
                 if (!DesktopAcrylicController.IsSupported()) { LogManager.Log("背景材质: 系统不支持亚克力"); return; }
                 var c = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
                 c.AddSystemBackdropTarget(support);
                 c.SetSystemBackdropConfiguration(_micaCfg);
                 _backdrop = c;
-                LogManager.Log("背景材质: 亚克力 DesktopAcrylic(Thin) 已接管（深浅=" + (dark ? "Dark" : "Light") + "）");
+                LogManager.Log("背景材质: " + ((material ?? "").Equals("liquid", StringComparison.OrdinalIgnoreCase) ? "液态玻璃（亚克力底）" : "亚克力") + " DesktopAcrylic(Thin) 已接管（深浅=" + (dark ? "Dark" : "Light") + "）");
             }
             else
             {
