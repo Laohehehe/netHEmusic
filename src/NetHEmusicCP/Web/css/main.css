@@ -20,7 +20,9 @@ html,body{height:100%;margin:0;}
 body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-serif);background:var(--frame-bg);color:var(--md-accent-color-secondary);overflow:hidden;}
 /* 与 WinUI 原生标题栏同色：标题栏用的是主题 AppSurfaceDarkenBrush(= --md-accent-color-bg-darken) */
 :root{
-  --frame-bg: var(--md-accent-color-bg-darken);
+  /* 窗口/页面底色用 bg（浅一档），面板/行/卡片用 bg-darken（深一档）——
+     以前两者都是 bg-darken，所以整个应用只有一个底色，浅色配色下尤其是一片白 */
+  --frame-bg: var(--md-accent-color-bg);
   --side-bg:  var(--md-accent-color-bg-darken);
   --card-bg:  var(--md-accent-color-bg-darken);
 }
@@ -164,6 +166,22 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .cust-select .cs-item.sel{color:var(--md-accent-color);font-weight:600;}
 .sec-title{font-size:15px;font-weight:600;margin:22px 0 12px;opacity:.9;}
 .muted{color:rgba(var(--md-accent-color-grey-base-rgb),.55);font-size:13px;}
+/* 原生表单控件跟随应用深浅色（WebView 里默认跟系统走，浅色配色下滑块轨道会是深色的） */
+:root{color-scheme:light;}
+:root.dark{color-scheme:dark;}
+/* 浮层统一毛玻璃：和 dock 一致（半透明/Mica 主题下才协调） */
+.pl-panel,.ctx-menu,.qual-menu{backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);}
+/* Windows 11 风格小圆圈加载动画 */
+.win-spin-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:56px 0;}
+.win-spin{width:44px;height:44px;}
+.win-spin circle{
+  fill:var(--md-accent-color);opacity:.15;
+  transform-origin:24px 24px;transform:rotate(calc(var(--i) * 45deg));
+  animation:win-dot 1.05s linear infinite;animation-delay:calc(var(--i) * 0.13s);
+}
+@keyframes win-dot{0%,100%{opacity:.15;}45%{opacity:1;}}
+.win-spin-text{margin-top:2px;font-size:13px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);}
+@media (prefers-reduced-motion: reduce){ .win-spin circle{animation:none;opacity:.6;} }
 .song-list{border-radius:var(--radius);overflow:hidden;}
 .song-row{display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;background:var(--md-accent-color-bg-darken);border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.04);transition:background .15s;
   /* 长列表：屏幕外的行跳过布局与绘制（含 hover/切页动画时的重绘），行高用实测值兜底 */

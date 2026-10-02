@@ -784,7 +784,14 @@ function applyPerfAnim(s) {
       toastOutTimer = setTimeout(function () { el.style.display = 'none'; el.classList.remove('toast-out'); }, 240);
     }, 2000);
   }
-  function loading() { view.innerHTML = '<div class="big-load">正在加载…</div>'; }
+  // Windows 11 风格的小圆圈加载动画（纯 SVG + CSS，动画定义见 main.css 的 .win-spin）
+  function spinHTML(text) {
+    var dots = '';
+    for (var i = 0; i < 8; i++) dots += '<circle cx="24" cy="7.5" r="3.1" style="--i:' + i + '"></circle>';
+    return '<div class="win-spin-wrap"><svg class="win-spin" viewBox="0 0 48 48" aria-hidden="true">' + dots + '</svg>'
+      + (text ? '<div class="win-spin-text">' + esc(text) + '</div>' : '') + '</div>';
+  }
+  function loading() { view.innerHTML = spinHTML(''); }
 
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
   function pop(el) { if(!el) return; el.classList.remove('fx-pop'); void el.offsetWidth; el.classList.add('fx-pop'); }
@@ -1101,6 +1108,7 @@ function applyPerfAnim(s) {
     return m;
   }
   function showPlCardMenu(x, y, p, mine) {
+    hideAllCtxMenus();
     var m = ensurePlCardMenu(); if (!m) return;
     Array.prototype.forEach.call(m.children, function (c) {
       var isDel = c.getAttribute('data-a') === 'del';
@@ -2785,7 +2793,12 @@ function applyPerfAnim(s) {
 
   // 主题：把 C# 传来的 Material You 变量以【行内样式】写到 <html>（优先级最高，覆盖 :root 默认值）
   function applyThemeVars(d) {
-    if (d.dark !== undefined) document.documentElement.classList.toggle('dark', !!d.dark);
+    if (d.dark !== undefined) {
+      document.documentElement.classList.toggle('dark', !!d.dark);
+      // 让原生表单控件（滑块轨道、滚动条、下拉）跟着应用的深浅色走 —— WebView 里默认跟系统走，
+      // 所以浅色配色下滑块轨道会是深色的（观感很怪）
+      try { document.documentElement.style.colorScheme = d.dark ? 'dark' : 'light'; } catch (eCS) { }
+    }
     plugEmit('theme', { dark: !!d.dark, vars: d.vars || '' });
     if (d.vars) {
       var root = document.documentElement;
@@ -3015,6 +3028,7 @@ function applyPerfAnim(s) {
     return m;
   }
   function showQueueMenu(x, y, index) {
+    hideAllCtxMenus();
     var m = ensureQueueMenu(); if (!m) return;
     plCtxIndex = index;
     m.style.display = 'block';
@@ -3022,6 +3036,13 @@ function applyPerfAnim(s) {
     m.style.top = Math.min(y, window.innerHeight - 170) + 'px';
   }
   function hideQueueMenu() { var m = $('#pl-ctx'); if (m) m.style.display = 'none'; plCtxIndex = -1; }
+  // 右键菜单互斥：开新菜单前先把其它菜单关掉（原来右键点别处不会关掉已经开着的菜单，会叠一堆）
+  function hideAllCtxMenus() {
+    try { hideQueueMenu(); } catch (e1) { }
+    try { hidePlCardMenu(); } catch (e2) { }
+    try { hideMenu(); } catch (e3) { }
+    try { qualClose(); } catch (e4) { }
+  }
   document.addEventListener('click', hideQueueMenu);
   document.addEventListener('contextmenu', function (e) {
     if (plOpen && !(e.target.closest && e.target.closest('.pl-item'))) hideQueueMenu();
@@ -3518,7 +3539,7 @@ function applyPerfAnim(s) {
   menu.querySelectorAll('.ctx-item').forEach(it => { it.onclick = (e)=>{ e.stopPropagation(); const a=it.getAttribute('data-a'); if(ctxSong){ if(a==='play') play(ctxSong); else if(a==='next') { NE.post({type:'playnext', song:ctxSong}); toast('已加入下一首播放'); } else if(a==='dl') NE.post({type:'download', song:ctxSong}); } hideMenu(); }; });
   document.addEventListener('click', ()=>hideMenu());
   function hideMenu(){ menu.style.display='none'; }
-  function showMenu(x,y,song){ ctxSong=song; menu.style.display='block'; menu.style.left=x+'px'; menu.style.top=y+'px'; }
+  function showMenu(x,y,song){ hideAllCtxMenus(); ctxSong=song; menu.style.display='block'; menu.style.left=x+'px'; menu.style.top=y+'px'; }
 
   // 给列表行的右键绑定自定义菜单
   view.addEventListener('contextmenu', function(e){

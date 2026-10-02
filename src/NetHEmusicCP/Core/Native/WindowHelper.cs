@@ -7,7 +7,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using WinRT;
+using netHEmusic.Core;
 using netHEmusic.Core.Logging;
+using netHEmusic.Core.Theme;
 
 namespace netHEmusic.Core.Native;
 
@@ -110,14 +112,23 @@ public static class WindowHelper
         }
     }
 
-    /// <summary>让材质的深浅跟着应用主题走（切配色/切深浅时调用）。</summary>
+    /// <summary>让材质的深浅/着色跟着应用配色走（切配色/切深浅时调用）。</summary>
     public static void SyncBackdropTheme(bool dark)
     {
         try
         {
-            if (_micaCfg is null) return;
+            if (_micaCfg is null || _mica is null) return;
             var want = dark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
             if (_micaCfg.Theme != want) { _micaCfg.Theme = want; LogManager.Debug("材质主题同步: " + want); }
+            // 材质用【配色自己的 bg】着色（页面底色那一档），面板是 bg-darken 那一档 ——
+            // 这样标题栏材质和页面融合、面板又能从材质上"浮"出来，层次不会拉平
+            var scheme = AppServices.Theme.GetScheme();
+            var c = ThemeManager.HexToColor(scheme.bg);
+            var wc = global::Windows.UI.Color.FromArgb(255, c.R, c.G, c.B);
+            _mica.TintColor = wc;
+            _mica.TintOpacity = 0.45f;
+            _mica.FallbackColor = wc;
+            _mica.LuminosityOpacity = dark ? 0.0f : 1.0f;
         }
         catch (Exception e) { LogManager.Debug("材质主题同步失败: " + e.Message); }
     }
