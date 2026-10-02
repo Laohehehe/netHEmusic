@@ -151,10 +151,12 @@ public sealed class ThemeManager
         var grey = mode == "light" ? "0,0,0" : "255,255,255";
         var a = Math.Max(0.2, Math.Min(1.0, surfaceAlpha));
         var ci = System.Globalization.CultureInfo.InvariantCulture;
-        // bg = 页面/窗口底色：带 alpha → 窗口材质透上来；
-        // bg-darken = 面板/行/卡片底色：保持【实色】，配色才不会被材质冲淡成一团白
+        // bg = 页面/窗口底色；bg-darken = 面板/行/卡片/底部 dock 底色。
+        // 两者都要带 alpha：面板不带 alpha 的话，页面里的 backdrop-filter 毛玻璃就无从可见
+        // （面板变成实色 = 底部 dock、歌单面板、右键菜单的模糊全部消失）。
+        // 配色本身已经按方案调过色，所以半透明也是"方案色 + 材质"，不会再糊成一团白。
         var bgOut = a >= 0.999 ? bg : $"rgba({bgc.Item1},{bgc.Item2},{bgc.Item3},{a.ToString("0.###", ci)})";
-        var bdOut = bgDarken;
+        var bdOut = a >= 0.999 ? bgDarken : $"rgba({bd.Item1},{bd.Item2},{bd.Item3},{a.ToString("0.###", ci)})";
         return $"--md-accent-color:{primary};--md-accent-color-rgb:{pr.Item1},{pr.Item2},{pr.Item3};" +
                $"--md-accent-color-secondary:{secondary};--md-accent-color-secondary-rgb:{se.Item1},{se.Item2},{se.Item3};" +
                $"--md-accent-color-bg:{bgOut};--md-accent-color-bg-rgb:{bgc.Item1},{bgc.Item2},{bgc.Item3};" +
