@@ -989,6 +989,7 @@ function applyPerfAnim(s) {
     var c = $('#pl-cover'), wrap = $('#pl-cover-wrap');
     if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); if(wrap) wrap.classList.add('has-cover'); try { if (String((appSettings && appSettings.scheme) || '') === 'dynamic-auto') pickCoverColor(ns.Pic); } catch (e7) { } }
     else { c.removeAttribute('src'); if(wrap) wrap.classList.remove('has-cover'); }
+    kickLikes();          // 切歌后同步爱心状态（首次会自动拉一次「我喜欢的音乐」）
   }
   function setPlayer(ns) { if(!ns) return; scrobSwitchTo(ns); showSongMeta(ns); setPlaying(true); pop($('#pb-play')); plugEmit('track', ns); }
 
@@ -1012,6 +1013,9 @@ function applyPerfAnim(s) {
     playlist:ico('<line x1="3" x2="14" y1="6" y2="6"/><line x1="3" x2="14" y1="12" y2="12"/><line x1="3" x2="9" y1="18" y2="18"/><path d="M16.5 14.4l6 3.6-6 3.6z"/>'),
     dl:      ico('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>'),
     star:    ico('<path d="M12 3.6l2.7 5.4 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.9l6-.9z"/>'),
+    // 喜欢：空心爱心（未喜欢）/ 实心爱心（已喜欢）
+    heart:     ico('<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21.2l7.7-7.7 1.1-1.1a5.5 5.5 0 0 0 0-7.8z"/>'),
+    heartFill: icoFill('<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>'),
     playNext:ico('<line x1="3" x2="13" y1="6" y2="6"/><line x1="3" x2="11" y1="12" y2="12"/><line x1="3" x2="11" y1="18" y2="18"/><path d="M15 11l6 4-6 4z"/>'),
     trash:   ico('<polyline points="3 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>'),
     folder:  ico('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.1a2 2 0 0 1 1.6.8l1 1.4h7.3A2.5 2.5 0 0 1 21 9.7v8.8A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"/>'),
@@ -1055,11 +1059,92 @@ function applyPerfAnim(s) {
     NE.post({ type: 'play_list', songs: merged, index: base.length });
     toast('已添加到播放列表 +' + add.length + ' 首（共 ' + merged.length + ' 首）');
   }
-  function playlistCard(p) {
+  function playlistCard(p, mine) {
     const c = el('div','pl-card');
     c.innerHTML = '<img loading="lazy" src="'+(p.coverImgUrl||p.picUrl||'').replace(/\^\d+\^/,'')+'?param=200y200"><div class="plc-name">'+esc(p.name||'')+'</div><div class="plc-count">'+(p.trackCount||'')+' 首</div>';
     c.onclick = () => go('playlist', { id:p.id, name:p.name });
+    c.oncontextmenu = function (e) { e.preventDefault(); e.stopPropagation(); showPlCardMenu(e.clientX, e.clientY, p, !!mine); };
     return c;
+  }
+
+  // ---- 歌单卡片右键菜单：分享歌单 / 添加至播放列表 / 删除歌单（只有自己的歌单才给删）----
+  var PLCARD_MENU = [
+    { a: 'share', ic: 'share', t: '分享歌单' },
+    { a: 'add',   ic: 'add',   t: '添加至播放列表' },
+    { a: 'del',   ic: 'trash', t: '删除歌单' }
+  ];
+  var plCardTarget = null;
+  function ensurePlCardMenu() {
+    var m = $('#plcard-ctx'); if (!m || m.dataset.ready) return m;
+    m.innerHTML = '';
+    PLCARD_MENU.forEach(function (it) {
+      var d = el('div', 'ctx-item');
+      d.setAttribute('data-a', it.a);
+      d.innerHTML = '<span class="ctx-ic">' + SVG[it.ic] + '</span><span>' + it.t + '</span>';
+      d.onclick = function (e) { e.stopPropagation(); var p = plCardTarget, a = it.a; hidePlCardMenu(); if (p) onPlCardAction(a, p); };
+      m.appendChild(d);
+    });
+    m.dataset.ready = '1';
+    return m;
+  }
+  function showPlCardMenu(x, y, p, mine) {
+    var m = ensurePlCardMenu(); if (!m) return;
+    Array.prototype.forEach.call(m.children, function (c) {
+      var isDel = c.getAttribute('data-a') === 'del';
+      c.style.display = (isDel && !mine) ? 'none' : '';     // 别人的歌单不给「删除」
+    });
+    plCardTarget = p;
+    m.style.display = 'block';
+    m.style.left = Math.min(x, window.innerWidth - 190) + 'px';
+    m.style.top = Math.min(y, window.innerHeight - 160) + 'px';
+  }
+  function hidePlCardMenu() { var m = $('#plcard-ctx'); if (m) m.style.display = 'none'; }
+  async function onPlCardAction(a, p) {
+    if (a === 'share') {
+      NE.post({ type: 'copy_text', text: '分享歌单《' + (p.name || '') + '》：https://music.163.com/#/playlist?id=' + p.id + ' (@网易云音乐)' });
+      return;
+    }
+    if (a === 'add') {
+      toast('正在读取歌单…');
+      try {
+        var r = await NE.playlistTracks(p.id, 1000, 0);
+        var songs = ((r && r.songs) || []).map(normSong).filter(function (s) { return s && s.Id; });
+        if (!songs.length) { toast('这个歌单是空的'); return; }
+        NE.post({ type: 'queue_append', songs: songs });
+        setTimeout(function () { NE.post({ type: 'queue_get' }); }, 500);   // 让本地的播放列表跟着刷新
+      } catch (e) { toast('读取歌单失败: ' + (e && e.message ? e.message : e)); }
+      return;
+    }
+    if (a === 'del') {
+      confirmDialog('删除歌单', '确定删除歌单《' + (p.name || '') + '》吗？会在网易云上真正删除，无法恢复。', '删除', async function () {
+        try {
+          var r2 = await deletePlaylistApi(p.id);
+          var code = r2 && (r2.code || (r2.data && r2.data.code));
+          if (code !== 200) throw new Error((r2 && (r2.message || r2.msg)) || ('code ' + code));
+          toast('歌单已删除');
+          if (curView === 'liked') go('liked');
+        } catch (e) { toast('删除失败: ' + (e && e.message ? e.message : e)); }
+      });
+    }
+  }
+  document.addEventListener('click', hidePlCardMenu);
+  document.addEventListener('contextmenu', function (e) {
+    if (!(e.target.closest && e.target.closest('.pl-card'))) hidePlCardMenu();
+  });
+  // 通用确认弹窗（复用公告弹窗的样式）
+  function confirmDialog(title, message, okText, onOk) {
+    var mask = el('div', 'modal-mask show');
+    mask.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true">'
+      + '<div class="modal-head"><span class="modal-dot"></span><h3>' + esc(title) + '</h3></div>'
+      + '<div class="modal-body"><p>' + esc(message) + '</p></div>'
+      + '<div class="modal-foot"><button class="action-btn ghost" data-x="cancel">' + T('取消') + '</button>'
+      + '<button class="action-btn danger" data-x="ok">' + esc(okText || T('确定')) + '</button></div></div>';
+    document.body.appendChild(mask);
+    function close() { try { document.body.removeChild(mask); } catch (e) { } }
+    mask.querySelector('[data-x=cancel]').onclick = close;
+    mask.querySelector('[data-x=ok]').onclick = function () { close(); try { if (onOk) onOk(); } catch (e) { } };
+    mask.onclick = function (e) { if (e.target === mask) close(); };
+    return mask;
   }
   function renderSongs(arr, container) { currentList = arr.map(normSong); container.innerHTML=''; container.classList.add('song-list'); currentList.forEach((ns,i)=>container.appendChild(songRow(ns, i))); return currentList; }
 
@@ -1813,7 +1898,7 @@ function applyPerfAnim(s) {
         const sub = (r && r.playlist && r.playlist.length) ? '' : '';
         html.appendChild(el('p','muted','共 ' + list.length + ' 个歌单'));
         const grid = el('div','pl-grid');
-        list.forEach(p => grid.appendChild(playlistCard(p)));
+        list.forEach(p => grid.appendChild(playlistCard(p, true)));
         html.appendChild(grid);
       }
     } catch (e) { html.appendChild(el('div','big-load','加载失败: ' + e.message)); }
@@ -2501,8 +2586,72 @@ function applyPerfAnim(s) {
     b.classList.toggle('on', !!on);
     b.title = on ? '桌面歌词：已开启（点击关闭）' : '桌面歌词：已关闭（点击开启）';
   }
+  // ---- 喜欢（爱心）：写进网易云「我喜欢的音乐」，切歌时自动检测是否已喜欢 ----
+  var likedUid = 0, likedIds = null, likeBusy = false, likedLoading = false;
+  async function ensureLikes() {
+    if (likedIds) return likedIds;
+    try {
+      var st = await NE.loginStatus();
+      likedUid = (st && st.data && st.data.profile && st.data.profile.userId) || (st && st.profile && st.profile.userId) || 0;
+      if (!likedUid) return null;
+      var r = await NE.api('likelist', { uid: likedUid });
+      likedIds = {};
+      ((r && r.ids) || []).forEach(function (id) { likedIds[String(id)] = 1; });
+      return likedIds;
+    } catch (e) { return null; }
+  }
+  function curSong() { return nowPlaying || queue[playingIndex] || null; }
+  function syncLikeBtn() {
+    var b = $('#pl-like'); if (!b) return;
+    var ns = curSong();
+    var liked = !!(ns && likedIds && likedIds[String(ns.Id)]);
+    b.innerHTML = liked ? SVG.heartFill : SVG.heart;
+    b.classList.toggle('liked', liked);
+    b.title = T(liked ? '取消喜欢' : '喜欢');
+  }
+  function kickLikes() {
+    try {
+      syncLikeBtn();
+      if (likedIds === null && !likedLoading) { likedLoading = true; ensureLikes().then(function () { likedLoading = false; syncLikeBtn(); }); }
+    } catch (e) { }
+  }
+  // 收藏接口：不同实现有的只认 GET、有的只认 POST，先在 GET 失败时补一次 POST
+  async function likeApi(id, on) {
+    var args = { id: id, like: on ? 'true' : 'false' };
+    var r = await NE.api('like', args);
+    var code = r && (r.code || (r.data && r.data.code));
+    if (code !== 200) r = await NE.api('like', args, true);
+    return r;
+  }
+  async function deletePlaylistApi(id) {
+    var args = { id: id };
+    var r = await NE.api('playlist/delete', args);
+    var code = r && (r.code || (r.data && r.data.code));
+    if (code !== 200) r = await NE.api('playlist/delete', args, true);
+    return r;
+  }
+  async function toggleLike() {
+    if (likeBusy) return;
+    var ns = curSong();
+    if (!ns) { toast('还没有在播放的歌曲'); return; }
+    var ids = await ensureLikes();
+    if (!ids) { toast('请先在「账号」页扫码登录'); go('account'); return; }
+    var liked = !!ids[String(ns.Id)];
+    likeBusy = true;
+    try {
+      var r = await likeApi(ns.Id, !liked);
+      var code = r && (r.code || (r.data && r.data.code));
+      if (code !== 200) throw new Error((r && (r.message || r.msg)) || ('code ' + code));
+      if (liked) delete ids[String(ns.Id)]; else ids[String(ns.Id)] = 1;
+      syncLikeBtn();
+      toast(liked ? '已从「我喜欢的音乐」移除' : '已添加到「我喜欢的音乐」');
+    } catch (e) {
+      toast('操作失败: ' + (e && e.message ? e.message : e));
+    } finally { likeBusy = false; }
+  }
+  if ($('#pl-like')) $('#pl-like').onclick = toggleLike;
   function initDockIcons() {
-    var map = { 'pb-prev': SVG.prev, 'pb-next': SVG.next, 'pl-like': SVG.star, 'pl-dl': SVG.dl, 'pl-list': SVG.playlist };
+    var map = { 'pb-prev': SVG.prev, 'pb-next': SVG.next, 'pl-like': SVG.heart, 'pl-dl': SVG.dl, 'pl-list': SVG.playlist };
     Object.keys(map).forEach(function (id) { var b = document.getElementById(id); if (b) b.innerHTML = map[id]; });
     var pb = $('#pb-play'); if (pb && !pb.innerHTML.trim()) pb.innerHTML = SVG.play;
     applyMode(curMode, true);
@@ -2616,7 +2765,7 @@ function applyPerfAnim(s) {
   $('#pl-dl').onclick = () => { if(queue[playingIndex]) NE.post({type:'download', song:queue[playingIndex]}); };
   // 点击播放条封面 → 进入歌词页
   $('#pl-cover').onclick = () => openNowPlaying();
-  $('#pl-like').onclick = () => toast('收藏开发中');
+  $('#pl-like').onclick = toggleLike;   // 真正的喜欢/取消喜欢（见上方 toggleLike）
   // ---- 音量：滑块与真实音量双向同步；点喇叭图标静音/恢复 ----
   var lastVol = 80;
   function updateVolUI(v) {

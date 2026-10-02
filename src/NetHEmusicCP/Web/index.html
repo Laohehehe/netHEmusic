@@ -83,6 +83,9 @@
     <!-- 播放列表右键菜单 -->
     <div id="pl-ctx" class="ctx-menu pl-ctx" style="display:none"></div>
 
+    <!-- 歌单卡片右键菜单（分享 / 添加至播放列表 / 删除歌单） -->
+    <div id="plcard-ctx" class="ctx-menu pl-ctx" style="display:none"></div>
+
     <!-- 当前播放列表面板（点 dock 最右侧 list 按钮弹出） -->
     <div id="plpanel" class="pl-panel">
       <div class="pl-panel-head">
@@ -119,7 +122,7 @@
       <div class="pl-right">
         <span class="pl-vol" id="pl-vol-icon" title="音量"><i class="ic">&#xE767;</i></span>
         <input id="pl-volume" type="range" min="0" max="100" value="80">
-        <button id="pl-like" title="收藏" class="ic-btn"></button>
+        <button id="pl-like" title="喜欢" class="ic-btn"></button>
         <button id="pl-dl" title="下载" class="ic-btn"></button>
       <button id="pl-qual" title="音质" class="ic-btn"></button>
         <button id="pl-list" title="当前播放列表" class="ic-btn"></button>

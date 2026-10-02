@@ -284,6 +284,12 @@ html.no-fx .fx-shake{animation:none;}
 .pl-ctx .ctx-ic{display:inline-flex;width:15px;height:15px;flex:0 0 auto;opacity:.85;}
 .pl-ctx .ctx-ic svg{width:15px;height:15px;display:block;}
 .pl-ctx .ctx-item:hover .ctx-ic{opacity:1;}
+/* 已喜欢：爱心填成红色 */
+.ic-btn.liked{color:#e2564d;}
+.ic-btn.liked:hover{color:#ff6b60;}
+/* 危险按钮（删除确认） */
+.action-btn.danger{background:#e23b3b;color:#fff;}
+.action-btn.danger:hover{background:#f04a4a;}
 /* ================= 全窗口歌词页（Now Playing） ================= */
 .np{
   position:fixed;inset:0;z-index:4000;overflow:hidden;

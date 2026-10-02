@@ -699,6 +699,42 @@ public sealed partial class MainWindow : Window
                         }
                         break;
                     }
+                case "copy_text":
+                    {
+                        // 前端拼好的任意文本（歌单分享链接等）→ 系统剪贴板
+                        var txt = doc.TryGetProperty("text", out var ctv) ? ctv.GetString() ?? "" : "";
+                        if (txt.Length > 0)
+                        {
+                            var ok = ClipboardHelper.SetText(txt);
+                            PostToWeb(new { type = "toast", text = ok ? "分享链接已复制到剪贴板" : "复制失败（剪贴板被占用）" });
+                            LogManager.Log("复制文本: " + (ok ? "成功 " : "失败 ") + txt);
+                        }
+                        break;
+                    }
+                case "queue_append":
+                    {
+                        // 批量加入播放列表：只追加、不打断当前播放（走 RestoreQueue，不触发重新解析）
+                        if (doc.TryGetProperty("songs", out var arrA) && arrA.ValueKind == JsonValueKind.Array)
+                        {
+                            var q = AppServices.Player.Queue.ToList();
+                            var added = 0;
+                            foreach (var it in arrA.EnumerateArray())
+                            {
+                                var s = SongFromWeb(it);
+                                if (s is null || s.Id <= 0) continue;
+                                if (q.Any(x => x.Id == s.Id)) continue;
+                                q.Add(s); added++;
+                            }
+                            if (added > 0)
+                            {
+                                AppServices.Player.RestoreQueue(q, AppServices.Player.Index);
+                                PostToWeb(new { type = "toast", text = "已添加到播放列表 +" + added + " 首（共 " + q.Count + " 首）" });
+                                LogManager.Log("追加播放列表: +" + added + " 首, 共 " + q.Count + " 首");
+                            }
+                            else PostToWeb(new { type = "toast", text = "这些歌都已经在播放列表里了" });
+                        }
+                        break;
+                    }
                 case "desktop_lyric": SetDesktopLyric(doc.TryGetProperty("on", out var dlOn) && dlOn.ValueKind == JsonValueKind.True); break;
                 case "set_setting": HandleSetSetting(doc); break;
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;
