@@ -2971,6 +2971,17 @@ function applyPerfAnim(s) {
   NE.on('playing', function(d){
     if(d.song){
       nowPlaying = normSong(d.song);
+      // 高亮必须跟着"正在播的这首"走：以前这里只 renderQueue()、不更新 playingIndex，
+      // 于是从列表里点歌后高亮仍停在上一首（要重开面板触发 queue_get 才对）——本 bug 的根因。
+      try {
+        var nid = nowPlaying ? String(nowPlaying.Id) : '';
+        if (nid && nid !== '0') {
+          for (var qi = 0; qi < queue.length; qi++) {
+            var qs = queue[qi];
+            if (qs && String(qs.Id) === nid) { playingIndex = qi; break; }
+          }
+        }
+      } catch (eIdx) { }
       setPlayer(d.song);
       npSetPlaying(true);
       if (npOpen) openNowPlaying();          // 歌词页开着时跟着换歌换词
