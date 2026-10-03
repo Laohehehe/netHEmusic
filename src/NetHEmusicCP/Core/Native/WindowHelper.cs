@@ -128,15 +128,15 @@ public static class WindowHelper
         {
             if (!on)
             {
-                if (_logWin is { HasExited: false }) { try { _logWin.Kill(); } catch { } }
-                _logWin = null;
+                CloseLogWindow();
                 LogManager.Log("日志窗口已关闭");
                 return;
             }
             if (_logWin is { HasExited: false }) return;
             var log = LogManager.LogFilePath.Replace("'", "''");
-            // cmd /k 保底：就算 powershell 退出，窗口也还在，能看到最后的输出
-            var ps = "$Host.UI.RawUI.WindowTitle='netHEmusic 实时日志'; Get-Content -LiteralPath '" + log + "' -Wait -Tail 300";
+            // 必须显式 -Encoding UTF8：日志文件是「UTF-8 无 BOM」，Windows PowerShell 5.1 的 Get-Content
+            // 默认按系统 ANSI(GBK) 解码 —— 中文日志就会变成一整屏乱码。chcp 65001 保证输出端也是 UTF-8。
+            var ps = "$Host.UI.RawUI.WindowTitle='netHEmusic 实时日志'; Get-Content -LiteralPath '" + log + "' -Encoding UTF8 -Wait -Tail 300";
             var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe")
             {
                 Arguments = "/k chcp 65001>nul & powershell -NoProfile -ExecutionPolicy Bypass -Command \"" + ps.Replace("\"", "\\\"") + "\"",
@@ -149,8 +149,13 @@ public static class WindowHelper
         catch (Exception e) { LogManager.Debug("打开日志窗口失败: " + e.Message); }
     }
 
-    public static void ToggleMaximize(Window w)
+    /// <summary>关闭独立日志窗口：连 cmd 里起的 powershell 子进程一起收掉（否则退出后会留一个孤儿 tail 进程）。</summary>
+    public static void CloseLogWindow()
     {
+        try { if (_logWin is { HasExited: false }) _logWin.Kill(true); } catch { }
+        _logWin = null;
+    }
+    public static void ToggleMaximize(Window w)    {
         try
         {
             if (w.AppWindow.Presenter is not OverlappedPresenter p) return;
