@@ -187,9 +187,15 @@ public partial class App : Application
         // 紧接着 Environment.Exit 又把进程干掉（更新时就是这个流程，日志里能看到"已最小化到托盘"后立刻退出）
         _exiting = true;
         LogManager.Log("应用退出");
-        try { _tray?.Dispose(); } catch { }
-        AppServices.Updater.CloseInstallIfRunning();
-        try { (Application.Current as App)?._window?.Close(); } catch { }
+        // 逐步记日志：托盘退出时出现过「基于堆栈的缓冲区溢出」系统错误弹窗（/GS 校验失败），
+        // 崩在哪一步靠日志定位（谁最后一条没打出来，就是它）。每一步也单独兜异常，避免直接带走进程。
+        try { _tray?.Dispose(); } catch (Exception ex) { LogManager.Debug("退出步骤1(托盘)异常: " + ex.Message); }
+        LogManager.Log("退出步骤1/4 托盘已清理");
+        try { AppServices.Updater.CloseInstallIfRunning(); } catch (Exception ex) { LogManager.Debug("退出步骤2(安装器)异常: " + ex.Message); }
+        LogManager.Log("退出步骤2/4 安装器检查完成");
+        try { (Application.Current as App)?._window?.Close(); } catch (Exception ex) { LogManager.Debug("退出步骤3(主窗口)异常: " + ex.Message); }
+        LogManager.Log("退出步骤3/4 主窗口已关闭");
+        LogManager.Log("退出步骤4/4 Environment.Exit");
         Environment.Exit(0);
     }
 }
