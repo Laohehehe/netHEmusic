@@ -760,6 +760,17 @@ html.liquid .qual-menu{
    贴图生成（makeRim/makeSheen）、CSS 变量、--lg-power/--lg-spec、白描边与 inset 全部删掉。
    现在玻璃只有：折射 + 模糊 + 饱和度/亮度 + 外投影；"视角跟随"改为平移折射取样的背景（feOffset）。 */
 
+/* ================= 液态玻璃 · 流体质感（液滴 / 涟漪） ================= */
+/* 两个浮层：① #lg-drop 跟手的液滴透镜（粘度靠 JS 缓动 + 按速度挤压）② #lg-ripple 点击涟漪（一次性，播完自灭）。
+   两者都用 backdrop-filter:url(#透镜滤镜) 折射"下面的实时画面"，每帧只改 transform/opacity，
+   所以**不重画位移图**、也不会出现快照式实现那种冻结。pointer-events:none 保证不挡交互。 */
+#lg-drop, #lg-ripple{
+  position:fixed; top:0; left:0; z-index:60;
+  border-radius:50%; pointer-events:none;
+  opacity:0; will-change:transform,opacity;
+  contain:paint;
+}
+#lg-ripple{z-index:61;}
 /* ================= 液态玻璃 · liquidGL：试用后已撤掉 ================= */
 /* 走过一遍：开源库 liquidGL（MIT，WebGPU/WebGL 快照式玻璃）接成第三种材质，实测三个问题——
    ① dock 里的按钮点不动（库把目标元素及其子元素设成 pointer-events:none）

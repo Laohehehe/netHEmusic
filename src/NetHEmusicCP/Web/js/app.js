@@ -799,7 +799,7 @@ function applyLiveSetting(key, val) {
     else if (key === 'volume') applyVolume(Number(val) || 0, false);
     else if (key === 'playMode') applyMode(String(val), true);
     else if (key.indexOf('hk_') === 0) hotkeysFromSettings(appSettings);
-    if (key === 'ui_material' || key === 'ui_liquid_power' || key === 'ui_liquid_ca' || key === 'ui_liquid_thick' || key === 'ui_liquid_para') applyGlassUI();
+    if (key === 'ui_material' || key === 'ui_liquid_power' || key === 'ui_liquid_ca' || key === 'ui_liquid_thick' || key === 'ui_liquid_para' || key === 'ui_liquid_fluid') applyGlassUI();
   } catch (e) { }
 }
 function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
@@ -826,6 +826,11 @@ function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return
     if (!isFinite(v)) v = 50;              // 0 = 光带不跟随鼠标
     return Math.max(0, Math.min(100, v));
   }
+  function glassFluidValue(s) {
+    var v = Number(cfgGet(s, 'ui_liquid_fluid', 50));
+    if (!isFinite(v)) v = 50;              // 0 = 关掉流体质感（液滴/环境流动/涟漪）
+    return Math.max(0, Math.min(100, v));
+  }
   // ---- liquidGL 试用过、已撤掉（保留结论，别再踩）----
   // 试过把开源库 liquidGL（MIT，WebGPU 快照式玻璃）接成第三种材质，用户实测三个问题：
   //   ① dock 里的按钮全部点不动 —— 库会把目标元素和它的所有子元素设成 pointer-events:none
@@ -841,7 +846,7 @@ function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return
       var s = appSettings || {};
       var root = document.documentElement;
       root.classList.toggle('liquid', String(cfgGet(s, 'ui_material', 'acrylic')) === 'liquid');
-      if (window.neGlassSet) window.neGlassSet({ power: glassPowerValue(s), ca: glassCaValue(s), thickness: glassThickValue(s), parallax: glassParaValue(s) });
+      if (window.neGlassSet) window.neGlassSet({ power: glassPowerValue(s), ca: glassCaValue(s), thickness: glassThickValue(s), parallax: glassParaValue(s), fluid: glassFluidValue(s) });
       else if (window.neGlassRefresh) window.neGlassRefresh();
     } catch (e) {
       // 渲染路径不许静默吞异常（工作表单 §11）：这里出错会直接弹出错误框
@@ -2829,7 +2834,8 @@ function applyPerfAnim(s) {
       rng2('液态玻璃强度','ui_liquid_power', glassPowerValue(s), 0, 200, '%', 5),
       rng2('色散（彩边）','ui_liquid_ca', glassCaValue(s), 0, 100, '%', 5),
       rng2('厚度倾向','ui_liquid_thick', glassThickValue(s), 0, 100, '%', 5),   // 0 = 四周一样厚（改造前原样）
-      rng2('视角跟随','ui_liquid_para', glassParaValue(s), 0, 100, '%', 5)      // 光带跟着鼠标滑，边缘不动
+      rng2('视角跟随','ui_liquid_para', glassParaValue(s), 0, 100, '%', 5),     // 折射取样跟着鼠标平移
+      rng2('流体质感','ui_liquid_fluid', glassFluidValue(s), 0, 100, '%', 5)    // 指针液滴 + 环境流动 + 点击涟漪
     ], matCur === 'liquid');
     html.appendChild(group('主题 / 外观', [
       custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }]), function (v) {
