@@ -116,43 +116,37 @@ public static class WindowHelper
 
     public static void EndDrag() => _dragging = false;
 
-    // ---- 实时日志控制台（设置→高级 里的「显示控制台」）----
-    // WinUI 是 GUI 子系统程序，默认没有控制台，Console.WriteLine 全丢（这也是 -debugger 看不到日志的原因）。
-    // 这里按需 AllocConsole 出一个真控制台，再把 LogManager 的实时输出接上去。
-    [DllImport("kernel32.dll")] private static extern bool AllocConsole();
-    [DllImport("kernel32.dll")] private static extern bool FreeConsole();
-    [DllImport("kernel32.dll")] private static extern bool SetConsoleCtrlHandler(ConsoleCtrlHandler? handler, bool add);
-    private delegate bool ConsoleCtrlHandler(uint ctrlType);
-    private const uint CTRL_CLOSE_EVENT = 2;
-    private static ConsoleCtrlHandler? _ctrlHandler;
-    private static bool _consoleOpen;
+    // ---- 实时日志窗口（设置→高级 里的「显示控制台」）----
+    // 教训：一开始用 AllocConsole 给自己开控制台，结果【关掉那个黑框会把播放器一起带走】——
+    // Windows 对 CTRL_CLOSE_EVENT 只给进程一点清理时间，SetConsoleCtrlHandler 拦不住。
+    // 所以改成开关就【另起一个独立窗口】去 tail 日志文件：关它只杀那一个 tail 进程，播放器不受影响。
+    private static System.Diagnostics.Process? _logWin;
 
     public static void ShowConsole(bool on)
     {
         try
         {
-            if (on)
+            if (!on)
             {
-                if (!_consoleOpen)
-                {
-                    AllocConsole();
-                    try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }   // 否则中文日志是乱码
-                    _ctrlHandler ??= t => t == CTRL_CLOSE_EVENT;   // 关掉黑框别把播放器一起带走
-                    SetConsoleCtrlHandler(_ctrlHandler, true);
-                    _consoleOpen = true;
-                    try { Console.Title = "netHEmusic 实时日志"; } catch { }
-                }
-                LogManager.SetConsoleEnabled(true);
-                LogManager.Log("控制台已开启（关掉这个黑框不会退出软件）");
+                if (_logWin is { HasExited: false }) { try { _logWin.Kill(); } catch { } }
+                _logWin = null;
+                LogManager.Log("日志窗口已关闭");
+                return;
             }
-            else
+            if (_logWin is { HasExited: false }) return;
+            var log = LogManager.LogFilePath.Replace("'", "''");
+            // cmd /k 保底：就算 powershell 退出，窗口也还在，能看到最后的输出
+            var ps = "$Host.UI.RawUI.WindowTitle='netHEmusic 实时日志'; Get-Content -LiteralPath '" + log + "' -Wait -Tail 300";
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe")
             {
-                LogManager.Log("控制台已关闭");
-                LogManager.SetConsoleEnabled(false);
-                if (_consoleOpen) { FreeConsole(); _consoleOpen = false; }
-            }
+                Arguments = "/k chcp 65001>nul & powershell -NoProfile -ExecutionPolicy Bypass -Command \"" + ps.Replace("\"", "\\\"") + "\"",
+                UseShellExecute = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal
+            };
+            _logWin = System.Diagnostics.Process.Start(psi);
+            LogManager.Log("已打开独立日志窗口（关掉它不影响播放器）");
         }
-        catch (Exception e) { LogManager.Debug("控制台切换失败: " + e.Message); }
+        catch (Exception e) { LogManager.Debug("打开日志窗口失败: " + e.Message); }
     }
 
     public static void ToggleMaximize(Window w)

@@ -195,7 +195,14 @@ public partial class App : Application
         LogManager.Log("退出步骤2/4 安装器检查完成");
         try { (Application.Current as App)?._window?.Close(); } catch (Exception ex) { LogManager.Debug("退出步骤3(主窗口)异常: " + ex.Message); }
         LogManager.Log("退出步骤3/4 主窗口已关闭");
-        LogManager.Log("退出步骤4/4 Environment.Exit");
-        Environment.Exit(0);
+        LogManager.Log("退出步骤4/4 收尾");
+        // 不用 Environment.Exit(0)：四步走完后崩在进程拆除阶段（CRT /GS 栈校验弹窗），
+        // 改成让消息循环自然结束；万一有窗口赖着不退，2 秒后强制杀进程（Kill 不做托管拆除，不会再触发那个弹窗）
+        try { (Application.Current as App)?.Exit(); } catch (Exception ex) { LogManager.Debug("退出步骤4异常: " + ex.Message); }
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            await System.Threading.Tasks.Task.Delay(2000);
+            try { System.Diagnostics.Process.GetCurrentProcess().Kill(); } catch { }
+        });
     }
 }

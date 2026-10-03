@@ -47,6 +47,9 @@ public static class LogManager
     private static void TryMove(string s, string d) { try { File.Move(s, d, true); } catch { } }
     private static void TryDelete(string p) { try { File.Delete(p); } catch { } }
 
+    /// <summary>当前日志文件路径（外部日志窗口/控制台用）。</summary>
+    public static string LogFilePath => Path.Combine(_dir, "log.txt");
+
     /// <summary>开启/关闭实时控制台输出。</summary>
     public static void SetConsoleEnabled(bool enabled)
     {

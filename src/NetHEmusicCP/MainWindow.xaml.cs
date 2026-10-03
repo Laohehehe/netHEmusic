@@ -826,6 +826,7 @@ public sealed partial class MainWindow : Window
                 case "win_max": WindowHelper.ToggleMaximize(this); break;
                 case "win_min": WindowHelper.Minimize(this); break;
                 case "win_close": Close(); break;
+                case "app_exit": App.ExitApp(); break;   // 与托盘「退出」同一条路径（验证/自动化用）
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;
             }
         }
