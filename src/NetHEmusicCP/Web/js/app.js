@@ -806,7 +806,10 @@ function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return
   function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
 
   // ---- 液态玻璃开关 + 强度（顶部标题条已随原生标题栏一起取消，不再有标题栏设置项）----
-  // 强度走 window.neGlassPower（js/glass.js）：它只改 feDisplacementMap 的 scale，不重画位移图
+  // 两条实现路线：
+  //   · 自带实现（glass.js）：SVG 位移图 + backdrop-filter:url(#...)，材质值 'liquid'
+  //   · 开源库 liquidGL（WebGPU/WebGL，MIT，见 js/vendor/）：材质值 'liquidgl'
+  //     —— 就是 https://pidanai.com/ 那套效果的源头（该站的 liquid-glass.js 是它的衍生版）
   function glassPowerValue(s) {
     var v = Number(cfgGet(s, 'ui_liquid_power', 100));
     if (!isFinite(v)) v = 100;             // 0 是合法值（= 不折射），不能被 || 吃掉
@@ -827,11 +830,71 @@ function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return
     if (!isFinite(v)) v = 50;              // 0 = 光带不跟随鼠标
     return Math.max(0, Math.min(100, v));
   }
+  // ---- liquidGL（开源 WebGPU/WebGL 玻璃，pidanai 同源）----
+  // 只在材质 = 'liquidgl' 时初始化；切走就 destroy。参数由现有那几个滑块映射过去：
+  //   强度   → refraction / bevelDepth      色散 → aberration
+  //   视角跟随 → tilt（0 时关掉）
+  // 默认关掉 specular（用户明确不喜欢白光高光），需要的话再给开关。
+  var lgInst = null;
+  function liquidGLOn() { return !!(lgInst || (window.__liquidGL && document.documentElement.classList.contains('lg-canvas'))); }
+  function applyLiquidGL(on, s) {
+    try {
+      if (!on) {
+        if (lgInst) { try { lgInst.destroy(); } catch (e) { } lgInst = null; }
+        document.documentElement.classList.remove('lg-canvas');
+        return;
+      }
+      if (lgInst) return;
+      if (!window.liquidGL) {
+        try { if (window.NE_showErr) NE_showErr('液态玻璃(liquidGL)', '库没加载：js/vendor/liquidGL.js 缺失', '', ''); } catch (x) { }
+        return;
+      }
+      document.documentElement.classList.add('lg-canvas');   // 目标元素换 fixed 定位，见 effects.css
+      var pf = glassPowerValue(s) / 100;                     // 100% = 1
+      var para = glassParaValue(s) / 100;
+      lgInst = window.liquidGL({
+        engine: 'auto',            // WebGPU → WebGL2 → WebGL1 → CSS backdrop-filter 自动降级
+        snapshot: 'body',
+        target: '#player',
+        content: false,            // 不要在库里再画一份元素内容（否则封面/标题会重影），真实 DOM 就在画布上层
+        resolution: 1.5,
+        refraction: 0.01 * pf,
+        aberration: 0.35 * (glassCaValue(s) / 100),
+        bevelDepth: 0.08 * pf,
+        bevelWidth: 0.10 + 0.15 * (glassThickValue(s) / 100),   // 「厚度倾向」= 斜面宽度
+        frost: 5,                  // 我们原来的玻璃一直是模糊的，这里保留一点霜感
+        specular: false,           // 白光高光默认关（用户要求去掉）
+        shadow: false,             // 外投影由我们自己的 CSS 提供
+        reveal: 'none',
+        tilt: para > 0.01,         // 「视角跟随」= 悬停倾斜
+        tiltFactor: 3 * para,
+        tiltEase: 260,
+        on: { init: function (inst) { try { window.__liquidGL = inst; } catch (e) { } } }
+      });
+      NE.post({ type: 'log', msg: '[liquidGL] 已初始化（engine=auto, target=#player）' });
+    } catch (e) {
+      try { if (window.NE_showErr) NE_showErr('液态玻璃(liquidGL)', '初始化失败: ' + (e && e.message ? e.message : e), '', (e && e.stack) || ''); } catch (x) { }
+      try { console.error('[liquidGL] init failed', e); } catch (x) { }
+    }
+  }
+  window.neLiquidGLDebug = function () {
+    return {
+      loaded: !!window.liquidGL,
+      instance: !!lgInst,
+      cls: document.documentElement.classList.contains('lg-canvas'),
+      canvases: document.querySelectorAll('#player canvas').length,
+      allCanvases: document.querySelectorAll('canvas').length,
+      err: window.__NE_ERR || []
+    };
+  };
+
   function applyGlassUI() {
     try {
       var s = appSettings || {};
       var root = document.documentElement;
-      root.classList.toggle('liquid', String(cfgGet(s, 'ui_material', 'acrylic')) === 'liquid');
+      var mat = String(cfgGet(s, 'ui_material', 'acrylic'));
+      root.classList.toggle('liquid', mat === 'liquid');          // 自带 SVG 位移玻璃
+      applyLiquidGL(mat === 'liquidgl', s);                        // 开源 WebGPU/WebGL 玻璃
       if (window.neGlassSet) window.neGlassSet({ power: glassPowerValue(s), ca: glassCaValue(s), thickness: glassThickValue(s), parallax: glassParaValue(s) });
       else if (window.neGlassRefresh) window.neGlassRefresh();
     } catch (e) {
@@ -2833,7 +2896,8 @@ function applyPerfAnim(s) {
         sel('材质','ui_material', matCur, [
           { v: 'acrylic', t: '亚克力' },
           { v: 'micaAlt', t: 'Mica Alt' },
-          { v: 'liquid', t: '液态玻璃' }
+          { v: 'liquid', t: '液态玻璃' },
+          { v: 'liquidgl', t: '液态玻璃 · 折射(WebGPU)' }   // 开源 liquidGL（MIT），pidanai 同源方案
         ], function (v) {
           applyLiveSetting('ui_material', v);
           glassDetail.classList.toggle('hidden', v !== 'liquid');

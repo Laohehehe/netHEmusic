@@ -759,3 +759,10 @@ html.liquid .qual-menu{
    用户反馈深色主题下这圈白边像"异样的白光"，要求【去掉而不是调小】→ 2026-10-03 整层移除：
    贴图生成（makeRim/makeSheen）、CSS 变量、--lg-power/--lg-spec、白描边与 inset 全部删掉。
    现在玻璃只有：折射 + 模糊 + 饱和度/亮度 + 外投影；"视角跟随"改为平移折射取样的背景（feOffset）。 */
+
+/* ================= 液态玻璃 · liquidGL（材质 = liquidgl） ================= */
+/* 开源库 liquidGL（MIT，js/vendor/liquidGL.js）在自己内部建 canvas 做折射，
+   要求目标元素是 fixed / sticky 定位（它的画布按视口对齐）。这里只把 dock 改成 fixed
+   —— 它本来就是 left/right/bottom 贴视口，改成 fixed 视觉完全一致。
+   注意：自带实现的所有样式都挂在 html.liquid 下，所以这个模式下不会互相打架。 */
+html.lg-canvas #player{position:fixed;}
