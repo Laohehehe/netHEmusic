@@ -140,14 +140,16 @@ public sealed class AppConfig
         d.Data["App"] = new(StringComparer.OrdinalIgnoreCase)
         {
             ["first_run"] = "true", ["theme"] = "dark", ["language"] = "zh_cn",
-            ["material_you"] = "false", ["scheme"] = "dark-blue", ["mica"] = "true",
-            ["desktop_lyric_topmost"] = "true", ["desktop_lyric_vertical"] = "false",
+            ["scheme"] = "dark-blue", ["mica"] = "true",
+            ["desktop_lyric_topmost"] = "true",
+            // 注：曾有个 desktop_lyric_vertical 配置项，但从来没有任何地方读/写它（"桌面歌词竖排"这条
+            // 需求其实没接上）—— 2026-10-03 死代码清理时删掉；要真做竖排请连 UI 一起加。
             ["desktop_song_info"] = "true", ["volume"] = "100"
         };
         d.SectionOrder.Add("App");
         d.Data["Download"] = new(StringComparer.OrdinalIgnoreCase) { ["dir"] = "", ["quality"] = "high", ["concurrent"] = "3" };
         d.SectionOrder.Add("Download");
-        d.Data["Cache"] = new(StringComparer.OrdinalIgnoreCase) { ["limit_mb"] = "1024", ["mem_limit_mb"] = "160", ["dir"] = "" };
+        d.Data["Cache"] = new(StringComparer.OrdinalIgnoreCase) { ["limit_mb"] = "1024", ["dir"] = "" };
         d.SectionOrder.Add("Cache");
         d.Data["Player"] = new(StringComparer.OrdinalIgnoreCase) { ["volume"] = "100" };
         d.SectionOrder.Add("Player");
@@ -190,11 +192,9 @@ public sealed class AppConfig
     public bool FirstRun { get => Get("App", "first_run", "true").Equals("true", StringComparison.OrdinalIgnoreCase); set => Set("App", "first_run", value ? "true" : "false"); }
     public string Theme { get => Get("App", "theme", "dark") is var t && (t == "light" || t == "dark") ? t : "dark"; set => Set("App", "theme", value); }
     public string Language { get => Get("App", "language", "zh_cn"); set => Set("App", "language", value); }
-    public bool MaterialYou { get => Get("App", "material_you", "false").Equals("true", StringComparison.OrdinalIgnoreCase); set => Set("App", "material_you", value ? "true" : "false"); }
     public string Scheme { get => Get("App", "scheme", "dark-blue"); set => Set("App", "scheme", value); }
     public bool Mica { get => Get("App", "mica", "true").Equals("true", StringComparison.OrdinalIgnoreCase); set => Set("App", "mica", value ? "true" : "false"); }
     public bool DesktopLyricTopmost { get => Get("App", "desktop_lyric_topmost", "true").Equals("true", StringComparison.OrdinalIgnoreCase); set => Set("App", "desktop_lyric_topmost", value ? "true" : "false"); }
-    public bool DesktopLyricVertical { get => Get("App", "desktop_lyric_vertical", "false").Equals("true", StringComparison.OrdinalIgnoreCase); set => Set("App", "desktop_lyric_vertical", value ? "true" : "false"); }
     public bool DesktopSongInfo { get => Get("App", "desktop_song_info", "true").Equals("true", StringComparison.OrdinalIgnoreCase); set => Set("App", "desktop_song_info", value ? "true" : "false"); }
 
     public string DownloadDir
@@ -238,7 +238,8 @@ public sealed class AppConfig
     }
 
     public long CacheLimitMb { get { long.TryParse(Get("Cache", "limit_mb", "1024"), out var v); return Math.Max(1, v); } set => Set("Cache", "limit_mb", value); }
-    public long MemLimitMb { get { long.TryParse(Get("Cache", "mem_limit_mb", "160"), out var v); return Math.Max(64, v); } set => Set("Cache", "mem_limit_mb", value); }
+    // 注：曾有个 Cache/mem_limit_mb（"内存里最多放多少 MB"），实际内存环是 PlayerService 里写死的 3 首，
+    // 没有任何地方读这个键 —— 2026-10-03 死代码清理时删掉。
 
     public int Volume { get { int.TryParse(Get("Player", "volume", "100"), out var v); return Math.Clamp(v, 0, 100); } set => Set("Player", "volume", Math.Clamp(value, 0, 100)); }
 

@@ -4,9 +4,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid x:Name="Root" Background="{ThemeResource AppBackgroundBrush}">
         <!-- 无原生标题栏（标题栏高度按用户要求为 0）：窗口内容整块交给 WebView2，
-             系统的最小化/最大化/关闭由系统自己浮在网页右上角（ExtendsContentIntoTitleBar），
-             拖拽由网页顶部拖拽带 → win_drag → WM_NCLBUTTONDOWN 实现（见 WindowHelper.StartDrag）。
-             注意：不要在这里加回任何标题栏行高。 -->
+             系统的最小化/最大化/关闭由系统自己浮在网页右上角（ExtendsContentIntoTitleBar）。
+             注意：不要在这里加回任何标题栏行高；网页也不自绘拖拽带（顶部那片就是 WinUI 原生拖拽区）。 -->
         <WebView2 x:Name="WebView"/>
     </Grid>
 </Window>

@@ -14,7 +14,7 @@ using netHEmusic.Core.Theme;
 
 namespace netHEmusic.Core.Native;
 
-/// <summary>WinUI3 窗口辅助：图标、16:9 尺寸与居中、Mica 背景、自定义标题栏。</summary>
+/// <summary>WinUI3 窗口辅助：图标、16:9 尺寸与居中、窗口材质（Mica/亚克力）、系统菜单主题、实时日志控制台。</summary>
 public static class WindowHelper
 {
     public static IntPtr Hwnd(Window w) => WinRT.Interop.WindowNative.GetWindowHandle(w);
@@ -73,48 +73,16 @@ public static class WindowHelper
         try { w.AppWindow.Resize(new SizeInt32(width, height)); } catch (Exception e) { LogManager.Debug("Resize 失败: " + e.Message); }
     }
 
-    // ---- 无原生标题栏时的窗口拖动 / 最大化（网页发起：win_drag / win_drag_move / win_max / win_min） ----
-    // 说明：把按下转成 WM_NCLBUTTONDOWN(HTCAPTION) 让系统接管拖动的做法，在 WebView2 里
-    // 因为跨进程消息要绕一圈、系统拖动循环启动时鼠标已经抬起，实测窗口纹丝不动；
-    // 所以改成网页每次 mousemove 通知一次，这里按【原生光标位移】移动窗口（两边都用物理坐标，不混 DPI）。
-    [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X; public int Y; }
-    [DllImport("user32.dll")] private static extern bool ReleaseCapture();
-    [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT p);
+    // 说明：曾经有过一套"网页拖拽带"（win_drag / win_drag_move / win_drag_end + StartDrag/DragMove/EndDrag）
+    // 和一套网页侧窗口按钮（win_max / win_min / win_close + ToggleMaximize/Minimize）。
+    // 标题栏改成 0 高度后网页不再自绘拖拽带，最小化/最大化/关闭也由系统标题栏按钮负责，
+    // 这些消息没有任何发送方 → 2026-10-03 全部删除（死代码清理）。
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr LoadImage(IntPtr hinst, string name, uint type, int cx, int cy, uint load);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern uint ExtractIconEx(string file, int index, out IntPtr large, out IntPtr small, uint count);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
     private const uint IMAGE_ICON = 1, LR_LOADFROMFILE = 0x0010;
     private const int WM_SETICON = 0x0080, ICON_SMALL = 0, ICON_BIG = 1;
-    private static POINT _dragStart; private static PointInt32 _winStart; private static bool _dragging;
-
-    /// <summary>网页拖拽带按下：记录光标与窗口起点（最大化时先还原，符合系统习惯）。</summary>
-    public static void StartDrag(Window w)
-    {
-        try
-        {
-            if (w.AppWindow.Presenter is OverlappedPresenter p && p.State == OverlappedPresenterState.Maximized) p.Restore();
-            ReleaseCapture();
-            GetCursorPos(out _dragStart);
-            _winStart = w.AppWindow.Position;
-            _dragging = true;
-        }
-        catch (Exception e) { LogManager.Debug("拖动起点失败: " + e.Message); }
-    }
-
-    /// <summary>网页拖拽带移动：把光标位移原样加到窗口起点上。</summary>
-    public static void DragMove(Window w)
-    {
-        if (!_dragging) return;
-        try
-        {
-            if (!GetCursorPos(out var now)) return;
-            w.AppWindow.Move(new PointInt32(_winStart.X + (now.X - _dragStart.X), _winStart.Y + (now.Y - _dragStart.Y)));
-        }
-        catch (Exception e) { LogManager.Debug("拖动失败: " + e.Message); }
-    }
-
-    public static void EndDrag() => _dragging = false;
 
     // ---- 实时日志控制台（设置→高级 里的「显示控制台」）----
     // 用 AllocConsole 在本进程里开真控制台：能看到全部输出（含原生/崩溃信息），这是选它的理由。
@@ -176,21 +144,6 @@ public static class WindowHelper
         }
         catch (Exception e) { LogManager.Debug("控制台切换失败: " + e.Message); }
     }
-    public static void ToggleMaximize(Window w)    {
-        try
-        {
-            if (w.AppWindow.Presenter is not OverlappedPresenter p) return;
-            if (p.State == OverlappedPresenterState.Maximized) p.Restore(); else p.Maximize();
-        }
-        catch (Exception e) { LogManager.Debug("最大化失败: " + e.Message); }
-    }
-
-    public static void Minimize(Window w)
-    {
-        try { (w.AppWindow.Presenter as OverlappedPresenter)?.Minimize(); }
-        catch (Exception e) { LogManager.Debug("最小化失败: " + e.Message); }
-    }
-
     /// <summary>窗口居中到工作区。</summary>
     public static void Center(Window w, int width = 1280, int height = 720)
     {
@@ -305,16 +258,5 @@ public static class WindowHelper
     {
         try { (_backdrop as IDisposable)?.Dispose(); } catch { }
         _backdrop = null; _micaCfg = null;
-    }
-
-    /// <summary>启用自定义标题栏：内容扩展到标题栏区域并设置拖拽区。返回可用于拖拽的标题栏根元素。</summary>
-    public static void SetupTitleBar(Window w)
-    {
-        try
-        {
-            w.ExtendsContentIntoTitleBar = true;
-            w.SetTitleBar(w.Content as UIElement);
-        }
-        catch (Exception e) { LogManager.Debug("标题栏设置失败: " + e.Message); }
     }
 }

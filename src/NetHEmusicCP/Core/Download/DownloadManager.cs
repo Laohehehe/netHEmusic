@@ -189,12 +189,6 @@ public class DownloadManager
         Notify(true);
     }
 
-    /// <summary>清掉已完成/失败的行（文件留着）。</summary>
-    public void ClearFinished()
-    {
-        foreach (var item in _items.Values.Where(i => i.Status is "done" or "failed").ToList()) Remove(item.Id);
-    }
-
     /// <summary>给前端的队列快照。</summary>
     public List<object> Snapshot() => _items.Values
         .OrderBy(i => i.Status == "done" ? 1 : 0)

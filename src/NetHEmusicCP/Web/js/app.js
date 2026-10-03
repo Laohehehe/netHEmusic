@@ -2429,7 +2429,7 @@ function applyPerfAnim(s) {
     }
     function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); }; r.appendChild(t); return r; }
     // 原生 <select> 的弹层在 WebView2 里定位会飘，这里统一用自定义下拉
-    function sel(label, key, val, opts) { return custSel(label, key, val, opts); }
+    function sel(label, key, val, opts, onPick) { return custSel(label, key, val, opts, onPick); }
     function txt(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var i=el('input'); i.type='text'; i.value=val||''; i.onchange=function(){ NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
     // 自定义范围的滑条（用于动画速率这类非 0-100 的项）
     // 滑块 + 数值作为一个整体靠右（数值紧贴滑块，符合滑块控件规范）
@@ -2804,6 +2804,12 @@ function applyPerfAnim(s) {
       rr.appendChild(ii); return rr;
     }
     var accentDetail = subBlock([colorRow()], String(s.scheme) === 'custom');
+    // 液态玻璃的两个外观参数是「材质」的子设置：材质不是液态玻璃时收起（别再摆在外面误导）
+    var matCur = String(cfgGet(s, 'ui_material', 'acrylic'));
+    var glassDetail = subBlock([
+      rng2('液态玻璃强度','ui_liquid_power', glassPowerValue(s), 0, 200, '%', 5),
+      rng2('色散（彩边）','ui_liquid_ca', glassCaValue(s), 0, 100, '%', 5)
+    ], matCur === 'liquid');
     html.appendChild(group('主题 / 外观', [
       custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }]), function (v) {
         accentDetail.classList.toggle('hidden', v !== 'custom');
@@ -2812,14 +2818,16 @@ function applyPerfAnim(s) {
       accentDetail,
       fontRow('界面字体','ui_font', String(cfgGet(s,'ui_font','')), applyAppFont),
       masterSw('窗口材质','mica', s.mica, [
-        sel('材质','ui_material', String(cfgGet(s,'ui_material','acrylic')), [
+        sel('材质','ui_material', matCur, [
           { v: 'acrylic', t: '亚克力' },
           { v: 'micaAlt', t: 'Mica Alt' },
           { v: 'liquid', t: '液态玻璃' }
-        ]),
+        ], function (v) {
+          applyLiveSetting('ui_material', v);
+          glassDetail.classList.toggle('hidden', v !== 'liquid');
+        }),
         rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1),
-        rng2('液态玻璃强度','ui_liquid_power', glassPowerValue(s), 0, 200, '%', 5),   // 只影响「材质 = 液态玻璃」
-        rng2('色散（彩边）','ui_liquid_ca', glassCaValue(s), 0, 100, '%', 5)           // 0 = 关闭色散，回到单步折射
+        glassDetail
       ]),
       sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
     ]));

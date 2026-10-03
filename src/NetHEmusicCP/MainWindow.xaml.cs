@@ -28,8 +28,6 @@ namespace netHEmusic;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-    private bool _seeking = false;
-
     // ---- 记住上一次播放进度（[Player] last_song_id / last_pos）----
     private long _resumeSavedSongId = -1;   // 已经写盘的曲目 id
     private long _resumeSavedPos = -1;      // 已经写盘的位置（毫秒）
@@ -72,7 +70,7 @@ public sealed partial class MainWindow : Window
         WindowHelper.Center(this, 1280, 720);
         try
         {
-            ExtendsContentIntoTitleBar = true;      // 系统按钮浮在网页上；不再 SetTitleBar（标题栏行高为 0，拖拽走 win_drag）
+            ExtendsContentIntoTitleBar = true;      // 系统按钮浮在网页上；不再 SetTitleBar（标题栏行高为 0，网页那边也不再自绘拖拽带）
             AppWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
             AppWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
         }
@@ -689,10 +687,10 @@ public sealed partial class MainWindow : Window
             LogManager.Debug("web msg: " + type);
             switch (type)
             {
-                case "search": _ = HandleWebSearch(doc); break;
+                // 说明（2026-10-03 死代码清理）：原来的 case "search" / "playlist" / "lyric" / "login" / "dl_clear"
+                // 都已经删掉 —— 网页侧现在统一走 type:"api" 的通用转发（js/api.js：cloudsearch / playlist/track/all /
+                // lyric/new），登录 cookie 由 /api 自己拿；下载页只有「清除下载历史」(dl_history_clear) 和单条 dl_delete。
                 case "discover": _ = HandleWebDiscover(); break;
-                case "playlist": _ = HandleWebPlaylist(doc); break;
-                case "lyric": _ = HandleWebLyric(doc); break;
                 case "play": HandleWebPlay(doc); break;
                 case "play_list": HandleWebPlayList(doc); break;
                 case "download": HandleWebDownload(doc); break;
@@ -702,7 +700,6 @@ public sealed partial class MainWindow : Window
                 case "dl_remove": HandleDownloadOp(doc, "remove"); break;
                 case "dl_pause_all": AppServices.Download.PauseAll(); PostDownloadState(); break;
                 case "dl_resume_all": AppServices.Download.ResumeAll(); PostDownloadState(); break;
-                case "dl_clear": AppServices.Download.ClearFinished(); PostDownloadState(); break;
                 case "dl_list": PostDownloadedList(); break;
                 case "dl_history_clear": AppServices.Download.ClearHistory(); PostDownloadedList(); PostToWeb(new { type = "toast", text = "下载历史已清除（音乐文件未删除）" }); break;
                 case "dl_delete": HandleDeleteDownloaded(doc); break;
@@ -718,7 +715,7 @@ public sealed partial class MainWindow : Window
                 case "plugin_market": _ = HandlePluginMarketAsync(); break;
                 case "plugin_install": _ = HandlePluginInstallAsync(doc); break;
                 case "plugin_uninstall": HandlePluginUninstall(doc); break;
-                case "login": break; // 登录由 Web 前端 via /api 完成
+                case "login": break; // 历史遗留的空分支：登录由 Web 前端 via /api 完成（留着只为兼容老消息名）
                 case "api": _ = HandleWebApi(doc); break;
                 case "toggle": _ = AppServices.Player.ToggleAsync(); break;
                 case "prev": _ = AppServices.Player.PrevAsync(); break;
@@ -750,7 +747,6 @@ public sealed partial class MainWindow : Window
                         }
                         break;
                     }
-                case "open_settings": AppServices.RunOnUi(() => { try { new SettingsWindow().Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }); break;
                 case "open_repo": OpenRepo(doc); break;
                 case "get_settings": HandleGetSettings(); break;
                 case "pick_folder": PickFolder(doc); break;
@@ -860,13 +856,6 @@ public sealed partial class MainWindow : Window
                     break;
                 case "desktop_lyric": SetDesktopLyric(doc.TryGetProperty("on", out var dlOn) && dlOn.ValueKind == JsonValueKind.True); break;
                 case "set_setting": HandleSetSetting(doc); break;
-                // 无原生标题栏：窗口拖动 / 最大化由网页顶部拖拽带发起（原生最小化/最大化/关闭按钮仍由系统绘制）
-                case "win_drag": WindowHelper.StartDrag(this); break;
-                case "win_drag_move": WindowHelper.DragMove(this); break;
-                case "win_drag_end": WindowHelper.EndDrag(); break;
-                case "win_max": WindowHelper.ToggleMaximize(this); break;
-                case "win_min": WindowHelper.Minimize(this); break;
-                case "win_close": Close(); break;
                 case "app_exit": App.ExitApp(); break;   // 与托盘「退出」同一条路径（验证/自动化用）
                 // 离线播放：告知前端哪些歌已经缓存到本地（断网时未缓存的置灰）
                 // 前端上报在线/离线（navigator.onLine）：离线时 C# 侧不做预取/缓存/重试，避免请求风暴
@@ -886,7 +875,6 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) { LogManager.Debug("Web 消息失败: " + ex.Message); }
     }
 
-    private async Task HandleWebSearch(JsonElement doc) { var kw = doc.TryGetProperty("kw", out var k) ? k.GetString() ?? "" : ""; var songs = await AppServices.Netease.Search(kw, 1, 50); PostToWeb(new { type = "songs", songs = songs.Select(ToSongDto).ToList(), search = kw }); }
     /// <summary>更新公告：从 GitHub Release 取正文（不在程序里写死更新日志）。</summary>
     private async Task HandleReleaseNotes(JsonElement doc)
     {
@@ -897,8 +885,6 @@ public sealed partial class MainWindow : Window
     }
 
     private async Task HandleWebDiscover() { var songs = await AppServices.Netease.RecommendSongs(); PostToWeb(new { type = "songs", songs = songs.Select(ToSongDto).ToList(), discover = true }); }
-    private async Task HandleWebPlaylist(JsonElement doc) { long id = 0; if (doc.TryGetProperty("id", out var i)) id = i.GetInt64(); if (id <= 0) return; var tracks = await AppServices.Netease.PlaylistTracks(id, 1000, 0); PostToWeb(new { type = "songs", songs = tracks.Select(ToSongDto).ToList() }); }
-    private async Task HandleWebLyric(JsonElement doc) { long id = 0; if (doc.TryGetProperty("id", out var d)) id = d.GetInt64(); if (id <= 0 && AppServices.Player.Current != null) id = AppServices.Player.Current.Id; var json = await AppServices.Netease.JsonLyric(id); var (lrc, tl, ro, yrc) = AppServices.Netease.ParseLyric(json); PostToWeb(new { type = "lyric", lrc, tlyric = tl, romalrc = ro, yrc }); }
     private void HandleWebPlay(JsonElement doc)
     {
         if (doc.TryGetProperty("song", out var s))
@@ -1068,12 +1054,6 @@ public sealed partial class MainWindow : Window
                 AppServices.Config.Set("App", "ui_mica_alpha", value);
                 PushTheme();            // 只重算 CSS 变量，不用重启
                 break;
-            case "ui_titlebar":         // 标题栏渐变样式：surface / accent / none（现在由网页顶部条自己画）
-                AppServices.Config.Set("App", "ui_titlebar", value);
-                break;
-            case "ui_titlebar_alpha":   // 标题栏渐变强度（%）
-                AppServices.Config.Set("App", "ui_titlebar_alpha", value);
-                break;
             case "closeToTray": AppServices.Config.Set("App", "close_to_tray", b ? "true" : "false"); break;
             case "uiEffects": AppServices.Config.Set("App", "ui_effects", b ? "true" : "false"); break;
             case "custom_accent":
@@ -1229,17 +1209,8 @@ public sealed partial class MainWindow : Window
         catch (Exception e) { LogManager.Debug("api 透传失败: " + e.Message); PostToWeb(new { type = "api_result", id = doc.TryGetProperty("id", out var id2) ? id2.GetString() : "", name = doc.TryGetProperty("name", out var n2) ? n2.GetString() : "", error = e.Message }); }
     }
 
-    // ============ 顶栏 ============
-    private void OnLogo(object sender, RoutedEventArgs e) { PostToWeb(new { type = "nav", view = "home" }); }
-    private void OnSearch(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
-    {
-        var kw = (args.QueryText ?? "").Trim();
-        if (string.IsNullOrEmpty(kw)) return;
-        PostToWeb(new { type = "nav", view = "search", kw });
-    }
-    private void OnSettings(object sender, RoutedEventArgs e) { try { var w = new SettingsWindow(); w.Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }
-    private void OnTheme(object sender, RoutedEventArgs e) { AppServices.Theme.ToggleTheme(); ApplyNativeTheme(); PushTheme(); }
-    private void OnMinimize(object sender, RoutedEventArgs e) { try { (AppWindow.Presenter as Microsoft.UI.Windowing.OverlappedPresenter)?.Minimize(); } catch { } }
-    private void OnMaximize(object sender, RoutedEventArgs e) { try { if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter op) { if (op.State == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized) op.Restore(); else op.Maximize(); } } catch { } }
-    private void OnClose(object sender, RoutedEventArgs e) { App.ExitApp(); }
+    // ============ 顶栏（已废弃）============
+    // 原来自绘顶栏的 OnLogo / OnSearch / OnSettings / OnTheme / OnMinimize / OnMaximize / OnClose
+    // 七个事件处理都已经删掉：MainWindow.xaml 现在只有 WebView2，没有任何控件绑定它们（网页自己画侧栏/顶栏）。
+    // 窗口的最小化/最大化/关闭由系统标题栏按钮负责，不需要网页再发 win_max/win_min/win_close。
 }
