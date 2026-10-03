@@ -786,3 +786,4 @@ html.liquid .qual-menu{
    ③ 重载后画面冻结（快照式架构：不跟内层 #main 滚动重拍，也不支持 CSS 动画）
    结论：快照式不适合内容一直在动的桌面 UI；自带实现的 backdrop-filter 折射实时合成结果，不冻结也不挡交互。
    库文件已从仓库移除（要复现的话：npm i liquid-gl）。 */
+

@@ -360,7 +360,7 @@
     var svg = svgHost();
     var old = document.getElementById(id); if (old && old.parentNode) old.parentNode.removeChild(old);
     var f = el3('filter', { id: id, x: '0', y: '0', width: '100%', height: '100%', filterUnits: 'objectBoundingBox', 'color-interpolation-filters': 'sRGB' });
-    var url = makeLensMap(384);
+    var url = makeLensMap(768);
     var im = el3('feImage', { href: url, x: '0', y: '0', width: String(sizePx), height: String(sizePx), preserveAspectRatio: 'none', result: 'm' });
     im.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url);
     f.appendChild(im);
@@ -677,5 +677,6 @@
   window.addEventListener('resize', function () { if (enabled()) refresh(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { refresh(); initFluid(); }); else { refresh(); initFluid(); }
 })();
+
 
 
