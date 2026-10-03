@@ -47,7 +47,12 @@ window.addEventListener('unhandledrejection', function (e) {
   var pending = false;
   function queue() {
     if (pending) return; pending = true;
-    requestAnimationFrame(function () { pending = false; try { syncRangeFillAll(); } catch (x) { } });
+      requestAnimationFrame(function () {
+        pending = false;
+        try { syncRangeFillAll(); } catch (x) { }
+        // 任何 DOM 变动后都补一次离线置灰：列表渲染路径很多，靠每条路径自己记得调用太脆（实测主页列表没灰、面板却灰了）
+        try { if (window.neOfflineMark) window.neOfflineMark(); } catch (x) { }
+      });
   }
   function boot() {
     queue();
@@ -1450,6 +1455,7 @@ function applyPerfAnim(s) {
   function isOffline() { return netOffline || (navigator && navigator.onLine === false); }
   function markOfflineRows() {
     try {
+  window.neOfflineMark = markOfflineRows;   // 供 MutationObserver 自动补灰 / 自测
       var rows = document.querySelectorAll('.song-row,.pl-item');
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
