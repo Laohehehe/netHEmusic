@@ -760,9 +760,10 @@ html.liquid .qual-menu{
    贴图生成（makeRim/makeSheen）、CSS 变量、--lg-power/--lg-spec、白描边与 inset 全部删掉。
    现在玻璃只有：折射 + 模糊 + 饱和度/亮度 + 外投影；"视角跟随"改为平移折射取样的背景（feOffset）。 */
 
-/* ================= 液态玻璃 · liquidGL（材质 = liquidgl） ================= */
-/* 开源库 liquidGL（MIT，js/vendor/liquidGL.js）在自己内部建 canvas 做折射，
-   要求目标元素是 fixed / sticky 定位（它的画布按视口对齐）。这里只把 dock 改成 fixed
-   —— 它本来就是 left/right/bottom 贴视口，改成 fixed 视觉完全一致。
-   注意：自带实现的所有样式都挂在 html.liquid 下，所以这个模式下不会互相打架。 */
-html.lg-canvas #player{position:fixed;}
+/* ================= 液态玻璃 · liquidGL：试用后已撤掉 ================= */
+/* 走过一遍：开源库 liquidGL（MIT，WebGPU/WebGL 快照式玻璃）接成第三种材质，实测三个问题——
+   ① dock 里的按钮点不动（库把目标元素及其子元素设成 pointer-events:none）
+   ② 看着不透明（库清掉 #player 自己的背景色，看到的是它那张页面快照画布）
+   ③ 重载后画面冻结（快照式架构：不跟内层 #main 滚动重拍，也不支持 CSS 动画）
+   结论：快照式不适合内容一直在动的桌面 UI；自带实现的 backdrop-filter 折射实时合成结果，不冻结也不挡交互。
+   库文件已从仓库移除（要复现的话：npm i liquid-gl）。 */
