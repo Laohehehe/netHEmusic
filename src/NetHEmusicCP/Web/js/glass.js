@@ -453,6 +453,9 @@
       AMB_Y = amp * Math.sin(t * 0.41 + 2.1) + 0.45 * amp * Math.sin(t * 0.97);
       pushParallax();
     }
+    // 每约 0.5s 校正一次裁切容器几何：页面重排（面板开合/滚动条出现）会让缓存的矩形偏掉，
+    // 偏掉就会出现"裁切框和玻璃面对不齐 → 有一小条跑到外面去"。两个元素的 rect 取一次，开销可忽略。
+    if (fluidFrame % 30 === 0) refreshRects();
     // 液滴：缓动跟手 + 按速度做挤压（快 = 拉长，慢 = 圆）；坐标是"相对所在裁切容器"的
     var k = 0.16;
     dropX += (dropTX - dropX) * k; dropY += (dropTY - dropY) * k;
