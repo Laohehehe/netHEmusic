@@ -683,7 +683,30 @@ public sealed partial class MainWindow : Window
                 case "volume": { int.TryParse(doc.TryGetProperty("v", out var vv) ? vv.GetRawText() : "", out var n); AppServices.Player.SetVolume(n); break; }
                 case "save_cookie": { var cookie = doc.TryGetProperty("cookie", out var ck) ? ck.GetString() ?? "" : ""; AppServices.Netease.SetCookie(cookie); AppServices.Config.SaveCookie(cookie); LogManager.Log("登录 cookie 已保存(脱敏)"); break; }
                 case "queue_add": { if (doc.TryGetProperty("song", out var s2)) { var song = SongFromWeb(s2); if (song != null) { var q = AppServices.Player.Queue.ToList(); if (q.All(x => x.Id != song.Id)) { q.Add(song); _ = AppServices.Player.LoadQueueAsync(q, AppServices.Player.Index < 0 ? 0 : AppServices.Player.Index); } } } break; }
-                case "playnext": { if (doc.TryGetProperty("song", out var s)) { var song = SongFromWeb(s); if (song != null) { var q = AppServices.Player.Queue.ToList(); int idx = q.FindIndex(x => x.Id == song.Id); if (idx < 0) { var nxt = AppServices.Player.Index + 1; q.Insert(Math.Min(nxt, q.Count), song); _ = AppServices.Player.LoadQueueAsync(q, AppServices.Player.Index); } } } break; }
+                case "playnext":
+                    {
+                        // 「下一首播放」：以前只要歌已在队列里就什么都不做（而大家点的往往就是列表里已有的歌）→ 点了没反应。
+                        // 现在：已在队列里就【挪】到当前之后，不在就插入；两种都不产生重复，且不打断正在播的这首。
+                        if (doc.TryGetProperty("song", out var s))
+                        {
+                            var song = SongFromWeb(s);
+                            if (song != null)
+                            {
+                                var q = AppServices.Player.Queue.ToList();
+                                int cur = AppServices.Player.Index;
+                                int idx = q.FindIndex(x => x.Id == song.Id);
+                                if (idx == cur || idx == cur + 1) { /* 正在播 / 已经是下一首 */ }
+                                else
+                                {
+                                    if (idx >= 0) { q.RemoveAt(idx); if (idx < cur) cur--; }
+                                    q.Insert(Math.Min(cur + 1, q.Count), song);
+                                    AppServices.Player.RestoreQueue(q, cur);   // 不触发重播，避免正在听的歌被从头开始
+                                    LogManager.Log("已把《" + song.Title + "》设为下一首播放（队列 " + q.Count + " 首）");
+                                }
+                            }
+                        }
+                        break;
+                    }
                 case "open_settings": AppServices.RunOnUi(() => { try { new SettingsWindow().Activate(); } catch (Exception ex) { LogManager.Error("打开设置失败: " + ex.Message); } }); break;
                 case "open_repo": OpenRepo(doc); break;
                 case "get_settings": HandleGetSettings(); break;

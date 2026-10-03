@@ -100,6 +100,8 @@ public static class AppServices
             {
                 Player.RestoreQueue(list, Config.PlaylistIndex);
                 LogManager.Log("已恢复播放列表: " + list.Count + " 首，当前第 " + (Config.PlaylistIndex + 1) + " 首");
+                // 历史版本攒下的重复项会被 RestoreQueue 清掉，这里立刻回写，免得文件里一直留着脏数据
+                if (Player.Queue.Count != list.Count) { Config.SaveQueue(Player.Queue); Config.PlaylistIndex = Math.Max(0, Player.Index); LogManager.Log("去重后的播放列表已回写 player.json"); }
             }
         }
         catch (Exception e) { LogManager.Debug("恢复播放列表失败: " + e.Message); }

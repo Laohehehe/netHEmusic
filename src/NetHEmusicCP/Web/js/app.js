@@ -57,6 +57,31 @@ window.addEventListener('unhandledrejection', function (e) {
 })();
 
 (function () {
+  // ---- 音量滑块：鼠标放上去/拖动时显示当前具体音量 ----
+  var vol = document.getElementById('pl-volume');
+  if (!vol) return;
+  var tip = document.createElement('div');
+  tip.className = 'vol-tip';
+  document.body.appendChild(tip);
+  function pct() { var v = Math.round(Number(vol.value)); return isFinite(v) ? v : 0; }
+  function place() {
+    var r = vol.getBoundingClientRect();
+    if (!r.width) return;
+    var p = Math.max(0, Math.min(1, pct() / 100));
+    tip.style.left = Math.round(r.left + 7 + (r.width - 14) * p) + 'px';
+    tip.style.top = Math.round(r.top - 8) + 'px';
+    tip.textContent = '音量 ' + pct() + '%';
+  }
+  function show() { place(); tip.classList.add('on'); }
+  function hide() { tip.classList.remove('on'); }
+  vol.addEventListener('mouseenter', show);
+  vol.addEventListener('mousemove', place);
+  vol.addEventListener('mouseleave', hide);
+  vol.addEventListener('input', function () { if (tip.classList.contains('on')) place(); });
+  vol.addEventListener('change', function () { if (tip.classList.contains('on')) place(); });
+})();
+
+(function () {
   const NE = window.NE; const $ = s => document.querySelector(s);
   const view = $('#view');
   let queue = []; let playingIndex = -1; let currentList = []; let nowPlaying = null; let appSettings = {};
@@ -3273,8 +3298,10 @@ function applyPerfAnim(s) {
     if (cur && $('#pl-title').textContent === '未在播放') showSongMeta(cur);
   });
   NE.on('queue_changed', function (d) {
-    if (d && typeof d.index === 'number') { playingIndex = d.index; if (plOpen) { NE.post({ type: 'queue_get' }); } }
-    else if (plOpen) NE.post({ type: 'queue_get' });
+    // 面板开着时不要"先用新下标配旧列表"——那正是"高亮停在上一首"的成因；
+    // 统一以 queue_get 拉回来的整份列表为准（列表和下标同一次到达，原子更新）。
+    if (plOpen) { NE.post({ type: 'queue_get' }); return; }
+    if (d && typeof d.index === 'number') playingIndex = d.index;
   });
   NE.on('desktop_lyric_state', function (d) { if (!LYRIC_LOCKED) setLyricBtn(!!d.on); });
   // 插件宿主：拉一次插件列表（启用的插件会由 C# 把代码下发回来执行）

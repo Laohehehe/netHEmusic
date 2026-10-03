@@ -136,8 +136,10 @@ public sealed class PlayerService
     /// <summary>设置播放队列并从 index 开始。预热 3 首内存环。</summary>
     public async Task LoadQueueAsync(List<Song> songs, int startIndex = 0)
     {
-        _queue = songs ?? new();
-        _index = _queue.Count > 0 ? Math.Clamp(startIndex, 0, _queue.Count - 1) : -1;
+        var (list, idx, removed) = Dedupe(songs, startIndex);
+        if (removed > 0) LogManager.Log($"播放队列自动去重：{songs?.Count ?? 0} → {list.Count}（清掉 {removed} 条重复）");
+        _queue = list;
+        _index = _queue.Count > 0 ? Math.Clamp(idx, 0, _queue.Count - 1) : -1;
         QueueChanged?.Invoke(_index, _queue.Count);
         if (_index >= 0)
         {
@@ -149,9 +151,34 @@ public sealed class PlayerService
     /// <summary>恢复上次保存的播放队列（只装载、不自动播放），供软件重启后维持播放列表。</summary>
     public void RestoreQueue(List<Song> songs, int index)
     {
-        _queue = songs ?? new();
-        _index = _queue.Count > 0 ? Math.Clamp(index, 0, _queue.Count - 1) : -1;
+        var (list, idx, removed) = Dedupe(songs, index);
+        if (removed > 0) LogManager.Log($"播放队列自动去重：{songs?.Count ?? 0} → {list.Count}（清掉 {removed} 条重复）");
+        _queue = list;
+        _index = _queue.Count > 0 ? Math.Clamp(idx, 0, _queue.Count - 1) : -1;
         QueueChanged?.Invoke(_index, _queue.Count);
+    }
+
+    /// <summary>按 id 去重（保留第一次出现），并把「当前播放的那首」重新对准到去重后的新下标。
+    /// 老版本的追加逻辑没去重，队列里会积下同一批歌被重复追加多份的记录（user 的 player.json 里就有 178 条）。</summary>
+    public static (List<Song> list, int index, int removed) Dedupe(List<Song>? songs, int index)
+    {
+        var src = songs ?? new List<Song>();
+        var outp = new List<Song>(src.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        string? want = (index >= 0 && index < src.Count) ? KeyOf(src[index]) : null;
+        foreach (var s in src) { if (s is null) continue; if (seen.Add(KeyOf(s))) outp.Add(s); }
+        int ni = -1;
+        if (want is not null) { for (int i = 0; i < outp.Count; i++) if (KeyOf(outp[i]) == want) { ni = i; break; } }
+        if (ni < 0 && outp.Count > 0) ni = Math.Clamp(index, 0, outp.Count - 1);
+        return (outp, ni, src.Count - outp.Count);
+    }
+
+    private static string KeyOf(Song s)
+    {
+        if (s.Id > 0) return "i" + s.Id;
+        var a = s.Artists is { Count: > 0 } ? string.Join("/", s.Artists.Select(x => x.Name))
+              : (s.Ar is { Count: > 0 } ? string.Join("/", s.Ar.Select(x => x.Name)) : "");
+        return "n" + (s.Title ?? "") + "\u0001" + a;
     }
 
     /// <summary>开始播放当前曲目（若已加载过媒体则从当前位置继续）。</summary>
