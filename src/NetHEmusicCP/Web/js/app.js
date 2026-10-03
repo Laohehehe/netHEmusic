@@ -1147,6 +1147,8 @@ function applyPerfAnim(s) {
     trash:   ico('<polyline points="3 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>'),
     folder:  ico('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.1a2 2 0 0 1 1.6.8l1 1.4h7.3A2.5 2.5 0 0 1 21 9.7v8.8A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"/>'),
     x:       ico('<line x1="6" x2="18" y1="6" y2="18"/><line x1="18" x2="6" y1="6" y2="18"/>'),
+    // 刷新：箭头弯成一个圆圈、箭头指向尾部
+    refresh: ico('<path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><polyline points="20.8 3.4 20.8 7.4 16.8 7.4"/>'),
     // 开源仓库品牌标（simple-icons 官方路径）
     github:  icoFill('<path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>'),
     gitee:   icoFill('<path d="M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.016 0zm6.09 5.333c.328 0 .593.266.592.593v1.482a.594.594 0 0 1-.593.592H9.777c-.982 0-1.778.796-1.778 1.778v5.63c0 .327.266.592.593.592h5.63c.982 0 1.778-.796 1.778-1.778v-.296a.593.593 0 0 0-.592-.593h-4.15a.592.592 0 0 1-.592-.592v-1.482a.593.593 0 0 1 .593-.592h6.815c.327 0 .593.265.593.592v3.408a4 4 0 0 1-4 4H5.926a.593.593 0 0 1-.593-.593V9.778a4.444 4.444 0 0 1 4.445-4.444h8.296Z"/>'),
@@ -1425,6 +1427,34 @@ function applyPerfAnim(s) {
   function pcPut(key, v) {
     try { NE.post({ type: 'cache_put', key: key, json: JSON.stringify({ t: Date.now(), v: v }) }); } catch (e) { }
   }
+  /** 取缓存原始条目（带写入时间 t），由调用方自己判断新鲜度。 */
+  function pcGetEntry(key) {
+    return new Promise(function (res) {
+      var done = false;
+      function finish(v) { if (done) return; done = true; res(v); }
+      pcWaiters[key] = function (json) {
+        if (done) return;
+        try { finish(json ? JSON.parse(json) : null); } catch (e) { finish(null); }
+      };
+      NE.post({ type: 'cache_get', key: key });
+      setTimeout(function () { if (!done) { delete pcWaiters[key]; finish(null); } }, 4000);
+    });
+  }
+  /** 指定有效期的缓存（歌词这类可以放很久）。 */
+  async function pcGetTtl(key, ttlMs) {
+    var e = await pcGetEntry(key);
+    if (!e || !e.t || (Date.now() - e.t) > ttlMs) return null;
+    return e.v || null;
+  }
+  var LYRIC_TTL = 7 * 24 * 60 * 60 * 1000;   // 歌词基本不变，存 7 天
+  /** 网易云「每日推荐」的刷新边界：每天早上 6:00。当前若还没到 6:00，则边界是昨天 6:00。 */
+  function dailyBoundary(nowMs) {
+    var d = new Date(nowMs || Date.now());
+    if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+    d.setHours(6, 0, 0, 0);
+    return d.getTime();
+  }
+  window.neDailyBoundary = dailyBoundary;   // 便于自测/排查：传入时间戳可验证 6:00 边界
   async function go(viewName, data) {
     try {
       var prevView = curView;
@@ -1451,15 +1481,37 @@ function applyPerfAnim(s) {
 
   async function goHome() {
     loading();
-    const [ r, st ] = await Promise.all([ NE.recommend(), NE.loginStatus().catch(function(){ return {}; }) ]);
-    const songs = (r.data && r.data.dailySongs) || [];
+    // 首页的「每日推荐」同样按 6:00 边界走缓存：一天只请求一次；点刷新按钮可强制重取。
+    var songs = null;
+    var ent = await pcGetEntry('recommend');
+    if (ent && ent.t && ent.t >= dailyBoundary() && ent.v) songs = ent.v;
+    var st;
+    if (!songs) {
+      const [ r, st2 ] = await Promise.all([ NE.recommend(), NE.loginStatus().catch(function(){ return {}; }) ]);
+      songs = (r.data && r.data.dailySongs) || [];
+      st = st2;
+      pcPut('recommend', songs);
+    } else {
+      st = await NE.loginStatus().catch(function(){ return {}; });
+    }
     var prof = (st && st.data && st.data.profile) || (st && st.profile) || {};
     var nick = prof.nickname || '朋友';
     var h = new Date().getHours();
     var tw = T(h < 5 ? '凌晨' : h < 9 ? '早' : h < 12 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : '晚上');
     const html = el('div','page');
     html.appendChild(el('h2','greet-title', esc(nick) + '，' + tw + '好！想听点什么？'));
-    html.appendChild(el('h3','sec-title','每日推荐'));
+    var head = el('div','page-title-row');
+    head.appendChild(el('h3','sec-title','每日推荐'));
+    var rb = el('button','icon-btn'); rb.innerHTML = SVG.refresh || '⟳'; rb.title = '刷新每日推荐';
+    rb.onclick = function () {
+      if (rb.classList.contains('busy')) return;
+      rb.classList.add('busy');
+      try { NE.post({ type: 'cache_remove', key: 'recommend' }); } catch (e) { }
+      toast('正在刷新每日推荐…');
+      setTimeout(function () { goHome(); }, 250);
+    };
+    head.appendChild(rb);
+    html.appendChild(head);
     html.appendChild(allBtns(songs));
     const dl = el('div');
     renderSongs(songs, dl); html.appendChild(dl);
@@ -1467,14 +1519,29 @@ function applyPerfAnim(s) {
   }
   async function goRecommend() {
     loading();
-    var songs = await pcGet('recommend');
+    // 每日推荐按「当天 6:00 之后抓到的」为准：6:00 之前沿用昨天那份，之后重新抓。
+    // 这样一天只请求一次（原来 10 分钟就过期重抓，纯浪费，也不符合网易云 6:00 更新的节奏）。
+    var songs = null;
+    var ent = await pcGetEntry('recommend');
+    if (ent && ent.t && ent.t >= dailyBoundary() && ent.v) songs = ent.v;
     if (!songs) {
       const r = await NE.recommend();
       songs = (r.data && r.data.dailySongs) || [];
       pcPut('recommend', songs);
     }
     const html = el('div','page');
-    html.appendChild(el('h2','page-title','每日推荐 ('+songs.length+')'));
+    var head = el('div','page-title-row');
+    head.appendChild(el('h2','page-title','每日推荐 ('+songs.length+')'));
+    var rb = el('button','icon-btn'); rb.innerHTML = SVG.refresh || '⟳'; rb.title = '刷新每日推荐';
+    rb.onclick = async function () {
+      if (rb.classList.contains('busy')) return;
+      rb.classList.add('busy');
+      try { NE.post({ type: 'cache_remove', key: 'recommend' }); } catch (e) { }
+      toast('正在刷新每日推荐…');
+      setTimeout(function () { goRecommend(); }, 250);
+    };
+    head.appendChild(rb);
+    html.appendChild(head);
     html.appendChild(allBtns(songs));
     const dl = el('div'); renderSongs(songs, dl); html.appendChild(dl);
     view.innerHTML=''; view.appendChild(html);
@@ -1958,7 +2025,10 @@ function applyPerfAnim(s) {
       npSongId = ns.Id; npLines = []; npIndex = -1;
       npRenderLyric([]); npEl('np-lyric-inner').innerHTML = '<div class="np-line">歌词加载中…</div>';
       try {
-        var r = await NE.lyric(ns.Id);
+        // 歌词优先读磁盘缓存（歌词基本不变，存 7 天）——省一次请求，断网也能看
+        var cached = await pcGetTtl('lyric_' + ns.Id, LYRIC_TTL);
+        var r = cached || await NE.lyric(ns.Id);
+        if (!cached && r) pcPut('lyric_' + ns.Id, r);
         // 原词 / 翻译(tlyric) / 罗马音(romalrc) 三轨合并
         npTr = parseLrc((r && r.tlyric && r.tlyric.lyric) || '');
         npRo = parseLrc((r && r.romalrc && r.romalrc.lyric) || '');
