@@ -1470,6 +1470,12 @@ function applyPerfAnim(s) {
   window.neSetOffline = function (v) { netOffline = !!v; applyNetState(); };   // 自测用（断网状态注入）
   window.addEventListener('online', applyNetState);
   window.addEventListener('offline', applyNetState);
+  // 宿主(host)回传的离线状态：设置标志后只做本地重绘，不再回发 net_state（否则与 applyNetState 互相触发）
+  NE.on('net_state', function (d) {
+    netOffline = !!(d && d.offline);
+    try { document.documentElement.classList.toggle('offline', isOffline()); } catch (e) { }
+    markOfflineRows();
+  });
   NE.on('audio_cache_list', function (d) {
     audioCached = new Set(((d && d.ids) || []).map(String));
     markOfflineRows();

@@ -280,6 +280,8 @@ public sealed partial class MainWindow : Window
             {
                 AppServices.Player.ResetFrontendAudio();   // 网页重载后 <audio> 是空的
                 PushTheme(); PushLang(); PostToWeb(new { type = "nav", view = "home" }); CheckVersionNotice();
+                // 离线状态由 C# 侧持有：页面重载/切回来后要重新下发，否则"未缓存置灰"会消失
+                PostToWeb(new { type = "net_state", offline = netHEmusic.Core.Playback.PlayerService.Offline });
                 HookWebViewKeys();                         // 导航后 WebView 可能换了子窗口，补挂一次
             };
             WebView.Source = new Uri("https://appassets/index.html");
