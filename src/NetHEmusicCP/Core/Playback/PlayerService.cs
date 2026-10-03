@@ -37,6 +37,8 @@ public sealed class PlayerService
     /// <summary>实际交给前端的那条直链（失败取证用；可能是新解析的，不一定在内存环里）。</summary>
     private string _lastHandedUrl = "";
     private long _lastHandedUrlSongId = -1;
+    /// <summary>本地缓存音频播不出来的歌（别再走本地文件，否则联网时也播不了）。</summary>
+    private readonly HashSet<long> _badLocal = new();
 
     public event Action<Song?>? SongChanged;
     public event Action<bool>? PlaybackChanged;
@@ -390,8 +392,10 @@ public sealed class PlayerService
             // 前端播放模式：直链交给网页，由 <audio> + Web Audio 播放（可拿真实频谱）
             if (FrontendAudio)
             {
-                // 离线播放：本地已缓存就直接播本地文件（虚拟主机 mediacache），否则用在线直链并在后台缓存一份
-                var local = AppServices.Cache.FindAudio(s.Id);
+                // 离线播放：本地已缓存就直接播本地文件（由 C# 拦截 https://mediacache/* 回文件），
+                // 否则用在线直链并在后台缓存一份。_badLocal 里的歌说明本地文件播不了（文件坏了/通道没起来），
+                // 就不要再走本地，免得联网时也一起播不出来。
+                var local = _badLocal.Contains(s.Id) ? null : AppServices.Cache.FindAudio(s.Id);
                 if (local is not null)
                 {
                     url = AppServices.Cache.AudioVirtualUrl(s.Id, System.IO.Path.GetExtension(local));
@@ -481,6 +485,13 @@ public sealed class PlayerService
             ? _lastHandedUrl
             : (_memoryRing.TryGetValue(s.Id, out var cachedUrl) ? cachedUrl : "");
         if (!string.IsNullOrEmpty(bad)) _ = ProbeUrlAsync(bad);
+        // 本地缓存文件播不了（通道没起来 / 文件损坏）→ 标记这首歌以后别再走本地，并立刻用在线直链重试一次
+        if (bad.StartsWith("https://mediacache/", StringComparison.OrdinalIgnoreCase))
+        {
+            _badLocal.Add(s.Id);
+            _retryCount[s.Id] = 0;                       // 本地失败不占「直链失效」的重试额度
+            LogManager.Warn("本地缓存音频播不了，改回在线直链: " + s.DisplayName);
+        }
         _memoryRing.Remove(s.Id);                    // 关键：可能已经过期/失效的直链必须丢掉
         LogManager.Log("[重试] 直链失效，清掉缓存重新解析: " + s.DisplayName);
         await PlayCurrentAsync();                    // 同一首重放，不推进队列

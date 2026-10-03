@@ -746,3 +746,4 @@ html.liquid .qual-menu{
 /* ================= 离线播放：未缓存且断网 ================= */
 .song-row.offline{opacity:.45;filter:grayscale(1);cursor:not-allowed;}
 .song-row.offline .row-btn{pointer-events:none;}
+.pl-item.offline{opacity:.45;filter:grayscale(1);cursor:not-allowed;}

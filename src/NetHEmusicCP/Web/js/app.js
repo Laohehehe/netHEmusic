@@ -1450,7 +1450,7 @@ function applyPerfAnim(s) {
   function isOffline() { return netOffline || (navigator && navigator.onLine === false); }
   function markOfflineRows() {
     try {
-      var rows = document.querySelectorAll('.song-row');
+      var rows = document.querySelectorAll('.song-row,.pl-item');
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
         var id = r.getAttribute('data-sid');
@@ -3176,13 +3176,18 @@ function applyPerfAnim(s) {
     if (!queue.length) { box.innerHTML = '<div class="pl-empty">播放列表是空的</div>'; return; }
     queue.forEach(function (ns, i) {
       var it = el('div', 'pl-item' + (i === playingIndex ? ' on' : ''));
+      try { it.setAttribute('data-sid', String(ns.Id || '')); } catch (eSid2) { }
       it.innerHTML = '<span class="pl-item-idx">' + String(i + 1).padStart(2, '0') + '</span>'
         + '<span class="pl-item-title">' + esc(ns.Title) + '</span>'
         + '<span class="pl-item-artist">' + esc(ns.Artist) + '</span>';
-      it.onclick = function () { NE.post({ type: 'play_index', index: i }); };
+      it.onclick = function () {
+        if (isOffline() && !audioCached.has(String(ns.Id))) { toast('无网络无法播放：' + ns.Title); return; }
+        NE.post({ type: 'play_index', index: i });
+      };
       it.oncontextmenu = function (e) { e.preventDefault(); e.stopPropagation(); showQueueMenu(e.clientX, e.clientY, i); };
       box.appendChild(it);
     });
+    try { markOfflineRows(); } catch (eRO) { }   // 断网时播放列表里没缓存的歌也要置灰
     var cur = box.querySelector('.pl-item.on'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
   }
 

@@ -232,9 +232,38 @@ public sealed partial class MainWindow : Window
             var core = WebView.CoreWebView2;
             var webFolder = FindWebFolder();
             core.SetVirtualHostNameToFolderMapping("appassets", webFolder, CoreWebView2HostResourceAccessKind.Allow);
-            // 离线播放：把音频缓存目录也挂一个虚拟主机，网页可直接播本地文件
-            try { core.SetVirtualHostNameToFolderMapping("mediacache", AppServices.Cache.AudioDir, CoreWebView2HostResourceAccessKind.Allow); }
-            catch (Exception mv) { LogManager.Debug("音频缓存虚拟主机失败: " + mv.Message); }
+            // 离线播放：本地音频不走「目录映射」（实测 SetVirtualHostNameToFolderMapping 那个 host 解析不了，
+            // 报"不知道这样的主机"），改成自己拦请求回文件 —— 可控、能记日志、能自己定 Content-Type。
+            try
+            {
+                var audioDir = Path.GetFullPath(AppServices.Cache.AudioDir);
+                core.AddWebResourceRequestedFilter("https://mediacache/*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
+                core.WebResourceRequested += (s, e) =>
+                {
+                    try
+                    {
+                        var name = Path.GetFileName(new Uri(e.Request.Uri).LocalPath);
+                        var file = Path.Combine(audioDir, name);
+                        if (!string.IsNullOrEmpty(name) && File.Exists(file) && file.StartsWith(audioDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var ext = Path.GetExtension(file).ToLowerInvariant();
+                            var mime = ext switch { ".flac" => "audio/flac", ".mp3" => "audio/mpeg", ".m4a" or ".mp4" => "audio/mp4", ".wav" => "audio/wav", ".ogg" => "audio/ogg", _ => "application/octet-stream" };
+                            var fs = File.OpenRead(file);
+                            e.Response = core.Environment.CreateWebResourceResponse(fs.AsRandomAccessStream(), 200, "OK",
+                                "Content-Type: " + mime + "\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *");
+                            LogManager.Debug("本地音频响应: " + name + " (" + new FileInfo(file).Length / 1024 / 1024 + " MB, " + mime + ")");
+                        }
+                        else
+                        {
+                            e.Response = core.Environment.CreateWebResourceResponse(null, 404, "Not Found", "");
+                            LogManager.Debug("本地音频缺失: " + name);
+                        }
+                    }
+                    catch (Exception ex2) { LogManager.Debug("本地音频响应失败: " + ex2.Message); }
+                };
+                LogManager.Log("离线音频通道就绪（拦截 https://mediacache/* → " + audioDir + "）");
+            }
+            catch (Exception mv) { LogManager.Debug("离线音频通道失败: " + mv.Message); }
             // 关闭 WebView2 缓存，保证热重载后拿到最新的 HTML/CSS/JS
             try { await core.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}"); } catch (Exception ce) { LogManager.Debug("禁用缓存失败: " + ce.Message); }
             SetupHotReload(webFolder);
