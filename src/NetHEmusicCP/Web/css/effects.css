@@ -765,12 +765,15 @@ html.liquid .qual-menu{
    两者都用 backdrop-filter:url(#透镜滤镜) 折射"下面的实时画面"，每帧只改 transform/opacity，
    所以**不重画位移图**、也不会出现快照式实现那种冻结。pointer-events:none 保证不挡交互。 */
 #lg-drop, #lg-ripple{
-  position:fixed; top:0; left:0; z-index:60;
+  position:absolute; top:0; left:0; z-index:2;
   border-radius:50%; pointer-events:none;
   opacity:0; will-change:transform,opacity;
-  contain:paint;
 }
-#lg-ripple{z-index:61;}
+/* 每个玻璃面一个裁切容器：overflow:hidden + 玻璃自己的圆角 → 液滴/涟漪只在该面内部生效 */
+.lg-clip{
+  position:fixed; z-index:19; overflow:hidden;
+  pointer-events:none; contain:paint;
+}
 /* ================= 液态玻璃 · liquidGL：试用后已撤掉 ================= */
 /* 走过一遍：开源库 liquidGL（MIT，WebGPU/WebGL 快照式玻璃）接成第三种材质，实测三个问题——
    ① dock 里的按钮点不动（库把目标元素及其子元素设成 pointer-events:none）

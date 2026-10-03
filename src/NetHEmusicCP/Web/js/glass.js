@@ -373,39 +373,66 @@
     return e;
   }
 
-  /// 指针是否落在某个玻璃面上（用缓存的矩形，滚动/resize 后由 refresh 重新取）
-  var rects = [];
+  /// 每个玻璃面一个"裁切容器"（overflow:hidden + 同样的圆角），液滴和涟漪都放进对应容器里。
+  /// 这样它们的透镜效果**只作用在该玻璃面自己的范围里**，不会去扭曲旁边的非玻璃区域
+  /// （用户报过：点击涟漪会波动到非液态玻璃面上）。
+  var rects = [], clips = [];
   function refreshRects() {
-    rects = [];
+    rects = []; clips = [];
     for (var i = 0; i < applied.length; i++) {
-      var r = applied[i].getBoundingClientRect();
-      if (r.width > 24 && r.height > 12) rects.push(r);
+      var el = applied[i], r = el.getBoundingClientRect();
+      if (r.width <= 24 || r.height <= 12) continue;
+      var rad = 0, z = 0;
+      try { var cs = getComputedStyle(el); rad = parseFloat(cs.borderTopLeftRadius) || 0; z = parseInt(cs.zIndex, 10) || 0; } catch (e) { rad = 0; z = 0; }
+      var cid = 'lg-clip-' + clips.length;
+      var c = document.getElementById(cid);
+      if (!c) { c = document.createElement('div'); c.id = cid; c.className = 'lg-clip'; c.setAttribute('aria-hidden', 'true'); document.body.appendChild(c); }
+      c.style.left = Math.round(r.left) + 'px';
+      c.style.top = Math.round(r.top) + 'px';
+      c.style.width = Math.round(r.width) + 'px';
+      c.style.height = Math.round(r.height) + 'px';
+      c.style.borderRadius = Math.round(rad) + 'px';
+      c.style.zIndex = String(z + 1);          // 必须盖在这个玻璃面之上，否则液滴会被玻璃自己挡住
+      rects.push(r); clips.push(c);
     }
+    // 多余的裁切容器（元素消失/尺寸过小）收掉，别留垃圾节点
+    var all = document.querySelectorAll('.lg-clip');
+    for (var k = 0; k < all.length; k++) {
+      var used = false;
+      for (var j = 0; j < clips.length; j++) if (clips[j] === all[k]) used = true;
+      if (!used && all[k].id !== 'lg-clip-keep') all[k].remove();
+    }
+    if (dropEl && dropEl.parentNode && dropEl.parentNode.classList && dropEl.parentNode.classList.contains('lg-clip')) dropEl.parentNode.removeChild(dropEl);
   }
-  function overGlass(x, y) {
+  /// 指针落在第几个玻璃面上（-1 = 不在任何玻璃面上）
+  function glassIndexAt(x, y) {
     for (var i = 0; i < rects.length; i++) {
       var r = rects[i];
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return true;
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return i;
     }
-    return false;
+    return -1;
   }
+  function overGlass(x, y) { return glassIndexAt(x, y) >= 0; }
 
-  /// C 点击涟漪：临时元素，铺开 + 淡出后自己移除
-  function spawnRipple(x, y) {
-    if (FLUID <= 0.02 || !enabled()) return;
+  /// C 点击涟漪：放进该玻璃面的裁切容器里（坐标相对容器），铺开 + 淡出后自己移除
+  function spawnRipple(x, y, idx) {
+    if (FLUID <= 0.02 || !enabled() || idx < 0 || !clips[idx]) return;
+    var c = clips[idx], r = rects[idx];
     var d = 40 + 260 * FLUID;                       // 涟漪直径
     var scale = 6 + 10 * FLUID;                     // 透镜强度（px）
     makeLensFilter('lg-rip-f', Math.round(d), scale);
     var el = ensureEl('lg-ripple');
+    if (el.parentNode !== c) c.appendChild(el);
+    var lx = x - r.left, ly = y - r.top;            // 容器内坐标
     el.style.width = el.style.height = Math.round(d) + 'px';
     el.style.backdropFilter = 'url(#lg-rip-f)';
     el.style.webkitBackdropFilter = 'url(#lg-rip-f)';
     el.style.transition = 'none';
-    el.style.transform = 'translate(' + (x - d / 2) + 'px,' + (y - d / 2) + 'px) scale(0.35)';
+    el.style.transform = 'translate(' + (lx - d / 2) + 'px,' + (ly - d / 2) + 'px) scale(0.35)';
     el.style.opacity = String(0.55 + 0.35 * FLUID);
     void el.offsetWidth;                             // 强制一次布局，让下面的过渡真的跑起来
     el.style.transition = 'transform .62s cubic-bezier(.22,.8,.2,1), opacity .62s ease-out';
-    el.style.transform = 'translate(' + (x - d / 2) + 'px,' + (y - d / 2) + 'px) scale(1.9)';
+    el.style.transform = 'translate(' + (lx - d / 2) + 'px,' + (ly - d / 2) + 'px) scale(1.9)';
     el.style.opacity = '0';
   }
 
@@ -420,13 +447,13 @@
     var t = (performance.now() - fluidT0) / 1000;
     var amp = 1.2 * FLUID;
     // 环境流动是"很慢的漂移"，没必要每帧都改 feOffset（每改一次都会让 backdrop-filter 重新光栅化）——
-    // 隔帧更新，实测空闲帧时间从 avg 6.35ms 回到 5.6ms 上下（p95 也不再冒 16ms 的尖峰）。
+    // 隔帧更新，空闲帧时间比每帧更新低一截。
     if ((fluidFrame++ & 1) === 0) {
       AMB_X = amp * Math.sin(t * 0.53) + 0.45 * amp * Math.sin(t * 1.21 + 1.7);
       AMB_Y = amp * Math.sin(t * 0.41 + 2.1) + 0.45 * amp * Math.sin(t * 0.97);
       pushParallax();
     }
-    // 液滴：缓动跟手 + 按速度做挤压（快 = 拉长，慢 = 圆）
+    // 液滴：缓动跟手 + 按速度做挤压（快 = 拉长，慢 = 圆）；坐标是"相对所在裁切容器"的
     var k = 0.16;
     dropX += (dropTX - dropX) * k; dropY += (dropTY - dropY) * k;
     var vx = dropTX - dropX, vy = dropTY - dropY;
@@ -448,16 +475,21 @@
     dropEl = document.getElementById('lg-drop');
     window.addEventListener('pointermove', function (e) {
       if (!enabled() || FLUID <= 0.02) { dropRect = false; return; }
-      dropTX = e.clientX; dropTY = e.clientY;
-      dropRect = overGlass(e.clientX, e.clientY);
-      if (!dropRect && dropShow < 0.02) { dropX = dropTX; dropY = dropTY; }
+      var idx = glassIndexAt(e.clientX, e.clientY);
+      dropRect = idx >= 0;
+      if (idx < 0) return;
+      var r = rects[idx];
+      dropTX = e.clientX - r.left; dropTY = e.clientY - r.top;   // 容器内坐标
+      if (dropEl && clips[idx] && dropEl.parentNode !== clips[idx]) clips[idx].appendChild(dropEl);
+      if (!dropRect) { dropX = dropTX; dropY = dropTY; }
     }, { passive: true });
     window.addEventListener('pointerdown', function (e) {
       if (!enabled() || FLUID <= 0.02) return;
-      if (!overGlass(e.clientX, e.clientY)) return;
+      var idx = glassIndexAt(e.clientX, e.clientY);
+      if (idx < 0) return;
       makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 5 + 9 * FLUID);
       if (dropEl) { dropEl.style.backdropFilter = 'url(#lg-drop-f)'; dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f)'; }
-      spawnRipple(e.clientX, e.clientY);
+      spawnRipple(e.clientX, e.clientY, idx);
     }, { passive: true });
     // 初始化液滴滤镜（尺寸/强度随 FLUID 变，setOptions 里会重建）
     makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 5 + 9 * FLUID);
