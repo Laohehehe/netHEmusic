@@ -75,10 +75,13 @@
   }
 
   /// 位移图：R 通道 = x 位移，G 通道 = y 位移（128 = 不动）。
-  /// 剖面用凸 squircle：y = (1-(1-t)^4)^(1/4)，越靠边折射越强、到边缘归零，避免采样到元素外。
-  /// 只与尺寸 + 厚度倾向有关（强度/色散不参与），所以改强度不用重画。
-  /// 厚度不均（THICK>0）：真实玻璃板被上方光照射时，上边缘看起来更厚（折射带更宽、更强），
-  /// 下边缘最薄，左右略有差别 —— 四条边各用一套带宽/幅值。THICK=0 时退化成四周一样（等价于改造前）。
+  /// 剖面换成 liquidGL 那套：圆角盒 SDF + 解析法线 + liquidRel 透镜剖面（A/B/C 常量照它的着色器）。
+  /// 为什么换：原来"横竖各算一条剖面"在**圆角处是错的**（角上折射方向不对）；SDF + 法线给出真正沿边法线
+  /// 的折射，四角自然变成斜面透镜。位移量 = 法线 × distance × (1-ref)：边缘归零、往里一段最强、再深归零。
+  /// 只与尺寸 + 圆角 + 厚度倾向有关（强度/色散不参与），所以改强度不用重画。
+  /// 厚度不均（THICK>0）：按法线方向把四条边的带宽/幅值混合；THICK=0 时四周一样（band=DEPTH, gain=1）。
+  var LQ_A = 1.75, LQ_B = 1.25, LQ_C = 2.0;
+
   function edgeProfile() {
     var t = THICK;
     return {
@@ -88,8 +91,21 @@
     };
   }
 
-  function makeMap(w, h) {
-    var key = w + 'x' + h + '@' + Math.round(THICK * 20);
+  function sdRoundBox(px, py, hx, hy, r) {
+    var qx = Math.abs(px) - hx + r, qy = Math.abs(py) - hy + r;
+    var ax = qx > 0 ? qx : 0, ay = qy > 0 ? qy : 0;
+    return Math.sqrt(ax * ax + ay * ay) + Math.min(Math.max(qx, qy), 0) - r;
+  }
+
+  /// liquidGL 的透镜剖面：边缘 0（不位移）→ 带内增强 → 深处回到 0
+  function liquidRel(dst, r, blur) {
+    var n = Math.pow(Math.max(0, Math.min(1, (dst - r + blur) / blur)), LQ_A);
+    return 1 - Math.pow(1 - Math.pow(1 - n, LQ_B), LQ_C);
+  }
+
+  function makeMap(w, h, radius) {
+    var rad = Math.max(0, Math.round(radius || 0));
+    var key = w + 'x' + h + '@' + Math.round(THICK * 20) + '@' + rad;
     if (maps[key]) return maps[key];
     var ms = mapSize(w, h), mw = ms[0], mh = ms[1];
     var c = document.createElement('canvas');
@@ -98,27 +114,41 @@
     var img = ctx.createImageData(mw, mh);
     var d = img.data;
     var e = edgeProfile();
-    var invS = 1 / ms[2];                                     // 位移图比元素小，距离换算回元素像素
-    function prof(t) {                                        // t: 0=边缘 1=边缘带结束
-      if (t <= 0 || t >= 1) return 0;
-      var x = 1 - t;
-      return Math.pow(1 - x * x * x * x, 0.25);
-    }
-    function cl(v) { return v < -1 ? -1 : (v > 1 ? 1 : v); }
+    // 位移图会被 feImage 铺到 (w+MAPFEATHER) × (h+MAPFEATHER) 个元素像素上，所以按同样比例换算元素坐标
+    var fx = (w + MAPFEATHER) / mw, fy = (h + MAPFEATHER) / mh;
+    var hx = Math.max(w * 0.5 - 0.75, 1), hy = Math.max(h * 0.5 - 0.75, 1);
+    var r = Math.max(0, Math.min(rad, Math.min(hx, hy)));
+    var vx = new Float32Array(mw * mh), vy = new Float32Array(mw * mh), maxMag = 0;
     for (var y = 0; y < mh; y++) {
+      var py = (y + 0.5) * fy - h * 0.5;
       for (var x = 0; x < mw; x++) {
-        var dl = x, dr = mw - 1 - x, dt = y, db = mh - 1 - y;
-        var left = dl < dr, up = dt < db;
-        var tL = (left ? dl : dr) * invS / (left ? e.bezL : e.bezR);
-        var tT = (up ? dt : db) * invS / (up ? e.bezT : e.bezB);
-        var mx = cl(prof(tL) * (left ? e.gainL : e.gainR)) * (left ? -1 : 1);   // 朝最近的边推 → 边缘放大
-        var my = cl(prof(tT) * (up ? e.gainT : e.gainB)) * (up ? -1 : 1);
-        var o = (y * mw + x) * 4;
-        d[o] = 128 + Math.round(mx * 127);
-        d[o + 1] = 128 + Math.round(my * 127);
-        d[o + 2] = 128;
-        d[o + 3] = 255;
+        var px = (x + 0.5) * fx - w * 0.5;
+        var sd = sdRoundBox(px, py, hx, hy, r);
+        // 法线：SDF 的数值梯度（±1 元素像素，指向外）
+        var nx = sdRoundBox(px + 1, py, hx, hy, r) - sdRoundBox(px - 1, py, hx, hy, r);
+        var ny = sdRoundBox(px, py + 1, hx, hy, r) - sdRoundBox(px, py - 1, hx, hy, r);
+        var len = Math.sqrt(nx * nx + ny * ny);
+        if (len < 1e-4) { nx = 0; ny = -1; len = 1; }
+        nx /= len; ny /= len;
+        var ax = nx < 0 ? -nx : nx, ay = ny < 0 ? -ny : ny;
+        var band = ax * (nx < 0 ? e.bezL : e.bezR) + ay * (ny < 0 ? e.bezT : e.bezB);
+        var gain = ax * (nx < 0 ? e.gainL : e.gainR) + ay * (ny < 0 ? e.gainT : e.gainB);
+        var dist = Math.max(0, Math.min(r + sd, r + band));
+        var mag = dist * (1 - liquidRel(dist, r, band)) * gain;
+        // 取样取"往里"（与 liquidGL 一致：sample = coord - 法线×位移），所以这里取负号
+        var i = y * mw + x;
+        vx[i] = -nx * mag; vy[i] = -ny * mag;
+        var abs = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
+        if (abs > maxMag) maxMag = abs;
       }
+    }
+    if (maxMag < 1e-6) maxMag = 1;                            // 极小元素兜底，避免除零
+    for (var k = 0; k < mw * mh; k++) {
+      var o = k * 4;
+      d[o] = 128 + Math.round((vx[k] / maxMag) * 127);
+      d[o + 1] = 128 + Math.round((vy[k] / maxMag) * 127);
+      d[o + 2] = 128;
+      d[o + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
     var url = c.toDataURL('image/png');
@@ -148,11 +178,12 @@
 
   /// 给某个尺寸造（或复用）一个折射滤镜，返回 { id, node, dms }
   /// 色散关（CA≈0）时就是以前那两步：feImage + 单次 feDisplacementMap
-  function makeFilter(w, h) {
+  function makeFilter(w, h, radius) {
     var caKey = Math.round(CA * 100);
-    var key = w + 'x' + h + '@' + caKey;
+    var rad = Math.max(0, Math.round(radius || 0));
+    var key = w + 'x' + h + '@' + caKey + '@' + rad;      // 圆角变了位移图也变（SDF 用它算斜面和法线）
     if (filters[key]) return filters[key];
-    var mapUrl = makeMap(w, h);
+    var mapUrl = makeMap(w, h, rad);
     var id = 'lg-f' + (++SEQ);
     var svg = svgHost();
     var f = el3('filter', {
@@ -228,7 +259,9 @@
     if (r.width < 24 || r.height < 12) return;
     var w = Math.max(24, Math.round(r.width / 4) * 4);        // 4px 取整：尺寸微抖不重画位移图
     var h = Math.max(12, Math.round(r.height / 4) * 4);
-    var rec = makeFilter(w, h);
+    var rad = 0;                                              // 元素实际圆角：SDF 斜面/法线要用它
+    try { rad = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0; } catch (e) { rad = 0; }
+    var rec = makeFilter(w, h, Math.max(0, Math.min(rad, 60)));
     el.setAttribute('data-lg', rec.id);
     paint(el, rec);
     applied.push(el);
