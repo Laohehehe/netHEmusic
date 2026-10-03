@@ -935,6 +935,8 @@ function applyPerfAnim(s) {
       toastOutTimer = setTimeout(function () { el.style.display = 'none'; el.classList.remove('toast-out'); }, 240);
     }, 2000);
   }
+  // 测试入口：控制台/CDP 里调 window.neToast('文本') 就能弹一条，方便自测（不改变任何动画逻辑）
+  window.neToast = function (msg) { toast(msg || '测试提示'); return 'shown'; };
   // Windows 11 风格的小圆圈加载动画（纯 SVG + CSS，动画定义见 main.css 的 .win-spin）
   function spinHTML(text) {
     var dots = '';
@@ -3971,4 +3973,5 @@ function applyPerfAnim(s) {
   });
 
 })();
+
 
