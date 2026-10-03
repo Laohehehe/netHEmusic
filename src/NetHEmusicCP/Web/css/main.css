@@ -338,8 +338,6 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .repo-btn:focus-visible{outline:2px solid var(--md-accent-color);outline-offset:2px;}
 
 /* ================= 页面标题行 + 圆形图标按钮（每日推荐刷新等） ================= */
-.page-title-row{display:flex;align-items:center;gap:10px;margin:0 0 14px;}
-.page-title-row .page-title{margin:0;}
 .icon-btn{width:30px;height:30px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;padding:0;
   border-radius:50%;border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.14);background:transparent;color:var(--md-accent-color-secondary);
   cursor:pointer;transition:background .15s ease,color .15s ease,transform .2s ease;}
@@ -348,3 +346,6 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .icon-btn:active{transform:scale(.94);}
 .icon-btn.busy svg{animation:spin .9s linear infinite;}
 @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+/* 每日推荐刷新按钮：跟「播放全部/下载全部」同一行、靠右 */
+.action-row .icon-btn{margin-left:auto;}

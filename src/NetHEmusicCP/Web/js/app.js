@@ -1050,7 +1050,7 @@ function applyPerfAnim(s) {
     img.onerror = function () { };
     img.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "param=48y48";
   }
-  function allBtns(songs) {
+  function allBtns(songs, extra) {
     var wrap = el("div", "action-row");
     var b1 = el("button", "action-btn", "播放全部");
     b1.onclick = function () { addQueue(songs.map(normSong), 0); };
@@ -1071,7 +1071,20 @@ function applyPerfAnim(s) {
       toast("已加入下载队列：" + list.length + " 首");
     };
     wrap.appendChild(b1); wrap.appendChild(b2);
+    if (extra) wrap.appendChild(extra);   // 额外按钮（如每日推荐刷新）靠右放同一行
     return wrap;
+  }
+  /** 每日推荐刷新按钮：清缓存 + 强制重取，转圈由 .busy 控制。 */
+  function refreshBtn(reload) {
+    var rb = el('button','icon-btn'); rb.innerHTML = SVG.refresh || '⟳'; rb.title = '刷新每日推荐';
+    rb.onclick = function () {
+      if (rb.classList.contains('busy')) return;
+      rb.classList.add('busy');
+      try { NE.post({ type: 'cache_remove', key: 'recommend' }); } catch (e) { }
+      toast('正在刷新每日推荐…');
+      setTimeout(reload, 250);
+    };
+    return rb;
   }
   // 只更新歌名/歌手/封面（恢复播放列表时用，不改播放状态）
   function showSongMeta(ns) {
@@ -1505,19 +1518,8 @@ function applyPerfAnim(s) {
     var tw = T(h < 5 ? '凌晨' : h < 9 ? '早' : h < 12 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : '晚上');
     const html = el('div','page');
     html.appendChild(el('h2','greet-title', esc(nick) + '，' + tw + '好！想听点什么？'));
-    var head = el('div','page-title-row');
-    head.appendChild(el('h3','sec-title','每日推荐'));
-    var rb = el('button','icon-btn'); rb.innerHTML = SVG.refresh || '⟳'; rb.title = '刷新每日推荐';
-    rb.onclick = function () {
-      if (rb.classList.contains('busy')) return;
-      rb.classList.add('busy');
-      try { NE.post({ type: 'cache_remove', key: 'recommend' }); } catch (e) { }
-      toast('正在刷新每日推荐…');
-      setTimeout(function () { goHome(); }, 250);
-    };
-    head.appendChild(rb);
-    html.appendChild(head);
-    html.appendChild(allBtns(songs));
+    html.appendChild(el('h3','sec-title','每日推荐'));
+    html.appendChild(allBtns(songs, refreshBtn(function () { goHome(); })));
     const dl = el('div');
     renderSongs(songs, dl); html.appendChild(dl);
     view.innerHTML=''; view.appendChild(html);
@@ -1535,19 +1537,8 @@ function applyPerfAnim(s) {
       pcPut('recommend', songs);
     }
     const html = el('div','page');
-    var head = el('div','page-title-row');
-    head.appendChild(el('h2','page-title','每日推荐 ('+songs.length+')'));
-    var rb = el('button','icon-btn'); rb.innerHTML = SVG.refresh || '⟳'; rb.title = '刷新每日推荐';
-    rb.onclick = async function () {
-      if (rb.classList.contains('busy')) return;
-      rb.classList.add('busy');
-      try { NE.post({ type: 'cache_remove', key: 'recommend' }); } catch (e) { }
-      toast('正在刷新每日推荐…');
-      setTimeout(function () { goRecommend(); }, 250);
-    };
-    head.appendChild(rb);
-    html.appendChild(head);
-    html.appendChild(allBtns(songs));
+    html.appendChild(el('h2','page-title','每日推荐 ('+songs.length+')'));
+    html.appendChild(allBtns(songs, refreshBtn(function () { goRecommend(); })));
     const dl = el('div'); renderSongs(songs, dl); html.appendChild(dl);
     view.innerHTML=''; view.appendChild(html);
   }
