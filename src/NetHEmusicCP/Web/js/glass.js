@@ -360,7 +360,7 @@
     var svg = svgHost();
     var old = document.getElementById(id); if (old && old.parentNode) old.parentNode.removeChild(old);
     var f = el3('filter', { id: id, x: '0', y: '0', width: '100%', height: '100%', filterUnits: 'objectBoundingBox', 'color-interpolation-filters': 'sRGB' });
-    var url = makeLensMap(768);
+    var url = makeLensMap(128);
     var im = el3('feImage', { href: url, x: '0', y: '0', width: String(sizePx), height: String(sizePx), preserveAspectRatio: 'none', result: 'm' });
     im.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url);
     f.appendChild(im);
@@ -442,13 +442,12 @@
     var c = clips[idx], r = rects[idx];
     var d = 40 + 260 * FLUID;                       // 涟漪直径
     var scale = 2 + 2.5 * FLUID;                     // 透镜强度（px）
-    makeLensFilter('lg-rip-f', Math.round(d), scale);
     var el = ensureEl('lg-ripple');
     if (el.parentNode !== c) c.appendChild(el);
     ripEl = el; ripD = d; ripX = x - r.left; ripY = y - r.top; ripT0 = performance.now();
     el.style.width = el.style.height = Math.round(d) + 'px';
-    el.style.backdropFilter = 'url(#lg-rip-f) blur(1.8px)';
-    el.style.webkitBackdropFilter = 'url(#lg-rip-f) blur(1.8px)';
+    el.style.backdropFilter = 'blur(2.5px) brightness(1.04) saturate(1.04)';
+    el.style.webkitBackdropFilter = 'blur(2.5px) brightness(1.04) saturate(1.04)';
     el.style.transition = 'none';
     el.style.opacity = String(0.55 + 0.35 * FLUID);  // 起始必须不透明，否则整段看不见
     el.style.transform = 'translate(' + (ripX - d / 2) + 'px,' + (ripY - d / 2) + 'px) scale(0.35)';
@@ -467,7 +466,8 @@
     var amp = 1.2 * FLUID;
     // 环境流动是"很慢的漂移"，没必要每帧都改 feOffset（每改一次都会让 backdrop-filter 重新光栅化）——
     // 隔帧更新，空闲帧时间比每帧更新低一截。
-    if ((fluidFrame++ & 1) === 0) {
+    fluidFrame++;
+    if ((fluidFrame & 3) === 0) {
       AMB_X = amp * Math.sin(t * 0.53) + 0.45 * amp * Math.sin(t * 1.21 + 1.7);
       AMB_Y = amp * Math.sin(t * 0.41 + 2.1) + 0.45 * amp * Math.sin(t * 0.97);
       pushParallax();
@@ -482,15 +482,12 @@
     dropX += (dropTX - dropX) * k; dropY += (dropTY - dropY) * k;
     var vx = dropTX - dropX, vy = dropTY - dropY;
     var sp = Math.sqrt(vx * vx + vy * vy);
-    if ((fluidFrame & 3) === 0 && dropFilterDm) {
-      var sc = (5 + 9 * FLUID) * (1 + Math.min(0.45, sp / 260));
-      var sv = sc.toFixed(2);
-      if (dropFilterDm.getAttribute('scale') !== sv) dropFilterDm.setAttribute('scale', sv);
-    }
     if (dropEl) {
       dropShow += ((dropRect ? 1 : 0) - dropShow) * 0.18;
+      var vis = dropShow > 0.01;
+      if (dropEl.__vis !== vis) { dropEl.__vis = vis; dropEl.style.display = vis ? 'block' : 'none'; }
       var size = (70 + 60 * FLUID);
-      dropEl.style.width = dropEl.style.height = Math.round(size) + 'px';
+      if (dropEl.__sz !== size) { dropEl.__sz = size; dropEl.style.width = dropEl.style.height = Math.round(size) + 'px'; }
       dropEl.style.opacity = String(Math.max(0, dropShow * (0.55 + 0.45 * FLUID)));
       dropEl.style.transform = 'translate(' + Math.round(dropX - size / 2) + 'px,' + Math.round(dropY - size / 2) + 'px)';
     }
@@ -515,12 +512,10 @@
       if (!enabled() || FLUID <= 0.02) return;
       var idx = glassIndexAt(e.clientX, e.clientY);
       if (idx < 0) return;
-      makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 1.8 + 2.2 * FLUID);
-      if (dropEl) { dropEl.style.backdropFilter = 'url(#lg-drop-f) blur(1.8px)'; dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f)'; }
+      if (dropEl) { dropEl.style.backdropFilter = 'blur(3px) brightness(1.06) saturate(1.06)'; dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f)'; }
       spawnRipple(e.clientX, e.clientY, idx);
     }, { passive: true });
     // 初始化液滴滤镜（尺寸/强度随 FLUID 变，setOptions 里会重建）
-    makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 5 + 9 * FLUID);
     if (dropEl) { dropEl.style.backdropFilter = 'url(#lg-drop-f)'; dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f)'; dropEl.style.opacity = '0'; }
     fluidT0 = performance.now();
     if (!fluidRaf) fluidRaf = requestAnimationFrame(fluidLoop);
@@ -592,10 +587,9 @@
       if (Math.abs(nf - FLUID) > 0.0005) {
         FLUID = nf;
         // 液滴尺寸/强度跟着变 → 重建透镜滤镜；涟漪每次点击时按当时的 FLUID 现建
-        makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 1.8 + 2.2 * FLUID);
         if (dropEl) {
-          dropEl.style.backdropFilter = 'url(#lg-drop-f) blur(1.8px)';
-          dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f) blur(1.8px)';
+          dropEl.style.backdropFilter = 'blur(3px) brightness(1.06) saturate(1.06)';
+          dropEl.style.webkitBackdropFilter = 'blur(3px) brightness(1.06) saturate(1.06)';
         }
       }
     }
@@ -677,6 +671,8 @@
   window.addEventListener('resize', function () { if (enabled()) refresh(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { refresh(); initFluid(); }); else { refresh(); initFluid(); }
 })();
+
+
 
 
 

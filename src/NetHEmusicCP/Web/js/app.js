@@ -799,6 +799,7 @@ function applyLiveSetting(key, val) {
     else if (key === 'volume') applyVolume(Number(val) || 0, false);
     else if (key === 'playMode') applyMode(String(val), true);
     else if (key.indexOf('hk_') === 0) hotkeysFromSettings(appSettings);
+    if (key === 'ui_fps') applyFps(String(val) === 'true');
     if (key === 'ui_material' || key === 'ui_liquid_power' || key === 'ui_liquid_ca' || key === 'ui_liquid_thick' || key === 'ui_liquid_para' || key === 'ui_liquid_fluid') applyGlassUI();
   } catch (e) { }
 }
@@ -855,6 +856,38 @@ function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return
     }
   }
   window.neApplyGlassUI = applyGlassUI;
+
+  // ---- 帧率显示（设置 → 高级）：右上角/右下角一个小方块，每 0.5s 刷一次 ----
+  // 用 rAF 计数：它跟的是"页面实际出帧"，所以掉帧能直接看出来（不是估算值）。
+  var fpsRaf = 0, fpsN = 0, fpsT = 0;
+  function applyFps(on) {
+    try {
+      var box = document.getElementById('fps-box');
+      if (!on) {
+        if (fpsRaf) { cancelAnimationFrame(fpsRaf); fpsRaf = 0; }
+        if (box) box.remove();
+        return;
+      }
+      if (!box) { box = document.createElement('div'); box.id = 'fps-box'; box.textContent = '-- FPS'; document.body.appendChild(box); }
+      if (fpsRaf) return;
+      fpsN = 0; fpsT = performance.now();
+      var tick = function () {
+        fpsRaf = requestAnimationFrame(tick);
+        fpsN++;
+        var now = performance.now();
+        if (now - fpsT >= 500) {
+          var fps = Math.round(fpsN * 1000 / (now - fpsT));
+          box.textContent = fps + ' FPS · ' + (1000 / Math.max(1, fps)).toFixed(1) + ' ms';
+          fpsN = 0; fpsT = now;
+        }
+      };
+      fpsRaf = requestAnimationFrame(tick);
+    } catch (e) {
+      try { if (window.NE_showErr) NE_showErr('帧率显示', String(e && e.message || e), '', ''); } catch (x) { }
+    }
+  }
+  window.neApplyFps = applyFps;
+  window.neFpsDebug = function () { var b = document.getElementById('fps-box'); return { on: !!fpsRaf, text: b ? b.textContent : null }; };
 
   // 窗口拖动交给 WinUI 自己的拖拽区（ExtendsContentIntoTitleBar 后顶部那片原生区域），
   // 网页不再自己发 win_drag / win_drag_move —— 那套会每移动一次就写一条日志（web msg: win_drag_move），
@@ -2975,6 +3008,7 @@ function applyPerfAnim(s) {
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
     html.appendChild(group('高级', [
       feedbackRow(),
+      sw('显示帧率','ui_fps', cfgBool(s,'ui_fps',false)),
       sw('显示控制台','ui_console', cfgBool(s,'ui_console',false)),
       sw('开发者工具（F12 打开）','ui_devtools', cfgBool(s,'ui_devtools',false))
     ]));
@@ -3485,6 +3519,7 @@ function applyPerfAnim(s) {
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
       npApplyLyricSettings(s);                                 // 歌词页外观设置
       applyPerfAnim(s);                                        // 性能：动画开关与速率
+      applyFps(cfgBool(s, 'ui_fps', false));                   // 帧率显示（设置→高级）
       if (s && s.quality) { qualCur = String(s.quality); }
       qualBind();
       hotkeysFromSettings(s);                                  // 快捷键绑定
@@ -3921,3 +3956,4 @@ function applyPerfAnim(s) {
   });
 
 })();
+

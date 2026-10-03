@@ -760,24 +760,31 @@ html.liquid .qual-menu{
    贴图生成（makeRim/makeSheen）、CSS 变量、--lg-power/--lg-spec、白描边与 inset 全部删掉。
    现在玻璃只有：折射 + 模糊 + 饱和度/亮度 + 外投影；"视角跟随"改为平移折射取样的背景（feOffset）。 */
 
-/* ================= 液态玻璃 · 流体质感（液滴 / 涟漪） ================= */
-/* 两个浮层：① #lg-drop 跟手的液滴透镜（粘度靠 JS 缓动 + 按速度挤压）② #lg-ripple 点击涟漪（一次性，播完自灭）。
-   两者都用 backdrop-filter:url(#透镜滤镜) 折射"下面的实时画面"，每帧只改 transform/opacity，
-   所以**不重画位移图**、也不会出现快照式实现那种冻结。pointer-events:none 保证不挡交互。 */
+/* ================= 液态玻璃 · 流体质感（水珠 / 涟漪） ================= */
+/* ① #lg-drop 跟手的"水珠"（粘度靠 JS 缓动）② #lg-ripple 点击涟漪（一次性，播完自灭）。
+   ⚠️ 都**不做位移放大**：放大镜式液滴会放大 backdrop（Chromium 对带 blur 的 backdrop 是按降分辨率
+   渲染的），倍率一大就出现块状锯齿 —— 已按用户选择换成水珠：只做模糊/亮度/饱和 + 亮边，不重采样。
+   每帧只改 transform/opacity，所以既不会重画位移图，也不会像快照式实现那样冻结。pointer-events:none 不挡交互。 */
 #lg-drop, #lg-ripple{
   position:absolute; top:0; left:0; z-index:2;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22),
+              inset 0 8px 12px -6px rgba(255,255,255,.16),
+              inset 0 -9px 14px -8px rgba(0,0,0,.35),
+              0 2px 10px rgba(0,0,0,.25);
   /* 不要用 border-radius 的硬圆边：那条边会露出阶梯状锯齿（用户截图里最刺眼的就是它）。
      改成径向遮罩做羽化过渡，位移内容到边缘自然淡出，看不到硬边界。 */
   border-radius:0;
   -webkit-mask-image: radial-gradient(closest-side, rgba(0,0,0,1) 38%, rgba(0,0,0,.55) 66%, rgba(0,0,0,0) 100%);
   mask-image: radial-gradient(closest-side, rgba(0,0,0,1) 38%, rgba(0,0,0,.55) 66%, rgba(0,0,0,0) 100%);
   pointer-events:none;
-  opacity:0; will-change:transform,opacity;
+  opacity:0; display:none;            /* 隐藏时必须真的不渲染：带 backdrop-filter 的图层即使 opacity:0 也会采样 backdrop（待机开销大头） */
+  will-change:transform,opacity;
 }
-/* 每个玻璃面一个裁切容器：overflow:hidden + 玻璃自己的圆角 → 液滴/涟漪只在该面内部生效 */
+/* 每个玻璃面一个裁切容器：overflow:hidden + 玻璃自己的圆角 → 液滴/涟漪只在该面内部生效。
+   它自己不带任何滤镜，所以只是空壳时不产生开销（原先的 contain:paint 会强制分层，已去掉）。 */
 .lg-clip{
   position:fixed; z-index:19; overflow:hidden;
-  pointer-events:none; contain:paint;
+  pointer-events:none;
 }
 /* ================= 液态玻璃 · liquidGL：试用后已撤掉 ================= */
 /* 走过一遍：开源库 liquidGL（MIT，WebGPU/WebGL 快照式玻璃）接成第三种材质，实测三个问题——
@@ -786,4 +793,9 @@ html.liquid .qual-menu{
    ③ 重载后画面冻结（快照式架构：不跟内层 #main 滚动重拍，也不支持 CSS 动画）
    结论：快照式不适合内容一直在动的桌面 UI；自带实现的 backdrop-filter 折射实时合成结果，不冻结也不挡交互。
    库文件已从仓库移除（要复现的话：npm i liquid-gl）。 */
+
+
+/* ================= 帧率显示（设置-高级） ================= */
+#fps-box{position:fixed;right:14px;bottom:112px;z-index:99999;padding:2px 8px;border-radius:6px;pointer-events:none;background:rgba(0,0,0,.62);color:#8fe3ff;font:12px/16px Consolas,monospace;box-shadow:0 2px 10px rgba(0,0,0,.35);}
+
 
