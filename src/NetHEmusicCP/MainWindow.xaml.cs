@@ -56,6 +56,7 @@ public sealed partial class MainWindow : Window
             }
             catch { }
             WindowHelper.SyncBackdropTheme(dark);   // 材质的深浅跟着应用配色走（否则切浅色后标题栏还是深的）
+            WindowHelper.SyncSystemMenuTheme(dark);  // 托盘右键等系统菜单也跟着深浅色（最简改法，不重写菜单）
         }
         catch (Exception e) { LogManager.Debug("原生配色失败: " + e.Message); }
     }

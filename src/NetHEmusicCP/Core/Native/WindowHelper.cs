@@ -208,6 +208,28 @@ public static class WindowHelper
     private static object? _backdrop;                  // MicaController / DesktopAcrylicController
     private static SystemBackdropConfiguration? _micaCfg;
 
+    // ---- 让系统右键菜单（含托盘菜单）跟随应用的深/浅色 ----
+    // 文档/社区的做法（Win32 Dark Mode）：uxtheme 的序号导出 SetPreferredAppMode(135) + FlushMenuThemes(136)。
+    // 序号导出只能用 EntryPoint="#135" 这种写法调。失败就静默退回系统默认外观。
+    [DllImport("uxtheme.dll", EntryPoint = "#135", SetLastError = true)] private static extern int SetPreferredAppMode(int mode);
+    [DllImport("uxtheme.dll", EntryPoint = "#136", SetLastError = true)] private static extern void FlushMenuThemes();
+    private static int _lastAppMode = -1;
+
+    /// <summary>0=Default 1=AllowDark 2=ForceDark 3=ForceLight（跟随应用配色，而不是系统主题）。</summary>
+    public static void SyncSystemMenuTheme(bool dark)
+    {
+        try
+        {
+            int mode = dark ? 2 : 3;
+            if (mode == _lastAppMode) return;
+            SetPreferredAppMode(mode);
+            FlushMenuThemes();          // 让已经建好的菜单也刷新（切配色后立刻生效）
+            _lastAppMode = mode;
+            LogManager.Debug("系统菜单主题: " + (dark ? "深色" : "浅色"));
+        }
+        catch (Exception e) { LogManager.Debug("系统菜单主题设置失败: " + e.Message); }
+    }
+
     /// <summary>应用窗口材质。material = "acrylic"（亚克力：能透看后方其它窗口）/ "micaAlt"（Mica Alt：只取桌面壁纸）。
     /// dark 用应用自己的深浅色传入：启动时元素还没进可视树，ActualTheme 报的是系统主题。</summary>
     public static void ApplyBackdrop(Window w, bool enable, bool dark, string material = "acrylic")
