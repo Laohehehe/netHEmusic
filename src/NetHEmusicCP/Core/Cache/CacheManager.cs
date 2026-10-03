@@ -110,4 +110,72 @@ public sealed class CacheManager
         if (s.Length == 0) return "k";
         return s.Length > 80 ? s.Substring(0, 80) : s;
     }
+
+    // ================= 离线播放：音频缓存 =================
+    // 与页面数据缓存共用同一个 temp 目录与「缓存上限」设置（EnforceLimit 已经按 LRU 覆盖全部文件），
+    // 文件名形如 audio\<歌曲id>.mp3；播放时本地有就直接走本地（虚拟主机 https://mediacache/），
+    // 没有就用在线直链并在后台存一份，下次断网也能听。
+    public string AudioDir
+    {
+        get { var d = Path.Combine(CacheDir, "audio"); try { Directory.CreateDirectory(d); } catch { } return d; }
+    }
+
+    /// <summary>已缓存的音频文件路径（没有则 null）。</summary>
+    public string? FindAudio(long songId)
+    {
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(AudioDir, songId + ".*"))
+                if (new FileInfo(f).Length > 64 * 1024) return f;   // 太小的当坏文件忽略
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>已经缓存的歌曲 id 列表（前端用来把没缓存的歌在断网时置灰）。</summary>
+    public List<long> AudioIds()
+    {
+        var list = new List<long>();
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(AudioDir, "*"))
+            {
+                var name = Path.GetFileNameWithoutExtension(f);
+                if (long.TryParse(name, out var id) && new FileInfo(f).Length > 64 * 1024) list.Add(id);
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    /// <summary>给网页用的本地播放地址（InitWebView 里把 mediacache 映射到 AudioDir）。</summary>
+    public string AudioVirtualUrl(long songId, string ext)
+        => "https://mediacache/audio/" + songId + (string.IsNullOrEmpty(ext) ? ".mp3" : ext);
+
+    /// <summary>后台把在线直链存一份到本地缓存（失败静默；前端播放不受影响）。</summary>
+    public async System.Threading.Tasks.Task CacheAudioAsync(string remoteUrl, long songId)
+    {
+        try
+        {
+            if (songId <= 0 || string.IsNullOrEmpty(remoteUrl) || remoteUrl.StartsWith("https://mediacache/")) return;
+            if (FindAudio(songId) is not null) return;
+            var ext = ".mp3";
+            try { var p = new Uri(remoteUrl).AbsolutePath; var e = Path.GetExtension(p); if (e.Length is >= 2 and <= 5) ext = e; } catch { }
+            var tmp = Path.Combine(AudioDir, songId + ".part");
+            var dst = Path.Combine(AudioDir, songId + ext);
+            using (var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) })
+            using (var resp = await http.GetAsync(remoteUrl, System.Net.Http.HttpCompletionOption.ResponseHeadersRead))
+            {
+                if (!resp.IsSuccessStatusCode) { LogManager.Debug("缓存音频失败(HTTP " + (int)resp.StatusCode + ") id=" + songId); return; }
+                await using (var src = await resp.Content.ReadAsStreamAsync())
+                await using (var fs = File.Create(tmp))
+                    await src.CopyToAsync(fs);
+            }
+            if (new FileInfo(tmp).Length < 64 * 1024) { try { File.Delete(tmp); } catch { } return; }
+            File.Move(tmp, dst, true);
+            LogManager.Log("已缓存音频（可离线播放）: " + Path.GetFileName(dst) + " " + (new FileInfo(dst).Length / 1024 / 1024) + " MB");
+            EnforceLimit();
+        }
+        catch (Exception e) { LogManager.Debug("缓存音频异常 id=" + songId + ": " + e.Message); }
+    }
 }

@@ -742,3 +742,7 @@ html.liquid .qual-menu{
   padding:3px 8px;border-radius:6px;pointer-events:none;opacity:0;transition:opacity .12s ease;white-space:nowrap;
   box-shadow:0 4px 14px rgba(0,0,0,.35);}
 .vol-tip.on{opacity:1;}
+
+/* ================= 离线播放：未缓存且断网 ================= */
+.song-row.offline{opacity:.45;filter:grayscale(1);cursor:not-allowed;}
+.song-row.offline .row-btn{pointer-events:none;}

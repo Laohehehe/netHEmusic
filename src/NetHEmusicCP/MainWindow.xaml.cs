@@ -232,6 +232,9 @@ public sealed partial class MainWindow : Window
             var core = WebView.CoreWebView2;
             var webFolder = FindWebFolder();
             core.SetVirtualHostNameToFolderMapping("appassets", webFolder, CoreWebView2HostResourceAccessKind.Allow);
+            // 离线播放：把音频缓存目录也挂一个虚拟主机，网页可直接播本地文件
+            try { core.SetVirtualHostNameToFolderMapping("mediacache", AppServices.Cache.AudioDir, CoreWebView2HostResourceAccessKind.Allow); }
+            catch (Exception mv) { LogManager.Debug("音频缓存虚拟主机失败: " + mv.Message); }
             // 关闭 WebView2 缓存，保证热重载后拿到最新的 HTML/CSS/JS
             try { await core.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}"); } catch (Exception ce) { LogManager.Debug("禁用缓存失败: " + ce.Message); }
             SetupHotReload(webFolder);
@@ -828,6 +831,10 @@ public sealed partial class MainWindow : Window
                 case "win_min": WindowHelper.Minimize(this); break;
                 case "win_close": Close(); break;
                 case "app_exit": App.ExitApp(); break;   // 与托盘「退出」同一条路径（验证/自动化用）
+                // 离线播放：告知前端哪些歌已经缓存到本地（断网时未缓存的置灰）
+                case "audio_cache_list":
+                    PostToWeb(new { type = "audio_cache_list", ids = AppServices.Cache.AudioIds() });
+                    break;
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;
             }
         }

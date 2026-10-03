@@ -390,6 +390,17 @@ public sealed class PlayerService
             // 前端播放模式：直链交给网页，由 <audio> + Web Audio 播放（可拿真实频谱）
             if (FrontendAudio)
             {
+                // 离线播放：本地已缓存就直接播本地文件（虚拟主机 mediacache），否则用在线直链并在后台缓存一份
+                var local = AppServices.Cache.FindAudio(s.Id);
+                if (local is not null)
+                {
+                    url = AppServices.Cache.AudioVirtualUrl(s.Id, System.IO.Path.GetExtension(local));
+                    LogManager.Log("离线缓存命中，本地播放: " + s.DisplayName);
+                }
+                else
+                {
+                    _ = AppServices.Cache.CacheAudioAsync(url, s.Id);
+                }
                 UpdateSmtc(s);
                 _frontendLoadedIndex = _index;
                 _lastHandedUrl = url; _lastHandedUrlSongId = s.Id;   // 失败取证要探这一条

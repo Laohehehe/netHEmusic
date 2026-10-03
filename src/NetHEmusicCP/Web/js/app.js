@@ -1163,6 +1163,13 @@ function applyPerfAnim(s) {
   };
   function songRow(ns, i) {
     const r = el('div','song-row');
+    try { r.setAttribute('data-sid', String(ns.Id || '')); } catch (eSid) { }   // 离线置灰要按 id 判断
+    var blocked = function () {
+      if (!isOffline()) return false;
+      if (audioCached.has(String(ns.Id))) return false;
+      toast('无网络无法播放：' + ns.Title);
+      return true;
+    };
     r.innerHTML = '<div class="sr-idx">'+String(i+1).padStart(2,'0')+'</div>'+
       '<img class="sr-cover" loading="lazy"'+imgSrc(ns.Pic,'?param=80y80')+'>'+
       '<div class="sr-title">'+esc(ns.Title)+'</div><div class="sr-artist">'+esc(ns.Artist)+'</div>'+
@@ -1170,10 +1177,10 @@ function applyPerfAnim(s) {
       '<button class="row-btn primary" data-do="play" title="播放">'+SVG.play+'</button>'+
       '<button class="row-btn" data-do="add" title="添加到播放列表">'+SVG.add+'</button>'+
       '<button class="row-btn" data-do="dl" title="下载">'+SVG.dl+'</button>';
-    r.querySelector('[data-do=play]').onclick = e => { e.stopPropagation(); play(ns); };
+    r.querySelector('[data-do=play]').onclick = e => { e.stopPropagation(); if (!blocked()) play(ns); };
     r.querySelector('[data-do=add]').onclick = e => { e.stopPropagation(); addPlaylist(ns); };
     r.querySelector('[data-do=dl]').onclick = e => { e.stopPropagation(); NE.post({type:'download', song:ns}); };
-    r.onclick = () => play(ns);
+    r.onclick = () => { if (!blocked()) play(ns); };
     return r;
   }
   function addPlaylist(ns) { NE.post({ type:'queue_add', song: ns }); toast('已添加到播放列表: ' + ns.Title); }
@@ -1289,6 +1296,7 @@ function applyPerfAnim(s) {
       var end = Math.min(shown + LIST_CHUNK, currentList.length);
       for (var i = shown; i < end; i++) container.insertBefore(songRow(currentList[i], i), sentinel);
       shown = end;
+      try { markOfflineRows(); } catch (eMO) { }   // 新渲染出来的行也要按离线状态置灰
       if (shown >= currentList.length) {
         if (io) { try { io.disconnect(); } catch (e) { } io = null; }
         try { sentinel.parentNode.removeChild(sentinel); } catch (e2) { }
@@ -1455,6 +1463,37 @@ function applyPerfAnim(s) {
     return d.getTime();
   }
   window.neDailyBoundary = dailyBoundary;   // 便于自测/排查：传入时间戳可验证 6:00 边界
+
+  // ================= 离线播放 =================
+  // 断网时：已缓存到本地的歌照常播；没缓存的歌置灰、不可点，悬浮提示「无网络无法播放」。
+  var audioCached = new Set();
+  var netOffline = false;
+  function isOffline() { return netOffline || (navigator && navigator.onLine === false); }
+  function markOfflineRows() {
+    try {
+      var rows = document.querySelectorAll('.song-row');
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var id = r.getAttribute('data-sid');
+        var bad = isOffline() && id && !audioCached.has(String(id));
+        r.classList.toggle('offline', !!bad);
+        if (bad) { r.title = '无网络无法播放'; r.setAttribute('aria-disabled', 'true'); }
+        else { r.removeAttribute('title'); r.removeAttribute('aria-disabled'); }
+      }
+    } catch (e) { }
+  }
+  function applyNetState() {
+    try { document.documentElement.classList.toggle('offline', isOffline()); } catch (e) { }
+    if (isOffline()) { try { NE.post({ type: 'audio_cache_list' }); } catch (e) { } }
+    markOfflineRows();
+  }
+  window.neSetOffline = function (v) { netOffline = !!v; applyNetState(); };   // 自测用（断网状态注入）
+  window.addEventListener('online', applyNetState);
+  window.addEventListener('offline', applyNetState);
+  NE.on('audio_cache_list', function (d) {
+    audioCached = new Set(((d && d.ids) || []).map(String));
+    markOfflineRows();
+  });
   async function go(viewName, data) {
     try {
       var prevView = curView;
@@ -3396,7 +3435,8 @@ function applyPerfAnim(s) {
   NE.getSettings().then(function (s) {
     try {
       appSettings = s || {};
-      applyGlassUI();                                          // 顶部标题条渐变 + 液态玻璃
+      applyGlassUI();
+      applyNetState();                                          // 启动时按网络状态给未缓存的歌置灰                                          // 顶部标题条渐变 + 液态玻璃
       applyMode(s.playMode || 'order', true);
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
       npApplyLyricSettings(s);                                 // 歌词页外观设置
