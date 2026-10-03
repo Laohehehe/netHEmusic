@@ -811,43 +811,9 @@ function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return
   }
   window.neApplyGlassUI = applyGlassUI;
 
-  // ---- 无原生标题栏：窗口最上面 44px 是拖拽带（空白处按住拖动窗口，双击最大化）----
-  (function () {
-    function interactive(t) {
-      for (var e = t; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
-        if (!e.tagName) continue;
-        var tag = e.tagName.toLowerCase();
-        if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a') return true;
-        var cl = e.classList;
-        if (cl && (cl.contains('set-switch') || cl.contains('cust-select') || cl.contains('cs-value') ||
-          cl.contains('song-row') || cl.contains('pl-card') || cl.contains('set-row') || cl.contains('nav-svg'))) return true;
-      }
-      return false;
-    }
-    function inStrip(e) { return e.clientY <= 44; }
-    var dragging = false, dragRaf = false;
-    document.addEventListener('mousedown', function (e) {
-      if (e.button !== 0 || e.detail >= 2 || !inStrip(e) || interactive(e.target)) return;
-      e.preventDefault();
-      try { window.getSelection().removeAllRanges(); } catch (x) { }
-      dragging = true;
-      NE.post({ type: 'win_drag' });
-    }, true);
-    document.addEventListener('mousemove', function () {
-      if (!dragging || dragRaf) return;
-      dragRaf = true;
-      requestAnimationFrame(function () { dragRaf = false; if (dragging) NE.post({ type: 'win_drag_move' }); });
-    }, true);
-    document.addEventListener('mouseup', function () {
-      if (!dragging) return;
-      dragging = false;
-      NE.post({ type: 'win_drag_end' });
-    }, true);
-    document.addEventListener('dblclick', function (e) {
-      if (e.button !== 0 || !inStrip(e) || interactive(e.target)) return;
-      NE.post({ type: 'win_max' });
-    }, true);
-  })();
+  // 窗口拖动交给 WinUI 自己的拖拽区（ExtendsContentIntoTitleBar 后顶部那片原生区域），
+  // 网页不再自己发 win_drag / win_drag_move —— 那套会每移动一次就写一条日志（web msg: win_drag_move），
+  // 而且和原生拖拽区功能重复。双击最大化同理由系统处理。
 
 // ---- 性能：动画总开关 / 分组开关 / 预设与自定义速率 ----
 var ANIM_PRESETS = {
