@@ -116,44 +116,65 @@ public static class WindowHelper
 
     public static void EndDrag() => _dragging = false;
 
-    // ---- 实时日志窗口（设置→高级 里的「显示控制台」）----
-    // 教训：一开始用 AllocConsole 给自己开控制台，结果【关掉那个黑框会把播放器一起带走】——
-    // Windows 对 CTRL_CLOSE_EVENT 只给进程一点清理时间，SetConsoleCtrlHandler 拦不住。
-    // 所以改成开关就【另起一个独立窗口】去 tail 日志文件：关它只杀那一个 tail 进程，播放器不受影响。
-    private static System.Diagnostics.Process? _logWin;
+    // ---- 实时日志控制台（设置→高级 里的「显示控制台」）----
+    // 用 AllocConsole 在本进程里开真控制台：能看到全部输出（含原生/崩溃信息），这是选它的理由。
+    // 代价说清楚：控制台属于本进程，【关掉这个黑框就等于结束程序】—— Windows 对 CTRL_CLOSE_EVENT
+    // 只给一段清理时间，SetConsoleCtrlHandler 拦不住这个终止。拦截器用在刀刃上：收到关闭事件时
+    // 先把播放列表/进度存好，再让系统照常结束进程。
+    [DllImport("kernel32.dll")] private static extern bool AllocConsole();
+    [DllImport("kernel32.dll")] private static extern bool FreeConsole();
+    [DllImport("kernel32.dll")] private static extern bool SetConsoleCtrlHandler(ConsoleCtrlHandler? handler, bool add);
+    private delegate bool ConsoleCtrlHandler(uint ctrlType);
+    private const uint CTRL_CLOSE_EVENT = 2, CTRL_LOGOFF_EVENT = 5, CTRL_SHUTDOWN_EVENT = 6;
+    private static ConsoleCtrlHandler? _ctrlHandler;
+    private static bool _consoleOpen;
+
+    private static bool OnConsoleCtrl(uint type)
+    {
+        try
+        {
+            if (type is CTRL_CLOSE_EVENT or CTRL_LOGOFF_EVENT or CTRL_SHUTDOWN_EVENT)
+            {
+                LogManager.Log("控制台被关闭 → 先保存播放列表与进度，然后结束程序");
+                try
+                {
+                    AppServices.Config.SaveQueue(AppServices.Player.Queue);
+                    AppServices.Config.PlaylistIndex = Math.Max(0, AppServices.Player.Index);
+                }
+                catch { }
+            }
+        }
+        catch { }
+        return false;   // 交给系统默认处理（进程随之结束）
+    }
 
     public static void ShowConsole(bool on)
     {
         try
         {
-            if (!on)
+            if (on)
             {
-                CloseLogWindow();
-                LogManager.Log("日志窗口已关闭");
-                return;
+                if (!_consoleOpen)
+                {
+                    AllocConsole();
+                    try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }   // 中文日志别乱码
+                    _ctrlHandler ??= OnConsoleCtrl;
+                    SetConsoleCtrlHandler(_ctrlHandler, true);
+                    _consoleOpen = true;
+                    try { Console.Title = "netHEmusic 实时日志"; } catch { }
+                    Console.WriteLine("提示：关闭本窗口会同时结束 netHEmusic（Windows 规则，拦不住）；日志同时全部写入 log.txt");
+                }
+                LogManager.SetConsoleEnabled(true);   // 会把开启之前的启动日志一并回放
+                LogManager.Log("控制台已开启（进程内真控制台，含原生输出）");
             }
-            if (_logWin is { HasExited: false }) return;
-            var log = LogManager.LogFilePath.Replace("'", "''");
-            // 必须显式 -Encoding UTF8：日志文件是「UTF-8 无 BOM」，Windows PowerShell 5.1 的 Get-Content
-            // 默认按系统 ANSI(GBK) 解码 —— 中文日志就会变成一整屏乱码。chcp 65001 保证输出端也是 UTF-8。
-            var ps = "$Host.UI.RawUI.WindowTitle='netHEmusic 实时日志'; Get-Content -LiteralPath '" + log + "' -Encoding UTF8 -Wait -Tail 300";
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+            else
             {
-                Arguments = "/k chcp 65001>nul & powershell -NoProfile -ExecutionPolicy Bypass -Command \"" + ps.Replace("\"", "\\\"") + "\"",
-                UseShellExecute = true,
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal
-            };
-            _logWin = System.Diagnostics.Process.Start(psi);
-            LogManager.Log("已打开独立日志窗口（关掉它不影响播放器）");
+                LogManager.Log("控制台已关闭");
+                LogManager.SetConsoleEnabled(false);
+                if (_consoleOpen) { FreeConsole(); _consoleOpen = false; }
+            }
         }
-        catch (Exception e) { LogManager.Debug("打开日志窗口失败: " + e.Message); }
-    }
-
-    /// <summary>关闭独立日志窗口：连 cmd 里起的 powershell 子进程一起收掉（否则退出后会留一个孤儿 tail 进程）。</summary>
-    public static void CloseLogWindow()
-    {
-        try { if (_logWin is { HasExited: false }) _logWin.Kill(true); } catch { }
-        _logWin = null;
+        catch (Exception e) { LogManager.Debug("控制台切换失败: " + e.Message); }
     }
     public static void ToggleMaximize(Window w)    {
         try

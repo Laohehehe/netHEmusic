@@ -191,7 +191,6 @@ public partial class App : Application
         // 崩在哪一步靠日志定位（谁最后一条没打出来，就是它）。每一步也单独兜异常，避免直接带走进程。
         try { _tray?.Dispose(); } catch (Exception ex) { LogManager.Debug("退出步骤1(托盘)异常: " + ex.Message); }
         LogManager.Log("退出步骤1/4 托盘已清理");
-        try { netHEmusic.Core.Native.WindowHelper.CloseLogWindow(); } catch (Exception ex) { LogManager.Debug("关闭日志窗口异常: " + ex.Message); }
         try { AppServices.Updater.CloseInstallIfRunning(); } catch (Exception ex) { LogManager.Debug("退出步骤2(安装器)异常: " + ex.Message); }
         LogManager.Log("退出步骤2/4 安装器检查完成");
         try { (Application.Current as App)?._window?.Close(); } catch (Exception ex) { LogManager.Debug("退出步骤3(主窗口)异常: " + ex.Message); }
