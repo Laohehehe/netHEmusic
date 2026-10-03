@@ -1456,8 +1456,17 @@ function applyPerfAnim(s) {
         var id = r.getAttribute('data-sid');
         var bad = isOffline() && id && !audioCached.has(String(id));
         r.classList.toggle('offline', !!bad);
-        if (bad) { r.title = '无网络无法播放'; r.setAttribute('aria-disabled', 'true'); }
-        else { r.removeAttribute('title'); r.removeAttribute('aria-disabled'); }
+        r.classList.toggle('offline', !!bad);
+        // 明确标记：右侧加「无网络」小标签（纯变暗在深色下不够直观）
+        var tag = r.querySelector('.offline-tag');
+        if (bad) {
+          r.title = '无网络无法播放'; r.setAttribute('aria-disabled', 'true');
+          if (!tag) { tag = document.createElement('span'); tag.className = 'offline-tag'; tag.textContent = '无网络';
+            var host = r.querySelector('.sr-title') || r.querySelector('.pl-item-title') || r; host.appendChild(tag); }
+        } else {
+          r.removeAttribute('title'); r.removeAttribute('aria-disabled');
+          if (tag) tag.remove();
+        }
       }
     } catch (e) { }
   }
@@ -1468,6 +1477,13 @@ function applyPerfAnim(s) {
     markOfflineRows();
   }
   window.neSetOffline = function (v) { netOffline = !!v; applyNetState(); };   // 自测用（断网状态注入）
+  // 自检：一次看清「为什么没置灰」（离线判定 / 已缓存数量 / 置灰数量 / 宿主状态）
+  window.neOfflineDebug = function () {
+    return { offline: isOffline(), onLine: navigator.onLine, injected: netOffline, cached: audioCached.size,
+      rows: document.querySelectorAll('.song-row').length, greyRows: document.querySelectorAll('.song-row.offline').length,
+      plRows: document.querySelectorAll('.pl-item').length, greyPl: document.querySelectorAll('.pl-item.offline').length,
+      htmlOffline: document.documentElement.classList.contains('offline') };
+  };
   window.addEventListener('online', applyNetState);
   window.addEventListener('offline', applyNetState);
   // 宿主(host)回传的离线状态：设置标志后只做本地重绘，不再回发 net_state（否则与 applyNetState 互相触发）

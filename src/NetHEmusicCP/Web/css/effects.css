@@ -744,6 +744,9 @@ html.liquid .qual-menu{
 .vol-tip.on{opacity:1;}
 
 /* ================= 离线播放：未缓存且断网 ================= */
-.song-row.offline{opacity:.45;filter:grayscale(1);cursor:not-allowed;}
+.song-row.offline{opacity:.32;filter:grayscale(1) brightness(.7);cursor:not-allowed;}
+.song-row.offline:hover{background:transparent;}
+.offline-tag{display:inline-block;margin-left:8px;padding:1px 6px;border-radius:8px;font-size:11px;line-height:16px;color:#e2564d;border:1px solid rgba(226,86,77,.5);background:rgba(226,86,77,.10);vertical-align:middle;}
 .song-row.offline .row-btn{pointer-events:none;}
-.pl-item.offline{opacity:.45;filter:grayscale(1);cursor:not-allowed;}
+.pl-item.offline{opacity:.32;filter:grayscale(1) brightness(.7);cursor:not-allowed;}
+.pl-item.offline:hover{background:transparent;}
