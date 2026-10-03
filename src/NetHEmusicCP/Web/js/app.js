@@ -1463,6 +1463,7 @@ function applyPerfAnim(s) {
   }
   function applyNetState() {
     try { document.documentElement.classList.toggle('offline', isOffline()); } catch (e) { }
+    try { NE.post({ type: 'net_state', offline: isOffline() }); } catch (e) { }   // 让 C# 也停下预取/缓存/重试
     if (isOffline()) { try { NE.post({ type: 'audio_cache_list' }); } catch (e) { } }
     markOfflineRows();
   }

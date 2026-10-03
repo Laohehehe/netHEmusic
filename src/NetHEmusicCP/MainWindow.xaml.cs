@@ -248,10 +248,31 @@ public sealed partial class MainWindow : Window
                         {
                             var ext = Path.GetExtension(file).ToLowerInvariant();
                             var mime = ext switch { ".flac" => "audio/flac", ".mp3" => "audio/mpeg", ".m4a" or ".mp4" => "audio/mp4", ".wav" => "audio/wav", ".ogg" => "audio/ogg", _ => "application/octet-stream" };
+                            long total = new FileInfo(file).Length;
+                            // 关键：媒体管线必须看到 Content-Length，且要支持 Range（206），否则直接 Format error 拒播
+                            long start = 0, end = total - 1;
+                            var range = e.Request.Headers.GetHeader("Range");
+                            bool partial = false;
+                            if (!string.IsNullOrEmpty(range))
+                            {
+                                var m = System.Text.RegularExpressions.Regex.Match(range, @"bytes=(\d*)-(\d*)");
+                                if (m.Success)
+                                {
+                                    if (m.Groups[1].Value.Length > 0) start = long.Parse(m.Groups[1].Value);
+                                    if (m.Groups[2].Value.Length > 0) end = long.Parse(m.Groups[2].Value);
+                                    if (end >= total) end = total - 1;
+                                    if (start > end || start >= total) start = 0;
+                                    partial = true;
+                                }
+                            }
                             var fs = File.OpenRead(file);
-                            e.Response = core.Environment.CreateWebResourceResponse(fs.AsRandomAccessStream(), 200, "OK",
-                                "Content-Type: " + mime + "\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *");
-                            LogManager.Debug("本地音频响应: " + name + " (" + new FileInfo(file).Length / 1024 / 1024 + " MB, " + mime + ")");
+                            fs.Seek(start, SeekOrigin.Begin);
+                            var slice = new LimitedStream(fs, end - start + 1);
+                            var headers = "Content-Type: " + mime + "\r\nContent-Length: " + (end - start + 1) +
+                                          "\r\nAccept-Ranges: bytes\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *" +
+                                          (partial ? "\r\nContent-Range: bytes " + start + "-" + end + "/" + total : "");
+                            e.Response = core.Environment.CreateWebResourceResponse(slice.AsRandomAccessStream(), partial ? 206 : 200, partial ? "Partial Content" : "OK", headers);
+                            LogManager.Debug("本地音频响应: " + name + " " + (partial ? ("Range " + start + "-" + end) : "完整") + " (" + mime + ")");
                         }
                         else
                         {
@@ -861,6 +882,14 @@ public sealed partial class MainWindow : Window
                 case "win_close": Close(); break;
                 case "app_exit": App.ExitApp(); break;   // 与托盘「退出」同一条路径（验证/自动化用）
                 // 离线播放：告知前端哪些歌已经缓存到本地（断网时未缓存的置灰）
+                // 前端上报在线/离线（navigator.onLine）：离线时 C# 侧不做预取/缓存/重试，避免请求风暴
+                case "net_state":
+                    {
+                        bool off = doc.TryGetProperty("offline", out var offv) && offv.ValueKind == JsonValueKind.True;
+                        netHEmusic.Core.Playback.PlayerService.Offline = off;
+                        LogManager.Log("网络状态: " + (off ? "离线" : "在线"));
+                        break;
+                    }
                 case "audio_cache_list":
                     PostToWeb(new { type = "audio_cache_list", ids = AppServices.Cache.AudioIds() });
                     break;

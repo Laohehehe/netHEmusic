@@ -135,6 +135,10 @@ public sealed class PlayerService
     public int Count => _queue.Count;
     public List<Song> Queue => _queue;
 
+    /// <summary>前端上报的离线状态（navigator.onLine）。离线时不预取、不缓存、不重试——否则每次播放失败都会
+    /// 触发「重新解析直链 → 再失败」的循环，CPU 和请求数会爆炸。</summary>
+    public static bool Offline { get; set; }
+
     /// <summary>设置播放队列并从 index 开始。预热 3 首内存环。</summary>
     public async Task LoadQueueAsync(List<Song> songs, int startIndex = 0)
     {
@@ -403,7 +407,7 @@ public sealed class PlayerService
                 }
                 else
                 {
-                    _ = AppServices.Cache.CacheAudioAsync(url, s.Id);
+                    if (!Offline) _ = AppServices.Cache.CacheAudioAsync(url, s.Id);   // 离线时别再发起下载
                 }
                 UpdateSmtc(s);
                 _frontendLoadedIndex = _index;
@@ -475,6 +479,8 @@ public sealed class PlayerService
     /// </summary>
     public async Task<bool> RetryCurrentAsync()
     {
+        // 离线：重试必然再次失败（解析直链要联网），直接停下，避免请求风暴与 CPU 飙升
+        if (Offline) { LogManager.Log("离线状态：不再重试当前曲目（已暂停）"); Pause(); return false; }
         var s = Current;
         if (s is null) return false;
         _retryCount.TryGetValue(s.Id, out var n);
