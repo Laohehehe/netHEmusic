@@ -249,30 +249,15 @@ public sealed partial class MainWindow : Window
                             var ext = Path.GetExtension(file).ToLowerInvariant();
                             var mime = ext switch { ".flac" => "audio/flac", ".mp3" => "audio/mpeg", ".m4a" or ".mp4" => "audio/mp4", ".wav" => "audio/wav", ".ogg" => "audio/ogg", _ => "application/octet-stream" };
                             long total = new FileInfo(file).Length;
-                            // 关键：媒体管线必须看到 Content-Length，且要支持 Range（206），否则直接 Format error 拒播
-                            long start = 0, end = total - 1;
-                            var range = e.Request.Headers.GetHeader("Range");
-                            bool partial = false;
-                            if (!string.IsNullOrEmpty(range))
-                            {
-                                var m = System.Text.RegularExpressions.Regex.Match(range, @"bytes=(\d*)-(\d*)");
-                                if (m.Success)
-                                {
-                                    if (m.Groups[1].Value.Length > 0) start = long.Parse(m.Groups[1].Value);
-                                    if (m.Groups[2].Value.Length > 0) end = long.Parse(m.Groups[2].Value);
-                                    if (end >= total) end = total - 1;
-                                    if (start > end || start >= total) start = 0;
-                                    partial = true;
-                                }
-                            }
+                            // 注意：整份文件直接回（200 + Content-Length），不切 Range 段 ——
+                            // AsRandomAccessStream() 要求流可寻址（CanSeek=true），自定义裁段流会让它抛
+                            // “does not support seeking”，播放器拿到空响应就报 Format error。本地文件整份给最稳，
+                            // 媒体管线自己会缓存/定位。Range 请求也回 200 全量（Chromium 接受，仅少了省流意义）。
                             var fs = File.OpenRead(file);
-                            fs.Seek(start, SeekOrigin.Begin);
-                            var slice = new LimitedStream(fs, end - start + 1);
-                            var headers = "Content-Type: " + mime + "\r\nContent-Length: " + (end - start + 1) +
-                                          "\r\nAccept-Ranges: bytes\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *" +
-                                          (partial ? "\r\nContent-Range: bytes " + start + "-" + end + "/" + total : "");
-                            e.Response = core.Environment.CreateWebResourceResponse(slice.AsRandomAccessStream(), partial ? 206 : 200, partial ? "Partial Content" : "OK", headers);
-                            LogManager.Debug("本地音频响应: " + name + " " + (partial ? ("Range " + start + "-" + end) : "完整") + " (" + mime + ")");
+                            var headers = "Content-Type: " + mime + "\r\nContent-Length: " + total +
+                                          "\r\nAccept-Ranges: bytes\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *";
+                            e.Response = core.Environment.CreateWebResourceResponse(fs.AsRandomAccessStream(), 200, "OK", headers);
+                            LogManager.Debug("本地音频响应: " + name + " (" + total / 1024 / 1024 + " MB, " + mime + ")");
                         }
                         else
                         {
