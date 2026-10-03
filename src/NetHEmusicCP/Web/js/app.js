@@ -2863,12 +2863,27 @@ function applyPerfAnim(s) {
     var accentDetail = subBlock([colorRow()], String(s.scheme) === 'custom');
     // 液态玻璃的两个外观参数是「材质」的子设置：材质不是液态玻璃时收起（别再摆在外面误导）
     var matCur = String(cfgGet(s, 'ui_material', 'acrylic'));
+    // 液态玻璃这几个参数只给"开 / 关"两种状态：开 = 该参数的满值（强度 200%，其余 100%），关 = 0。
+    // 理由（用户反馈）：只有开到满值才看得出效果。历史值 >0 一律显示为"开"，第一次拨动就写成 0/满值。
+    function glassSw(label, key, onVal, cur) {
+      var r = el('div','set-row'); r.appendChild(el('label','',label));
+      var on = Number(cur) > 0;
+      var t = el('div','set-switch'+(on?' on':'')); t.title = label;
+      t.onclick = function () {
+        var nv = t.classList.contains('on') ? 0 : onVal;
+        t.classList.toggle('on', nv === onVal);
+        NE.setSetting(key, String(nv));
+        applyLiveSetting(key, String(nv));
+      };
+      r.appendChild(t); return r;
+    }
     var glassDetail = subBlock([
-      rng2('液态玻璃强度','ui_liquid_power', glassPowerValue(s), 0, 200, '%', 5),
-      rng2('色散（彩边）','ui_liquid_ca', glassCaValue(s), 0, 100, '%', 5),
-      rng2('厚度倾向','ui_liquid_thick', glassThickValue(s), 0, 100, '%', 5),   // 0 = 四周一样厚（改造前原样）
-      rng2('视角跟随','ui_liquid_para', glassParaValue(s), 0, 100, '%', 5),     // 折射取样跟着鼠标平移
-      rng2('流体质感','ui_liquid_fluid', glassFluidValue(s), 0, 100, '%', 5)    // 指针液滴 + 环境流动 + 点击涟漪
+      hint('该材质显著影响性能，请酌情启用'),
+      glassSw('液态玻璃强度（200%）','ui_liquid_power', 200, glassPowerValue(s)),
+      glassSw('色散（彩边）','ui_liquid_ca', 100, glassCaValue(s)),
+      glassSw('厚度倾向','ui_liquid_thick', 100, glassThickValue(s)),
+      glassSw('视角跟随','ui_liquid_para', 100, glassParaValue(s)),
+      glassSw('流体质感','ui_liquid_fluid', 100, glassFluidValue(s))
     ], matCur === 'liquid');
     html.appendChild(group('主题 / 外观', [
       custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }]), function (v) {

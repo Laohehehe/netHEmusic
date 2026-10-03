@@ -30,6 +30,7 @@
 (function () {
   var SVGNS = 'http://www.w3.org/2000/svg';
   var SEQ = 0;
+  var stat = { maps: 0, filters: 0 };   // 自检计数：真正重建了多少次
   var maps = {};          // "WxH@thick" -> dataURL（位移图缓存：只与尺寸 + 厚度有关）
   var filters = {};       // "WxH@ca" -> { id, node, dm, off }（折射滤镜：强度/色散变化时复用）
   var order = [];         // 建过的所有滤镜，改强度/视角时统一更新
@@ -107,6 +108,7 @@
     var rad = Math.max(0, Math.round(radius || 0));
     var key = w + 'x' + h + '@' + Math.round(THICK * 20) + '@' + rad;
     if (maps[key]) return maps[key];
+    stat.maps++;
     var ms = mapSize(w, h), mw = ms[0], mh = ms[1];
     var c = document.createElement('canvas');
     c.width = mw; c.height = mh;
@@ -183,6 +185,7 @@
     var rad = Math.max(0, Math.round(radius || 0));
     var key = w + 'x' + h + '@' + caKey + '@' + rad;      // 圆角变了位移图也变（SDF 用它算斜面和法线）
     if (filters[key]) return filters[key];
+    stat.filters++;
     var mapUrl = makeMap(w, h, rad);
     var id = 'lg-f' + (++SEQ);
     var svg = svgHost();
@@ -257,8 +260,8 @@
     if (!el || !el.isConnected) return;
     var r = el.getBoundingClientRect();
     if (r.width < 24 || r.height < 12) return;
-    var w = Math.max(24, Math.round(r.width / 4) * 4);        // 4px 取整：尺寸微抖不重画位移图
-    var h = Math.max(12, Math.round(r.height / 4) * 4);
+    var w = Math.max(24, Math.round(r.width / 16) * 16);        // 4px 取整：尺寸微抖不重画位移图
+    var h = Math.max(12, Math.round(r.height / 16) * 16);
     var rad = 0;                                              // 元素实际圆角：SDF 斜面/法线要用它
     try { rad = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0; } catch (e) { rad = 0; }
     var rec = makeFilter(w, h, Math.max(0, Math.min(rad, 60)));
@@ -333,6 +336,7 @@
   function makeLensMap(size) {
     var key = 'lens' + size;
     if (maps[key]) return maps[key];
+    stat.maps++;
     var c = document.createElement('canvas'); c.width = c.height = size;
     var ctx = c.getContext('2d');
     var img = ctx.createImageData(size, size), d = img.data;
@@ -665,12 +669,21 @@
     return out;
   };
 
+  window.neGlassStats = function () { return { maps: stat.maps, filters: stat.filters }; };
   window.neGlassSet = setOptions;
   window.neGlassPower = function (pct) { return setOptions({ power: pct }); };
   window.neGlassRefresh = refresh;
-  window.addEventListener('resize', function () { if (enabled()) refresh(); });
+  // ⚠️ resize 必须去抖：侧边栏是 :hover 展开（width 有过渡），动画期间 resize 每帧都触发，
+  // 而一次完整重建实测 13.8ms → 展开那 0.3s 直接掉到 30fps 以下。去抖后整段只重建一次。
+  var rsTimer = 0;
+  window.addEventListener('resize', function () {
+    if (!enabled()) return;
+    clearTimeout(rsTimer);
+    rsTimer = setTimeout(refresh, 160);
+  });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { refresh(); initFluid(); }); else { refresh(); initFluid(); }
 })();
+
 
 
 
