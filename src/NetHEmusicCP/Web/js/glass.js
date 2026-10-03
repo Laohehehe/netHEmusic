@@ -325,7 +325,7 @@
   // 环境流动只改既有 feOffset 的 dx/dy（和"视角跟随"共用一条通道）。所以代价和改一个属性同级。
   var FLUID = 0.5;                 // ui_liquid_fluid / 100，0 = 全关
   var AMB_X = 0, AMB_Y = 0;        // 环境流动当前偏移（px）
-  var dropEl = null, dropX = 0, dropY = 0, dropTX = 0, dropTY = 0, dropShow = 0, dropRect = false;
+  var dropEl = null, dropDm = null, dropFilterDm = null, dropX = 0, dropY = 0, dropTX = 0, dropTY = 0, dropShow = 0, dropRect = false;
   var fluidRaf = 0, fluidT0 = 0, fluidFrame = 0;
 
   /// 径向透镜位移图：中心不动 → 中段最强 → 边缘归零（凸透镜），R/G = 沿半径朝内的位移
@@ -365,6 +365,8 @@
     f.appendChild(im);
     f.appendChild(el3('feDisplacementMap', { 'in': 'SourceGraphic', in2: 'm', scale: String(scalePx), xChannelSelector: 'R', yChannelSelector: 'G' }));
     svg.appendChild(f);
+    if (id === 'lg-drop-f') dropFilterDm = f.querySelector('feDisplacementMap');
+    return f;
   }
 
   function ensureEl(id) {
@@ -376,7 +378,7 @@
   /// 每个玻璃面一个"裁切容器"（overflow:hidden + 同样的圆角），液滴和涟漪都放进对应容器里。
   /// 这样它们的透镜效果**只作用在该玻璃面自己的范围里**，不会去扭曲旁边的非玻璃区域
   /// （用户报过：点击涟漪会波动到非液态玻璃面上）。
-  var rects = [], clips = [];
+  var rects = [], clips = [], lastPX = -1, lastPY = -1;
   function refreshRects() {
     rects = []; clips = [];
     for (var i = 0; i < applied.length; i++) {
@@ -402,7 +404,13 @@
       for (var j = 0; j < clips.length; j++) if (clips[j] === all[k]) used = true;
       if (!used && all[k].id !== 'lg-clip-keep') all[k].remove();
     }
-    if (dropEl && dropEl.parentNode && dropEl.parentNode.classList && dropEl.parentNode.classList.contains('lg-clip')) dropEl.parentNode.removeChild(dropEl);
+    // ⚠️ 不要把液滴从文档里摘下来（removeChild 会让它离开 DOM，getElementById 就找不到它了）。
+    // 按最后一次指针位置，把它放进"当前该在的那个裁切容器"；不在玻璃上就放回 body（反正透明度是 0）。
+    if (dropEl) {
+      var di = glassIndexAt(lastPX, lastPY);
+      var want = di >= 0 ? clips[di] : document.body;
+      if (want && dropEl.parentNode !== want) { want.appendChild(dropEl); if (di < 0) dropEl.style.opacity = '0'; }
+    }
   }
   /// 指针落在第几个玻璃面上（-1 = 不在任何玻璃面上）
   function glassIndexAt(x, y) {
@@ -414,7 +422,20 @@
   }
   function overGlass(x, y) { return glassIndexAt(x, y) >= 0; }
 
-  /// C 点击涟漪：放进该玻璃面的裁切容器里（坐标相对容器），铺开 + 淡出后自己移除
+  /// C 点击涟漪：放进该玻璃面的裁切容器里（坐标相对容器）。
+  /// 动画用 rAF 自己推进，不用 CSS transition —— 涟漪会换父节点、还要强制一次布局，
+  /// 那条 transition 在某些时序下会被吞掉（用户报过"淡入淡出没了"）。
+  var ripEl = null, ripT0 = 0, ripX = 0, ripY = 0, ripD = 0, ripRaf = 0;
+  function rippleTick() {
+    if (!ripEl) { ripRaf = 0; return; }
+    var k = Math.min(1, (performance.now() - ripT0) / 620);
+    var ease = 1 - Math.pow(1 - k, 3);                    // 先快后慢地铺开
+    var sc = 0.35 + 1.55 * ease;
+    ripEl.style.transform = 'translate(' + (ripX - ripD / 2) + 'px,' + (ripY - ripD / 2) + 'px) scale(' + sc.toFixed(3) + ')';
+    ripEl.style.opacity = String(Math.max(0, (0.55 + 0.35 * FLUID) * (1 - ease)));   // 线性淡出
+    if (k < 1) ripRaf = requestAnimationFrame(rippleTick);
+    else { ripEl.style.opacity = '0'; ripRaf = 0; }
+  }
   function spawnRipple(x, y, idx) {
     if (FLUID <= 0.02 || !enabled() || idx < 0 || !clips[idx]) return;
     var c = clips[idx], r = rects[idx];
@@ -423,17 +444,14 @@
     makeLensFilter('lg-rip-f', Math.round(d), scale);
     var el = ensureEl('lg-ripple');
     if (el.parentNode !== c) c.appendChild(el);
-    var lx = x - r.left, ly = y - r.top;            // 容器内坐标
+    ripEl = el; ripD = d; ripX = x - r.left; ripY = y - r.top; ripT0 = performance.now();
     el.style.width = el.style.height = Math.round(d) + 'px';
     el.style.backdropFilter = 'url(#lg-rip-f)';
     el.style.webkitBackdropFilter = 'url(#lg-rip-f)';
     el.style.transition = 'none';
-    el.style.transform = 'translate(' + (lx - d / 2) + 'px,' + (ly - d / 2) + 'px) scale(0.35)';
-    el.style.opacity = String(0.55 + 0.35 * FLUID);
-    void el.offsetWidth;                             // 强制一次布局，让下面的过渡真的跑起来
-    el.style.transition = 'transform .62s cubic-bezier(.22,.8,.2,1), opacity .62s ease-out';
-    el.style.transform = 'translate(' + (lx - d / 2) + 'px,' + (ly - d / 2) + 'px) scale(1.9)';
-    el.style.opacity = '0';
+    el.style.opacity = String(0.55 + 0.35 * FLUID);  // 起始必须不透明，否则整段看不见
+    el.style.transform = 'translate(' + (ripX - d / 2) + 'px,' + (ripY - d / 2) + 'px) scale(0.35)';
+    if (!ripRaf) ripRaf = requestAnimationFrame(rippleTick);
   }
 
   /// 主循环：环境流动（B）+ 液滴跟手（A）。FLUID=0 时完全停下并把偏移归零。
@@ -456,19 +474,24 @@
     // 每约 0.5s 校正一次裁切容器几何：页面重排（面板开合/滚动条出现）会让缓存的矩形偏掉，
     // 偏掉就会出现"裁切框和玻璃面对不齐 → 有一小条跑到外面去"。两个元素的 rect 取一次，开销可忽略。
     if (fluidFrame % 30 === 0) refreshRects();
-    // 液滴：缓动跟手 + 按速度做挤压（快 = 拉长，慢 = 圆）；坐标是"相对所在裁切容器"的
+    // 液滴：缓动跟手。**不做 scale 挤压** —— 元素一旦被 transform 放大，就是把它已经栅格化的
+    // backdrop-filter 结果重新采样放大，会出现明显的块状像素（用户报过"液滴里好模糊还有像素点"）。
+    // 速度改成调制透镜强度（feDisplacementMap 的 scale 属性，只重算那张小图，不放大位图）。
     var k = 0.16;
     dropX += (dropTX - dropX) * k; dropY += (dropTY - dropY) * k;
     var vx = dropTX - dropX, vy = dropTY - dropY;
     var sp = Math.sqrt(vx * vx + vy * vy);
-    var stretch = Math.min(0.5, sp / 240);
-    var ang = sp > 0.5 ? Math.atan2(vy, vx) : 0;
+    if ((fluidFrame & 3) === 0 && dropFilterDm) {
+      var sc = (5 + 9 * FLUID) * (1 + Math.min(0.45, sp / 260));
+      var sv = sc.toFixed(2);
+      if (dropFilterDm.getAttribute('scale') !== sv) dropFilterDm.setAttribute('scale', sv);
+    }
     if (dropEl) {
       dropShow += ((dropRect ? 1 : 0) - dropShow) * 0.18;
       var size = (70 + 60 * FLUID);
       dropEl.style.width = dropEl.style.height = Math.round(size) + 'px';
       dropEl.style.opacity = String(Math.max(0, dropShow * (0.55 + 0.45 * FLUID)));
-      dropEl.style.transform = 'translate(' + (dropX - size / 2) + 'px,' + (dropY - size / 2) + 'px) rotate(' + ang + 'rad) scale(' + (1 + stretch) + ',' + (1 - stretch * 0.55) + ') rotate(' + (-ang) + 'rad)';
+      dropEl.style.transform = 'translate(' + Math.round(dropX - size / 2) + 'px,' + Math.round(dropY - size / 2) + 'px)';
     }
   }
 
@@ -480,6 +503,7 @@
       if (!enabled() || FLUID <= 0.02) { dropRect = false; return; }
       var idx = glassIndexAt(e.clientX, e.clientY);
       dropRect = idx >= 0;
+      lastPX = e.clientX; lastPY = e.clientY;
       if (idx < 0) return;
       var r = rects[idx];
       dropTX = e.clientX - r.left; dropTY = e.clientY - r.top;   // 容器内坐标
