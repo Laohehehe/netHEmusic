@@ -727,16 +727,17 @@ html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
 #topbar{padding-right:152px;}            /* 右上角三个系统按钮铺在网页上，别压到搜索框 */
 
 /* ================= 液态玻璃（材质 = liquid） ================= */
-/* 底层仍是原生亚克力（能透看后方窗口），这里给【浮动】面板叠折射+高光：
+/* 底层仍是原生亚克力（能透看后方窗口），这里给【浮动】面板叠折射：
    折射滤镜由 js/glass.js 按元素尺寸生成，用 backdrop-filter: url(#...) 应用。
-   注意：#topbar 是贴着卡片顶边的整条行，不是浮动面板 —— 给它加高光描边会像一圈异常高亮，
-   所以它不参与液态玻璃（只保留上面的标题条配色渐变）。 */
+   ⚠️ 白色高光层（白描边 / inset 白色高光 / 镜面高光贴图）已按用户要求【整层删除】：
+   深色主题下那一圈白边看着像"异样的白光"，用户明确说去掉而不是调小。
+   这里只保留一层外投影，让面板有悬空的层次感。 */
 html.liquid #player,
 html.liquid .pl-panel,
 html.liquid .ctx-menu,
 html.liquid .qual-menu{
-  border:1px solid rgba(255,255,255,.18);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.30),inset 0 -1px 0 rgba(255,255,255,.08),0 14px 38px rgba(0,0,0,.38);
+  border-color: transparent;
+  box-shadow: 0 16px 40px rgba(0,0,0,.42);
 }
 /* ================= 音量悬停提示 ================= */
 .vol-tip{position:fixed;z-index:1200;transform:translate(-50%,-100%);background:rgba(0,0,0,.78);color:#fff;font-size:12px;
@@ -752,30 +753,9 @@ html.liquid .qual-menu{
 .pl-item.offline{opacity:.32;filter:grayscale(1) brightness(.7);cursor:not-allowed;}
 .pl-item.offline:hover{background:transparent;}
 
-/* ================= 液态玻璃·镜面高光层（对齐 iOS Liquid Glass 的第二层） ================= */
-/* 折射由 js/glass.js 的 backdrop-filter:url(#...) 负责；这里补"玻璃表面的反光"，两层：
-   ① --lg-spec-img  边缘反光层（圆角轮廓 + 上下受光差异）——跟着元素走，不动；
-   ② --lg-sheen-img 光带层（斜向主光带 + 右下回光 + 顶边柔光）——按 --lg-lx/--lg-ly 平移，
-      这就是"假视角视差"：鼠标动 = 看玻璃的角度变，光带跟着滑，边缘不动。
-   两层都是 glass.js 按元素尺寸生成的高光贴图；没生成出来时回退到下面三条渐变（纯 CSS、与尺寸无关）。
-   视差幅度由设置项「视角跟随」决定（写进 --lg-lx/--lg-ly，0 = 完全不动），
-   位移上限 7px（贴图四周留了 10px 余量，平移不会露白边）。 */
-html.liquid #player,
-html.liquid .pl-panel,
-html.liquid .ctx-menu,
-html.liquid .qual-menu{
-  background-image: var(--lg-spec-img, none), var(--lg-sheen-img,
-    linear-gradient(150deg, rgb(255 255 255 / calc(.20 * var(--lg-spec, 1))) 0%, rgb(255 255 255 / calc(.06 * var(--lg-spec, 1))) 18%, rgb(255 255 255 / 0) 38%),
-    linear-gradient(330deg, rgb(255 255 255 / calc(.10 * var(--lg-spec, 1))) 0%, rgb(255 255 255 / 0) 26%),
-    radial-gradient(120% 90% at 12% -10%, rgb(255 255 255 / calc(.16 * var(--lg-spec, 1))), rgb(255 255 255 / 0) 60%));
-  background-size: 100% 100%, calc(100% + 20px) calc(100% + 20px);
-  background-position: 0 0, calc(-10px + var(--lg-lx, 0) * 7px) calc(-10px + var(--lg-ly, 0) * 7px);
-  background-repeat: no-repeat, no-repeat;
-  border-color: rgba(255,255,255,.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.42),      /* 顶边受光 */
-    inset 1px 0 0 rgba(255,255,255,.16),      /* 左边受光 */
-    inset 0 -1px 0 rgba(255,255,255,.10),
-    inset -1px 0 0 rgba(255,255,255,.06),
-    0 16px 40px rgba(0,0,0,.42);
-}
+/* ================= 液态玻璃·镜面高光层：已删除 ================= */
+/* 原实现（对齐 iOS Liquid Glass 第二层）：每个元素生成"边缘反光 + 斜向光带"高光贴图，
+   再用 --lg-spec-img / --lg-sheen-img 贴上去，并配一圈白色 inset 高光。
+   用户反馈深色主题下这圈白边像"异样的白光"，要求【去掉而不是调小】→ 2026-10-03 整层移除：
+   贴图生成（makeRim/makeSheen）、CSS 变量、--lg-power/--lg-spec、白描边与 inset 全部删掉。
+   现在玻璃只有：折射 + 模糊 + 饱和度/亮度 + 外投影；"视角跟随"改为平移折射取样的背景（feOffset）。 */
