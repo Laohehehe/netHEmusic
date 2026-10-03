@@ -799,20 +799,31 @@ function applyLiveSetting(key, val) {
     else if (key === 'volume') applyVolume(Number(val) || 0, false);
     else if (key === 'playMode') applyMode(String(val), true);
     else if (key.indexOf('hk_') === 0) hotkeysFromSettings(appSettings);
-    if (key === 'ui_material') applyGlassUI();
+    if (key === 'ui_material' || key === 'ui_liquid_power') applyGlassUI();
   } catch (e) { }
 }
 function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
   function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
 
-  // ---- 液态玻璃开关（顶部标题条已随原生标题栏一起取消，不再有标题栏设置项）----
+  // ---- 液态玻璃开关 + 强度（顶部标题条已随原生标题栏一起取消，不再有标题栏设置项）----
+  // 强度走 window.neGlassPower（js/glass.js）：它只改 feDisplacementMap 的 scale，不重画位移图
+  function glassPowerValue(s) {
+    var v = Number(cfgGet(s, 'ui_liquid_power', 100));
+    if (!isFinite(v)) v = 100;             // 0 是合法值（= 不折射），不能被 || 吃掉
+    return Math.max(0, Math.min(200, v));
+  }
   function applyGlassUI() {
     try {
       var s = appSettings || {};
       var root = document.documentElement;
       root.classList.toggle('liquid', String(cfgGet(s, 'ui_material', 'acrylic')) === 'liquid');
-      if (window.neGlassRefresh) window.neGlassRefresh();
-    } catch (e) { }
+      if (window.neGlassPower) window.neGlassPower(glassPowerValue(s));
+      else if (window.neGlassRefresh) window.neGlassRefresh();
+    } catch (e) {
+      // 渲染路径不许静默吞异常（工作表单 §11）：这里出错会直接弹出错误框
+      try { if (window.NE_showErr) NE_showErr('液态玻璃', 'applyGlassUI 失败: ' + (e && e.message ? e.message : e), '', (e && e.stack) || ''); } catch (x) { }
+      try { console.error('[NE-glass] applyGlassUI failed', e); } catch (x) { }
+    }
   }
   window.neApplyGlassUI = applyGlassUI;
 
@@ -2801,7 +2812,8 @@ function applyPerfAnim(s) {
           { v: 'micaAlt', t: 'Mica Alt' },
           { v: 'liquid', t: '液态玻璃' }
         ]),
-        rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1)
+        rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1),
+        rng2('液态玻璃强度','ui_liquid_power', glassPowerValue(s), 0, 200, '%', 5)   // 只影响「材质 = 液态玻璃」
       ]),
       sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
     ]));
