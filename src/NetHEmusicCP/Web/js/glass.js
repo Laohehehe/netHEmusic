@@ -41,6 +41,11 @@
   var CA_MAX = 0.45;      // 色散上限：色散 100% 时 R/B 的位移倍率 = 1±0.45（50% ≈ ±0.22，看得出彩边但不脏）
   var POWER = 1;          // 强度设置（ui_liquid_power / 100）：0 = 不折射，2 = 200%
   var CA = 0.5;           // 色散设置（ui_liquid_ca / 100）：0 = 关（回到单步折射）
+  var THICK = 0.6;        // 厚度倾向（ui_liquid_thick / 100）：0 = 四周一样厚（改造前原样），1 = 上厚下薄最明显
+  var PARA = 0.5;         // 视角跟随（ui_liquid_para / 100）：高光层跟着鼠标偏移的幅度，0 = 不动
+  var SPECPAD = 10;       // 高光贴图（斜向光带那层）四周的余量：视差平移时不会露出空白
+  var MAPFEATHER = 8;     // 位移图比元素尺寸多出的一圈（px）：元素尺寸取整后仍保证盖满，不留没覆盖的边
+  var SHIFT = 7;          // 视差最大位移（px），CSS 里用
   var SPECMUL = 1;        // 高光倍率（开发期 A/B 用，正常恒为 1）
 
   function enabled() {
@@ -73,9 +78,20 @@
 
   /// 位移图：R 通道 = x 位移，G 通道 = y 位移（128 = 不动）。
   /// 剖面用凸 squircle：y = (1-(1-t)^4)^(1/4)，越靠边折射越强、到边缘归零，避免采样到元素外。
-  /// 只与尺寸有关（强度/色散不参与），所以改设置不用重画。
+  /// 只与尺寸 + 厚度倾向有关（强度/色散不参与），所以改强度不用重画。
+  /// 厚度不均（THICK>0）：真实玻璃板被上方光照射时，上边缘看起来更厚（折射带更宽、更强），
+  /// 下边缘最薄，左右略有差别 —— 四条边各用一套带宽/幅值。THICK=0 时退化成四周一样（等价于改造前）。
+  function edgeProfile() {
+    var t = THICK;
+    return {
+      bezT: DEPTH * (1 + 0.45 * t), bezB: DEPTH * (1 - 0.30 * t),
+      bezL: DEPTH * (1 + 0.10 * t), bezR: DEPTH * (1 - 0.10 * t),
+      gainT: 1 + 0.15 * t, gainB: 1 - 0.15 * t, gainL: 1, gainR: 1 - 0.05 * t
+    };
+  }
+
   function makeMap(w, h) {
-    var key = w + 'x' + h;
+    var key = w + 'x' + h + '@' + Math.round(THICK * 20);
     if (maps[key]) return maps[key];
     var ms = mapSize(w, h), mw = ms[0], mh = ms[1];
     var c = document.createElement('canvas');
@@ -83,19 +99,22 @@
     var ctx = c.getContext('2d');
     var img = ctx.createImageData(mw, mh);
     var d = img.data;
-    var bez = Math.max(1.5, DEPTH * ms[2]);                   // 位移图比元素小，边缘宽度同步缩放
+    var e = edgeProfile();
+    var invS = 1 / ms[2];                                     // 位移图比元素小，距离换算回元素像素
     function prof(t) {                                        // t: 0=边缘 1=边缘带结束
       if (t <= 0 || t >= 1) return 0;
       var x = 1 - t;
       return Math.pow(1 - x * x * x * x, 0.25);
     }
+    function cl(v) { return v < -1 ? -1 : (v > 1 ? 1 : v); }
     for (var y = 0; y < mh; y++) {
       for (var x = 0; x < mw; x++) {
         var dl = x, dr = mw - 1 - x, dt = y, db = mh - 1 - y;
-        var mx = prof(Math.min(dl, dr) / bez);
-        var my = prof(Math.min(dt, db) / bez);
-        if (dl < dr) mx = -mx;                                // 朝最近的边推 → 边缘放大
-        if (dt < db) my = -my;
+        var left = dl < dr, up = dt < db;
+        var tL = (left ? dl : dr) * invS / (left ? e.bezL : e.bezR);
+        var tT = (up ? dt : db) * invS / (up ? e.bezT : e.bezB);
+        var mx = cl(prof(tL) * (left ? e.gainL : e.gainR)) * (left ? -1 : 1);   // 朝最近的边推 → 边缘放大
+        var my = cl(prof(tT) * (up ? e.gainT : e.gainB)) * (up ? -1 : 1);
         var o = (y * mw + x) * 4;
         d[o] = 128 + Math.round(mx * 127);
         d[o + 1] = 128 + Math.round(my * 127);
@@ -123,27 +142,43 @@
   /// 高光倍率：跟随强度设置（100% 时 = 1，和改造前的 CSS 高光一致）
   function specAmount() { return (0.5 + 0.5 * POWER) * SPECMUL; }
 
-  /// 每元素"镜面高光贴图"：圆角边缘反光（软光晕 + 亮线）+ 斜向光带 + 右下回光 + 顶边内侧柔光。
-  /// 纯 canvas 绘图（没有逐像素 JS），所以跟着强度重画也很快。
-  function makeSpec(w, h, radius, spec) {
-    var key = w + 'x' + h + '@' + Math.round(radius) + '@' + spec.toFixed(2);
+  /// 每元素"镜面高光贴图"，拆成两层（视差要动的是光带，不能连边缘一起动）：
+  ///   · 光带层 makeSheen：斜向主光带 + 右下回光 + 顶边内侧柔光；画布四周留 SPECPAD 余量，
+  ///     这样 CSS 里平移它（视角跟随）时不会露出空白。
+  ///   · 边缘层 makeRim：圆角边缘反光（宽而淡的光晕 + 细而亮的亮线），跟着元素轮廓不动。
+  /// 两层都用 canvas 绘图（没有逐像素 JS），所以跟着强度重画也很快。
+  function makeSheen(w, h, spec) {
+    var key = 'sh' + w + 'x' + h + '@' + spec.toFixed(2);
+    if (specs[key]) return specs[key];
+    var P = SPECPAD;
+    var c = document.createElement('canvas');
+    c.width = w + P * 2; c.height = h + P * 2;
+    var ctx = c.getContext('2d');
+    function W(al) { return 'rgba(255,255,255,' + Math.max(0, al * spec).toFixed(3) + ')'; }
+    // ① 斜向主光带（左上受光）
+    var g1 = ctx.createLinearGradient(P, P, P + w * 0.8, P + h * 1.4);
+    g1.addColorStop(0, W(0.115)); g1.addColorStop(0.28, W(0.045)); g1.addColorStop(0.55, W(0));
+    ctx.fillStyle = g1; ctx.fillRect(P, P, w, h);
+    // ② 右下回光
+    var g2 = ctx.createLinearGradient(P + w, P + h, P + w * 0.5, P + h * 0.35);
+    g2.addColorStop(0, W(0.075)); g2.addColorStop(0.4, W(0));
+    ctx.fillStyle = g2; ctx.fillRect(P, P, w, h);
+    // ③ 顶边内侧柔光
+    var g3 = ctx.createLinearGradient(0, P, 0, P + Math.max(8, Math.min(h * 0.5, 44)));
+    g3.addColorStop(0, W(0.13)); g3.addColorStop(1, W(0));
+    ctx.fillStyle = g3; ctx.fillRect(P, P, w, h);
+    var url = c.toDataURL('image/png');
+    specs[key] = url;
+    return url;
+  }
+
+  function makeRim(w, h, radius, spec) {
+    var key = 'rm' + w + 'x' + h + '@' + Math.round(radius) + '@' + spec.toFixed(2);
     if (specs[key]) return specs[key];
     var c = document.createElement('canvas');
     c.width = w; c.height = h;
     var ctx = c.getContext('2d');
     function W(al) { return 'rgba(255,255,255,' + Math.max(0, al * spec).toFixed(3) + ')'; }
-    // ① 斜向主光带（左上受光）
-    var g1 = ctx.createLinearGradient(0, 0, w * 0.8, h * 1.4);
-    g1.addColorStop(0, W(0.115)); g1.addColorStop(0.28, W(0.045)); g1.addColorStop(0.55, W(0));
-    ctx.fillStyle = g1; ctx.fillRect(0, 0, w, h);
-    // ② 右下回光
-    var g2 = ctx.createLinearGradient(w, h, w * 0.5, h * 0.35);
-    g2.addColorStop(0, W(0.075)); g2.addColorStop(0.4, W(0));
-    ctx.fillStyle = g2; ctx.fillRect(0, 0, w, h);
-    // ③ 顶边内侧柔光
-    var g3 = ctx.createLinearGradient(0, 0, 0, Math.max(8, Math.min(h * 0.5, 44)));
-    g3.addColorStop(0, W(0.13)); g3.addColorStop(1, W(0));
-    ctx.fillStyle = g3; ctx.fillRect(0, 0, w, h);
     // ④ 圆角边缘反光：宽而淡的光晕 + 细而亮的亮线
     var r = Math.max(0, Math.min(radius, Math.min(w, h) / 2));
     var st = ctx.createLinearGradient(0, 0, w * 0.9, h);
@@ -188,7 +223,14 @@
       filterUnits: 'objectBoundingBox', 'color-interpolation-filters': 'sRGB'
     });
     var im = el3('feImage', {
-      href: mapUrl, x: '0', y: '0', width: '100%', height: '100%',
+      href: mapUrl,
+      // ⚠️ 关键：这里必须用**像素**宽高，不能写 "100%"！
+      // filter 的 primitiveUnits 默认是 userSpaceOnUse，里面的百分比是相对【宿主 <svg> 的视口】解析的，
+      // 而我们的宿主 svg 是 0x0（只放滤镜、不上屏）→ "100%" 解析成 0 → feImage 变成一张空图 →
+      // 位移图根本不参与运算（画面退化成"整块背景被 -0.5*scale 均匀平移"，左右上下都看不出边缘折射）。
+      // 2026-10-03 发现并修正：改成像素宽高后，位移图才真正生效（厚度/边缘折射立即可见）。
+      // 每个尺寸一个滤镜，所以这里的 w/h 就是元素尺寸（4px 取整，外面再加一圈余量防止盖不满）。
+      x: '0', y: '0', width: String(w + MAPFEATHER), height: String(h + MAPFEATHER),
       preserveAspectRatio: 'none', result: 'm'
     });
     im.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', mapUrl);
@@ -228,13 +270,15 @@
     return rec;
   }
 
-  /// 色散开关变化时，旧的滤镜链作废（结构不同）
+  /// 色散/厚度变化时，旧的滤镜链作废（结构或位移图变了）
+  /// ⚠️ 不要重置 SEQ：滤镜 id 复用（lg-f1 → 又建一个 lg-f1）会让元素的 backdrop-filter 字符串一字不变，
+  /// Chromium 认为没有样式变化就不重新光栅化 → 页面看起来"设置不生效"。新 id 才能可靠触发失效。
   function resetFilters() {
     for (var k in filters) {
       var n = filters[k].node;
       if (n && n.parentNode) n.parentNode.removeChild(n);
     }
-    filters = {}; order = []; SEQ = 0;
+    filters = {}; order = [];
   }
 
   /// 元素尺寸 → 位移图 + 滤镜 + 高光贴图，并把 backdrop-filter / --lg-spec-img 写到元素上
@@ -252,25 +296,41 @@
 
   function paint(el, rec, w, h) {
     var bf = filterCss(rec.id);
+    // 判断"是否需要写"直接读**内联样式**（el.style）—— 不要用自己缓存的字符串：
+    // clear() 会把内联样式抹掉，缓存若还记着旧值就会跳过写入，元素就永远失去 backdrop-filter
+    // （画面静默退回 main.css 里的 blur(6px)，看着像"设置不生效"）。这个坑 2026-10-03 踩过一次。
     if (el.style.backdropFilter !== bf) {
+      // 换滤镜时先落到 none、强制一次布局再写新值：只把 url(#A) 改成 url(#B) 有时不会让
+      // Chromium 重新光栅化 backdrop-filter（表现同样是"设置改了但画面没变"）。
+      if (el.style.backdropFilter && el.style.backdropFilter !== 'none') {
+        el.style.backdropFilter = 'none';
+        el.style.webkitBackdropFilter = 'none';
+        void el.offsetHeight;
+      }
       el.style.backdropFilter = bf;
       el.style.webkitBackdropFilter = bf;
     }
     var radius = 0;
     try { radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0; } catch (e) { radius = 0; }
-    var url = makeSpec(w, h, Math.max(0, Math.min(radius, 40)), Math.round(specAmount() * 10) / 10);
-    if (el.__lgSpec !== url) {                                  // 同一个 dataURL 不重复 setProperty
-      el.style.setProperty('--lg-spec-img', 'url("' + url + '")');
-      el.__lgSpec = url;
-    }
+    var spec = Math.round(specAmount() * 10) / 10;
+    var rad = Math.max(0, Math.min(radius, 40));
+    var rim = makeRim(w, h, rad, spec);
+    var sheen = makeSheen(w, h, spec);
+    if (el.__lgRim !== rim) { el.style.setProperty('--lg-spec-img', 'url("' + rim + '")'); el.__lgRim = rim; }
+    if (el.__lgSheen !== sheen) { el.style.setProperty('--lg-sheen-img', 'url("' + sheen + '")'); el.__lgSheen = sheen; }
+    el.style.setProperty('--lg-lx', (LX * PARA).toFixed(3));
+    el.style.setProperty('--lg-ly', (LY * PARA).toFixed(3));
   }
 
   function clear(el) {
     el.style.backdropFilter = '';
     el.style.webkitBackdropFilter = '';
     el.style.removeProperty('--lg-spec-img');
+    el.style.removeProperty('--lg-sheen-img');
+    el.style.removeProperty('--lg-lx');
+    el.style.removeProperty('--lg-ly');
     el.removeAttribute('data-lg');
-    el.__lgSpec = null;
+    el.__lgRim = null; el.__lgSheen = null;
   }
 
   /// 把当前强度写进 CSS 变量：高光层（effects.css）跟着强度一起缩放
@@ -309,15 +369,38 @@
     });
   }
 
-  /// 设置入口：{ power: 0~200, ca: 0~100, spec: 倍率(开发用) }
-  /// 强度只改 feDisplacementMap 的 scale（不重画位移图）；色散变了才重建滤镜链
+  // ---- 假视角视差：鼠标位置当作"看玻璃的角度"，只平移高光的光带层（边缘层不动）----
+  var LX = 0, LY = 0, paraPending = false;
+  function pushParallax() {
+    for (var i = 0; i < applied.length; i++) {
+      applied[i].style.setProperty('--lg-lx', (LX * PARA).toFixed(3));
+      applied[i].style.setProperty('--lg-ly', (LY * PARA).toFixed(3));
+    }
+  }
+  function onMove(e) {
+    if (PARA <= 0 || !enabled() || paraPending) return;
+    paraPending = true;
+    var cx = e.clientX, cy = e.clientY;
+    requestAnimationFrame(function () {
+      paraPending = false;
+      var nx = Math.max(-1, Math.min(1, (cx / Math.max(1, window.innerWidth)) * 2 - 1));
+      var ny = Math.max(-1, Math.min(1, (cy / Math.max(1, window.innerHeight)) * 2 - 1));
+      if (Math.abs(nx - LX) < 0.012 && Math.abs(ny - LY) < 0.012) return;   // 变化太小不重排
+      LX = nx; LY = ny;
+      pushParallax();
+    });
+  }
+  window.addEventListener('mousemove', onMove, { passive: true });
+  window.addEventListener('mouseleave', function () { LX = 0; LY = 0; pushParallax(); });
+
+  /// 设置入口：{ power: 0~200, ca: 0~100, thickness: 0~100, parallax: 0~100, spec: 倍率(开发用) }
+  /// 强度只改 feDisplacementMap 的 scale（不重画位移图）；色散变了重建滤镜链；厚度变了重画位移图
   function setOptions(opt) {
     opt = opt || {};
     if (opt.power !== undefined) {
       var p = Number(opt.power);
       if (!isFinite(p)) p = 100;
       POWER = clamp(p, 0, 200) / 100;
-      var sc = [];
       for (var i = 0; i < order.length; i++) {
         for (var j = 0; j < order[i].dms.length; j++) {
           var d = order[i].dms[j];
@@ -332,6 +415,21 @@
       var nc = clamp(c, 0, 100) / 100;
       if (Math.abs(nc - CA) > 0.0005) { CA = nc; resetFilters(); }
     }
+    if (opt.thickness !== undefined) {
+      var th = Number(opt.thickness);
+      if (!isFinite(th)) th = 60;
+      var nt = clamp(th, 0, 100) / 100;
+      if (Math.abs(nt - THICK) > 0.0005) {
+        THICK = nt;
+        maps = {};          // 位移图依赖厚度 → 丢缓存重画
+        resetFilters();     // ⚠️ 滤镜里 feImage 指向的是旧的位移图 dataURL，必须连滤镜一起重建
+      }
+    }
+    if (opt.parallax !== undefined) {
+      var pa = Number(opt.parallax);
+      if (!isFinite(pa)) pa = 50;
+      PARA = clamp(pa, 0, 100) / 100;
+    }
     if (opt.spec !== undefined) {
       var s2 = Number(opt.spec);
       SPECMUL = isFinite(s2) ? clamp(s2, 0, 2) : 1;
@@ -344,26 +442,35 @@
   window.neGlassDebug = function () {
     var svg = document.getElementById('lg-svg');
     var els = document.querySelectorAll('[data-lg]');
+    var e = edgeProfile();
     var out = {
       enabled: enabled(), power: POWER, ca: CA, spec: specAmount(),
+      thickness: THICK, parallax: PARA, lx: LX, ly: LY,
       scale: Math.round(scaleNow() * 10) / 10,
+      edges: {
+        bez: [e.bezT, e.bezB, e.bezL, e.bezR].map(function (v) { return Math.round(v * 100) / 100; }),
+        gain: [e.gainT, e.gainB, e.gainL, e.gainR].map(function (v) { return Math.round(v * 1000) / 1000; })
+      },
       filters: svg ? svg.querySelectorAll('filter').length : 0,
       applied: els.length, items: []
     };
     for (var j = 0; j < els.length; j++) {
-      var e = els[j], cs = getComputedStyle(e);
-      var f = e.getAttribute('data-lg');
+      var el = els[j], cs = getComputedStyle(el);
+      var f = el.getAttribute('data-lg');
       var node = f ? document.getElementById(f) : null;
       var dms = node ? node.querySelectorAll('feDisplacementMap') : [];
       var scales = [];
       for (var k = 0; k < dms.length; k++) scales.push(dms[k].getAttribute('scale'));
       out.items.push({
-        id: e.id || e.className,
-        w: Math.round(e.getBoundingClientRect().width),
+        id: el.id || el.className,
+        w: Math.round(el.getBoundingClientRect().width),
         bf: cs.backdropFilter || cs.webkitBackdropFilter,
         prims: node ? node.childNodes.length : 0,
         dmScales: scales,
-        specImg: (e.style.getPropertyValue('--lg-spec-img') || '').length
+        rimImg: (el.style.getPropertyValue('--lg-spec-img') || '').length,
+        sheenImg: (el.style.getPropertyValue('--lg-sheen-img') || '').length,
+        pos: cs.backgroundPosition,
+        lx: el.style.getPropertyValue('--lg-lx'), ly: el.style.getPropertyValue('--lg-ly')
       });
     }
     return out;
