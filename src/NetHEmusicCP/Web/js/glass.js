@@ -146,7 +146,11 @@
           var els = document.querySelectorAll(sel);
           for (var k = 0; k < els.length; k++) apply(els[k]);
         });
-      } catch (e) { }
+      } catch (e) {
+        // 以前这里把异常吞掉，导致'滤镜个数=0'这种静默失败很难查（errs 还是 0）——改成显式报错
+        try { if (window.NE_showErr) NE_showErr('液态玻璃', 'glass refresh 失败: ' + (e && e.message ? e.message : e), '', (e && e.stack) || ''); } catch (x) { }
+        try { console.error('[NE-glass] refresh failed', e); } catch (x) { }
+      }
     });
   }
 
