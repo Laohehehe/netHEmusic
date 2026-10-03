@@ -799,7 +799,7 @@ function applyLiveSetting(key, val) {
     else if (key === 'volume') applyVolume(Number(val) || 0, false);
     else if (key === 'playMode') applyMode(String(val), true);
     else if (key.indexOf('hk_') === 0) hotkeysFromSettings(appSettings);
-    if (key === 'ui_material' || key === 'ui_liquid_power') applyGlassUI();
+    if (key === 'ui_material' || key === 'ui_liquid_power' || key === 'ui_liquid_ca') applyGlassUI();
   } catch (e) { }
 }
 function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
@@ -812,12 +812,17 @@ function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return
     if (!isFinite(v)) v = 100;             // 0 是合法值（= 不折射），不能被 || 吃掉
     return Math.max(0, Math.min(200, v));
   }
+  function glassCaValue(s) {
+    var v = Number(cfgGet(s, 'ui_liquid_ca', 50));
+    if (!isFinite(v)) v = 50;              // 0 也是合法值（= 无色散）
+    return Math.max(0, Math.min(100, v));
+  }
   function applyGlassUI() {
     try {
       var s = appSettings || {};
       var root = document.documentElement;
       root.classList.toggle('liquid', String(cfgGet(s, 'ui_material', 'acrylic')) === 'liquid');
-      if (window.neGlassPower) window.neGlassPower(glassPowerValue(s));
+      if (window.neGlassSet) window.neGlassSet({ power: glassPowerValue(s), ca: glassCaValue(s) });
       else if (window.neGlassRefresh) window.neGlassRefresh();
     } catch (e) {
       // 渲染路径不许静默吞异常（工作表单 §11）：这里出错会直接弹出错误框
@@ -2813,7 +2818,8 @@ function applyPerfAnim(s) {
           { v: 'liquid', t: '液态玻璃' }
         ]),
         rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1),
-        rng2('液态玻璃强度','ui_liquid_power', glassPowerValue(s), 0, 200, '%', 5)   // 只影响「材质 = 液态玻璃」
+        rng2('液态玻璃强度','ui_liquid_power', glassPowerValue(s), 0, 200, '%', 5),   // 只影响「材质 = 液态玻璃」
+        rng2('色散（彩边）','ui_liquid_ca', glassCaValue(s), 0, 100, '%', 5)           // 0 = 关闭色散，回到单步折射
       ]),
       sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
     ]));
