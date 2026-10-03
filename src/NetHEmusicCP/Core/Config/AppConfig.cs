@@ -258,6 +258,8 @@ public sealed class AppConfig
     private sealed class PlayerDoc
     {
         public List<Song> Queue { get; set; } = new();
+        /// <summary>进入「随机播放」之前的原始顺序；null = 当前没有处于打乱状态。</summary>
+        public List<Song>? QueueOriginal { get; set; }
         public int Index { get; set; }
         public long LastSongId { get; set; } = -1;
         public long LastPos { get; set; }
@@ -337,6 +339,13 @@ public sealed class AppConfig
 
     public List<Song> LoadQueue() => PlayerState().Queue;
     public void SaveQueue(IReadOnlyList<Song> queue) { PlayerState().Queue = queue.ToList(); SavePlayer(); }
+
+    /// <summary>「随机播放」打乱前的原始顺序（切回顺序播放时恢复）。null = 没被打乱过。</summary>
+    public List<Song>? QueueOriginal
+    {
+        get => PlayerState().QueueOriginal;
+        set { PlayerState().QueueOriginal = value; SavePlayer(); }
+    }
     public string GetPlayback() => PlayerState().Playback;
     public void SavePlayback(string json) { PlayerState().Playback = json; SavePlayer(); }
 

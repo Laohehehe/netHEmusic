@@ -2827,8 +2827,8 @@ function applyPerfAnim(s) {
     html.appendChild(group('通知', [ sw('下载完成通知','toast', s.toast) ]));
     html.appendChild(group('高级', [
       feedbackRow(),
-      sw('开发者工具（F12 打开）','ui_devtools', cfgBool(s,'ui_devtools',false)),
-      hint('打开后按 F12 就能查看网页端控制台，排查界面问题时用；开关一拨立刻生效，不用重启。平时建议关着。')
+      sw('显示控制台','ui_console', cfgBool(s,'ui_console',false)),
+      sw('开发者工具（F12 打开）','ui_devtools', cfgBool(s,'ui_devtools',false))
     ]));
     // ---- 插件自带的设置项（插件通过 nethe.settings.add 注册）----
     try {

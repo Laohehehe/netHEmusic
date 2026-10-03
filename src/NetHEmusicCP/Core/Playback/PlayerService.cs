@@ -241,18 +241,46 @@ public sealed class PlayerService
 
     private readonly Random _rand = new();
 
+    /// <summary>切换播放模式时的队列处理：切到 random = 把整份列表打乱一次（伪随机：之后按打乱后的顺序依次放，
+    /// 一轮里每首只放一遍）；切回其它模式 = 恢复打乱前的原始顺序。原始顺序存进 player.json，重启也不丢。</summary>
+    public void OnModeChanged(string mode)
+    {
+        try
+        {
+            mode = (mode ?? "").ToLowerInvariant();
+            bool wantShuffle = mode == "random";
+            bool shuffled = _config.QueueOriginal is { Count: > 0 };
+            if (wantShuffle == shuffled) return;                    // 已经是目标状态，别重复打乱
+            var cur = Current;
+            if (wantShuffle)
+            {
+                if (_queue.Count < 2) return;
+                _config.QueueOriginal = new List<Song>(_queue);
+                for (int i = _queue.Count - 1; i > 0; i--) { int j = _rand.Next(i + 1); (_queue[i], _queue[j]) = (_queue[j], _queue[i]); }
+                LogManager.Log("已打乱播放列表（" + _queue.Count + " 首）");
+            }
+            else
+            {
+                var orig = _config.QueueOriginal ?? new List<Song>();
+                var keys = new HashSet<string>(orig.ConvertAll(KeyOf));
+                foreach (var s in _queue) if (s is not null && keys.Add(KeyOf(s))) orig.Add(s);   // 打乱期间新加的歌接在后面，不丢
+                _queue = orig;
+                _config.QueueOriginal = null;
+                LogManager.Log("已恢复打乱前的播放顺序（" + _queue.Count + " 首）");
+            }
+            _index = cur is null ? (_queue.Count > 0 ? 0 : -1) : Math.Max(0, _queue.FindIndex(x => x.Id == cur.Id));
+            _config.SaveQueue(_queue);
+            _config.PlaylistIndex = Math.Max(0, _index);
+            QueueChanged?.Invoke(_index, _queue.Count);
+        }
+        catch (Exception e) { LogManager.Debug("切换随机播放失败: " + e.Message); }
+    }
+
     private async Task StepAsync(int dir)
     {
         if (_queue.Count == 0 || _index < 0) return;
-        // 随机模式下手动切歌也要随机（原来这里只按顺序 +1/-1，导致“随机播放”看起来没生效）
-        if (Mode == "random" && _queue.Count > 1)
-        {
-            int next;
-            do { next = _rand.Next(_queue.Count); } while (next == _index);
-            _index = next;
-            LogManager.Log("随机切歌 → 第 " + (_index + 1) + " 首");
-        }
-        else if (Mode == "single" && dir > 0)
+        // 随机模式下队列已经在切换时打乱好了，这里按打乱后的顺序往下走（= 伪随机，一轮每首放一遍）
+        if (Mode == "single" && dir > 0)
         {
             // 单曲循环：手动“下一首”仍然换歌，但保持单曲循环设置
             _index = (_index + 1) % _queue.Count;
@@ -274,11 +302,8 @@ public sealed class PlayerService
             case "single":                                  // 单曲循环：重播当前
                 await PlayAtAsync(_index);
                 return;
-            case "random":                                  // 随机：随机挑一首（避免连续同一首）
-                if (_queue.Count == 1) { await PlayAtAsync(0); return; }
-                int next;
-                do { next = _rand.Next(_queue.Count); } while (next == _index);
-                await PlayAtAsync(next);
+            case "random":                                  // 随机：队列在切模式时已打乱，按打乱后的顺序循环即可
+                await StepAsync(1);
                 return;
             case "order":                                   // 顺序：到最后一首就停
                 if (_index >= _queue.Count - 1) { LogManager.Log("顺序播放已到最后一首"); Pause(); return; }

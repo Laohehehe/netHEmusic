@@ -81,6 +81,8 @@ public sealed partial class MainWindow : Window
         try { WindowMenuBlocker.Attach(WinRT.Interop.WindowNative.GetWindowHandle(this)); } catch (Exception ex) { LogManager.Debug("Attach 标题栏菜单屏蔽失败: " + ex.Message); }
 
         AppServices.OnThemeApplied = () => { try { ApplyNativeTheme(); } catch { } PushTheme(); };
+        // 上次开着控制台就继续开着（设置→高级）
+        try { if (AppServices.Config.Get("App", "ui_console", "false").Equals("true", StringComparison.OrdinalIgnoreCase)) WindowHelper.ShowConsole(true); } catch { }
         InitWebView();
 
         // 记住上一次播放进度：启动时先登记"上次听到哪"，等真正加载到那一首时才续播一次
@@ -257,7 +259,7 @@ public sealed partial class MainWindow : Window
         IsPlaying = () => { try { return AppServices.Player.Playing; } catch { return false; } },
         PlayMode = () => AppServices.Config.PlayMode,
         // 播放模式是前端的概念（顺序/列表/单曲/随机），这里改完配置再通知前端切一次
-        SetPlayMode = v => { AppServices.Config.PlayMode = v; PostToWeb(new { type = "playMode", value = v }); },
+        SetPlayMode = v => { AppServices.Config.PlayMode = v; AppServices.Player.OnModeChanged(v); PostToWeb(new { type = "playMode", value = v }); },
         IsLyricOn = () => AppServices.Config.Get("App", "desktop_lyric", "false").Equals("true", StringComparison.OrdinalIgnoreCase),
         SetLyric = on => SetDesktopLyric(on)
     };
@@ -1058,7 +1060,14 @@ public sealed partial class MainWindow : Window
             case "quality": AppServices.Config.Quality = value; break;
             case "crossfade": AppServices.Config.Crossfade = value; break;
             case "volume": if (int.TryParse(value, out var vol)) { AppServices.Player.SetVolume(vol); PostToWeb(new { type = "volume_changed", v = AppServices.Player.GetVolume() }); } break;
-            case "playMode": AppServices.Config.PlayMode = value; break;
+            case "playMode":
+                AppServices.Config.PlayMode = value;
+                AppServices.Player.OnModeChanged(value);   // 切到随机 = 打乱列表；切回顺序 = 还原
+                break;
+            case "ui_console":      // 显示控制台（实时日志）
+                AppServices.Config.Set("App", "ui_console", b ? "true" : "false");
+                WindowHelper.ShowConsole(b);
+                break;
             case "updateSource": AppServices.Config.Set("Update", "source", value); break;
             case "proxy": AppServices.Config.Set("Network", "proxy", value); break;
             case "language": AppServices.Lang.SetLanguage(value); AppServices.Config.Language = value; PushLang(); break;
