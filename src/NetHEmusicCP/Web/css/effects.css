@@ -766,7 +766,12 @@ html.liquid .qual-menu{
    所以**不重画位移图**、也不会出现快照式实现那种冻结。pointer-events:none 保证不挡交互。 */
 #lg-drop, #lg-ripple{
   position:absolute; top:0; left:0; z-index:2;
-  border-radius:50%; pointer-events:none;
+  /* 不要用 border-radius 的硬圆边：那条边会露出阶梯状锯齿（用户截图里最刺眼的就是它）。
+     改成径向遮罩做羽化过渡，位移内容到边缘自然淡出，看不到硬边界。 */
+  border-radius:0;
+  -webkit-mask-image: radial-gradient(closest-side, rgba(0,0,0,1) 38%, rgba(0,0,0,.55) 66%, rgba(0,0,0,0) 100%);
+  mask-image: radial-gradient(closest-side, rgba(0,0,0,1) 38%, rgba(0,0,0,.55) 66%, rgba(0,0,0,0) 100%);
+  pointer-events:none;
   opacity:0; will-change:transform,opacity;
 }
 /* 每个玻璃面一个裁切容器：overflow:hidden + 玻璃自己的圆角 → 液滴/涟漪只在该面内部生效 */

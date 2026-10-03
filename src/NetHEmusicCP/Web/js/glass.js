@@ -360,7 +360,7 @@
     var svg = svgHost();
     var old = document.getElementById(id); if (old && old.parentNode) old.parentNode.removeChild(old);
     var f = el3('filter', { id: id, x: '0', y: '0', width: '100%', height: '100%', filterUnits: 'objectBoundingBox', 'color-interpolation-filters': 'sRGB' });
-    var url = makeLensMap(256);
+    var url = makeLensMap(384);
     var im = el3('feImage', { href: url, x: '0', y: '0', width: String(sizePx), height: String(sizePx), preserveAspectRatio: 'none', result: 'm' });
     im.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url);
     f.appendChild(im);
@@ -441,14 +441,14 @@
     if (FLUID <= 0.02 || !enabled() || idx < 0 || !clips[idx]) return;
     var c = clips[idx], r = rects[idx];
     var d = 40 + 260 * FLUID;                       // 涟漪直径
-    var scale = 3 + 4 * FLUID;                     // 透镜强度（px）
+    var scale = 2 + 2.5 * FLUID;                     // 透镜强度（px）
     makeLensFilter('lg-rip-f', Math.round(d), scale);
     var el = ensureEl('lg-ripple');
     if (el.parentNode !== c) c.appendChild(el);
     ripEl = el; ripD = d; ripX = x - r.left; ripY = y - r.top; ripT0 = performance.now();
     el.style.width = el.style.height = Math.round(d) + 'px';
-    el.style.backdropFilter = 'url(#lg-rip-f) blur(1.2px)';
-    el.style.webkitBackdropFilter = 'url(#lg-rip-f) blur(1.2px)';
+    el.style.backdropFilter = 'url(#lg-rip-f) blur(1.8px)';
+    el.style.webkitBackdropFilter = 'url(#lg-rip-f) blur(1.8px)';
     el.style.transition = 'none';
     el.style.opacity = String(0.55 + 0.35 * FLUID);  // 起始必须不透明，否则整段看不见
     el.style.transform = 'translate(' + (ripX - d / 2) + 'px,' + (ripY - d / 2) + 'px) scale(0.35)';
@@ -515,8 +515,8 @@
       if (!enabled() || FLUID <= 0.02) return;
       var idx = glassIndexAt(e.clientX, e.clientY);
       if (idx < 0) return;
-      makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 2.5 + 3.5 * FLUID);
-      if (dropEl) { dropEl.style.backdropFilter = 'url(#lg-drop-f) blur(1.2px)'; dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f)'; }
+      makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 1.8 + 2.2 * FLUID);
+      if (dropEl) { dropEl.style.backdropFilter = 'url(#lg-drop-f) blur(1.8px)'; dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f)'; }
       spawnRipple(e.clientX, e.clientY, idx);
     }, { passive: true });
     // 初始化液滴滤镜（尺寸/强度随 FLUID 变，setOptions 里会重建）
@@ -592,10 +592,10 @@
       if (Math.abs(nf - FLUID) > 0.0005) {
         FLUID = nf;
         // 液滴尺寸/强度跟着变 → 重建透镜滤镜；涟漪每次点击时按当时的 FLUID 现建
-        makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 2.5 + 3.5 * FLUID);
+        makeLensFilter('lg-drop-f', Math.round(70 + 60 * FLUID), 1.8 + 2.2 * FLUID);
         if (dropEl) {
-          dropEl.style.backdropFilter = 'url(#lg-drop-f) blur(1.2px)';
-          dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f) blur(1.2px)';
+          dropEl.style.backdropFilter = 'url(#lg-drop-f) blur(1.8px)';
+          dropEl.style.webkitBackdropFilter = 'url(#lg-drop-f) blur(1.8px)';
         }
       }
     }
@@ -610,6 +610,20 @@
   }
 
   /// 开发期自检：设置是不是真的落到了渲染上（"没报错"不算过）
+  /// 开发期自检：把液滴钉在指定位置（真实鼠标会把合成事件顶掉，所以留一个不依赖鼠标的入口）
+  window.neFluidDemo = function (x, y) {
+    if (x === undefined) { dropRect = false; return 'hide'; }
+    var idx = glassIndexAt(x, y);
+    if (idx < 0) return 'not-on-glass';
+    var r = rects[idx];
+    dropTX = dropX = x - r.left; dropTY = dropY = y - r.top;
+    dropRect = true;
+    if (dropEl && clips[idx]) clips[idx].appendChild(dropEl);
+    var pin = setInterval(function () { dropTX = x - r.left; dropTY = y - r.top; dropRect = true; }, 60);
+    setTimeout(function () { clearInterval(pin); }, 2500);
+    return 'pinned:' + idx;
+  };
+
   window.neGlassDebug = function () {
     var svg = document.getElementById('lg-svg');
     var els = document.querySelectorAll('[data-lg]');
@@ -663,4 +677,5 @@
   window.addEventListener('resize', function () { if (enabled()) refresh(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { refresh(); initFluid(); }); else { refresh(); initFluid(); }
 })();
+
 
