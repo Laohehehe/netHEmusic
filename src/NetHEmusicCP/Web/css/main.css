@@ -58,15 +58,24 @@ body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-se
 .plg-btn.primary{border-color:var(--md-accent-color);color:var(--md-accent-color);}
 .plg-btn.danger:hover{border-color:#ff7a7a;color:#ff7a7a;}
 #app{height:100vh;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr;background:transparent;}
-/* 侧栏：默认收起(仅图标)，悬停展开 */
+/* 侧栏：默认收起(仅图标)。展开方式有两种（设置→主题/外观→侧边栏悬停展开）：
+   - 开(默认/原版)：鼠标悬停展开、移开收回，带 .18s 动画；body.sb-hover
+   - 关：不再响应悬停，用侧栏顶部 .sb-toggle 按钮单击展开/再单击收回，无动画；body.sb-nohover */
 #sidebar{grid-row:1;background:var(--side-bg);padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .18s ease;overflow:hidden;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
-#sidebar:hover{width:210px;}
+body.sb-hover #sidebar:hover,#sidebar.sb-open{width:210px;}
 #sidebar .label{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transition:max-width .18s ease,opacity .12s ease;}
-#sidebar:hover .label{max-width:180px;opacity:1;}
+body.sb-hover #sidebar:hover .label,#sidebar.sb-open .label{max-width:180px;opacity:1;}
 #sidebar .brand{justify-content:center;}
-#sidebar:hover .brand{justify-content:flex-start;}
+body.sb-hover #sidebar:hover .brand,#sidebar.sb-open .brand{justify-content:flex-start;}
 #nav a,a.nav-bottom{justify-content:center;margin:0 0 2px;}
-#sidebar:hover #nav a,#sidebar:hover a.nav-bottom{justify-content:flex-start;}
+body.sb-hover #sidebar:hover #nav a,body.sb-hover #sidebar:hover a.nav-bottom,#sidebar.sb-open #nav a,#sidebar.sb-open a.nav-bottom{justify-content:flex-start;}
+/* 按钮模式：无动画（该设置本身就叫"收回弹出动画"），按钮常驻可点（收起时也在 56px 侧栏里） */
+body.sb-nohover #sidebar,body.sb-nohover #sidebar .label{transition:none;}
+body.sb-nohover .sb-toggle{display:flex;}
+.sb-toggle{display:none;align-items:center;gap:8px;justify-content:center;width:100%;padding:8px 12px;margin:0 0 8px;background:none;border:0;border-radius:10px;color:var(--md-accent-color-secondary);cursor:pointer;font:inherit;font-size:14px;}
+.sb-toggle:hover{background:var(--nm-fill-hover);}
+.sb-toggle:active{transform:scale(.97);}
+.sb-toggle .sb-ic{display:flex;align-items:center;justify-content:center;flex:0 0 16px;}
 .brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;padding:0 8px 16px;color:var(--md-accent-color-secondary);}
 .brand-dot{width:10px;height:10px;border-radius:50%;background:var(--md-accent-color);}
 #nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:rgba(var(--md-accent-color-grey-base-rgb),.72);text-decoration:none;font-size:14px;cursor:pointer;}

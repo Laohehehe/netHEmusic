@@ -672,9 +672,50 @@ function applyLiveSetting(key, val) {
     else if (key === 'playMode') applyMode(String(val), true);
     else if (key.indexOf('hk_') === 0) hotkeysFromSettings(appSettings);
     if (key === 'ui_fps') applyFps(String(val) === 'true');
+    if (key === 'ui_sidebar_hover') applySidebarMode(appSettings);
     if (key === 'ui_material' || key === 'ui_liquid_power' || key === 'ui_liquid_ca' || key === 'ui_liquid_thick' || key === 'ui_liquid_para' || key === 'ui_liquid_fluid') applyGlassUI();
   } catch (e) { }
 }
+
+  // ---- 侧边栏展开方式（设置→主题/外观→侧边栏悬停展开）----
+  // 开(默认/原版)：悬停展开+收回，带 .18s 动画，侧栏里没有按钮（body.sb-hover）
+  // 关：不响应悬停，改用侧栏顶部 #sbToggle 按钮单击展开/再单击收回，无动画（body.sb-nohover）
+  function sidebarHoverOn(s) { return cfgBool(s, 'ui_sidebar_hover', true); }
+  function setSbToggleLabel() {
+    var sb = document.getElementById('sidebar'), b = document.getElementById('sbToggle');
+    if (!sb || !b) return;
+    var open = sb.classList.contains('sb-open');
+    var lb = b.querySelector('.label');
+    if (lb) lb.textContent = open ? '关闭导航' : '展开导航';
+    b.title = open ? '关闭导航' : '展开导航';
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function applySidebarMode(s) {
+    try {
+      s = s || appSettings || {};
+      var on = sidebarHoverOn(s);
+      var sb = document.getElementById('sidebar'), b = document.getElementById('sbToggle');
+      document.body.classList.toggle('sb-hover', on);
+      document.body.classList.toggle('sb-nohover', !on);
+      // 切回悬停模式时收起"按钮展开"留下的展开态，避免侧栏一直撑着
+      if (on && sb) sb.classList.remove('sb-open');
+      if (b && !b._wired) {
+        b._wired = true;
+        b.onclick = function () {
+          var s2 = document.getElementById('sidebar');
+          if (!s2) return;
+          s2.classList.toggle('sb-open');
+          setSbToggleLabel();
+        };
+      }
+      setSbToggleLabel();
+    } catch (e) {
+      // 渲染/交互路径不许静默吞异常（工作表单 §11）
+      try { if (window.NE_showErr) NE_showErr('侧边栏', 'applySidebarMode 失败: ' + (e && e.message ? e.message : e), '', (e && e.stack) || ''); } catch (x) { }
+      try { console.error('[NE-sidebar] applySidebarMode failed', e); } catch (x) { }
+    }
+  }
+  window.neSidebarMode = applySidebarMode;   // 调试钩子
 
   // ---- liquidGL 试用过、已撤掉（保留结论，别再踩）----
   // 试过把开源库 liquidGL（MIT，WebGPU 快照式玻璃）接成第三种材质，用户实测三个问题：
@@ -2614,7 +2655,8 @@ function applyPerfAnim(s) {
         rng2('界面不透明度','ui_mica_alpha', Number(cfgGet(s,'ui_mica_alpha',78))||78, 55, 100, '%', 1),
         glassDetail
       ]),
-      sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray)
+      sw('关闭按钮最小化到托盘','closeToTray', s.closeToTray),
+      sw('侧边栏悬停展开','ui_sidebar_hover', sidebarHoverOn(s))
     ]));
     html.appendChild(fxGroup(s));
     html.appendChild(group('下载', [ dirRow(), sel('音乐命名格式','ui_name_format', String(cfgGet(s,'ui_name_format','title-artist')), [{v:'title-artist',t:'歌曲名 - 歌手（默认）'},{v:'artist-title',t:'歌手 - 歌曲名'},{v:'title',t:'歌曲名'} ]), sel('音质','quality', s.quality, zhOpts('quality', ['standard','exhigh','lossless'])) ]));
@@ -3226,6 +3268,7 @@ function applyPerfAnim(s) {
     try {
       appSettings = s || {};
       applyGlassUI();
+      applySidebarMode(s);                                     // 侧边栏展开方式（悬停 / 按钮）
       applyNetState();                                          // 启动时按网络状态给未缓存的歌置灰                                          // 顶部标题条渐变 + 液态玻璃
       applyMode(s.playMode || 'order', true);
       applyVolume(s.volume != null ? s.volume : 80, false);   // 音量滑块跟随真实音量，别再出现“滑块 80% 实际静音”
