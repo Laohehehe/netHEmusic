@@ -66,7 +66,7 @@ body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-se
    - 开(默认/原版)：鼠标悬停展开、移开收回，带 .18s 动画；body.sb-hover
    - 关：不再响应悬停，用侧栏顶部 .sb-toggle 按钮单击展开/再单击收回，无动画；body.sb-nohover */
 /* 侧栏不再自己铺底色：#app 已经用同一个 --side-bg 铺满整窗，两层半透明叠一起侧栏会比周围亮一档 */
-#sidebar{grid-row:1;background:transparent;padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .24s cubic-bezier(.2,.8,.3,1.05);overflow:clip;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
+#sidebar{grid-row:1;background:transparent;padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .24s cubic-bezier(.2,.8,.3,1.05);overflow:clip;}
 body.sb-hover #sidebar:hover,#sidebar.sb-open{width:210px;}
 #sidebar .label{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transform:translateX(-4px);transition:max-width .24s cubic-bezier(.2,.8,.3,1.05),opacity .16s ease,transform .24s cubic-bezier(.2,.8,.3,1.05);}
 body.sb-hover #sidebar:hover .label,#sidebar.sb-open .label{max-width:180px;opacity:1;transform:none;}
