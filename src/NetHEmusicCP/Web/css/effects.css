@@ -68,6 +68,37 @@ html.no-fx .fx-shake{animation:none;}
   #nav a:hover:not(.on) .ic, a.nav-bottom:hover:not(.on) .ic,
   #nav a:hover:not(.on) .nav-svg, a.nav-bottom:hover:not(.on) .nav-svg{transform:none;}
 }
+/* ---------- 侧边栏「展开/关闭导航」按钮：与上面的 tab 完全同款动效 ---------- */
+.sb-toggle{
+  position:relative;
+  transition:background .22s ease, color .18s ease, transform .22s cubic-bezier(.2,.8,.3,1.1), box-shadow .22s ease;
+}
+.sb-toggle .sb-ic svg{
+  display:block;
+  transition:transform .28s cubic-bezier(.2,.8,.3,1.3), color .18s ease, filter .26s ease;
+  will-change:transform;
+}
+.sb-toggle::after{
+  content:'';position:absolute;left:-5px;top:50%;width:3px;height:18px;border-radius:3px;
+  background:var(--md-accent-color);opacity:0;transform:translateY(-50%) scaleY(.15);
+  transition:opacity .2s ease, transform .26s cubic-bezier(.2,.8,.3,1.1);
+  pointer-events:none;
+}
+.sb-toggle:hover{background:var(--nm-fill);transform:translateX(2px);color:var(--md-accent-color);}
+.sb-toggle:hover .sb-ic svg{
+  transform:scale(1.18);color:var(--md-accent-color);
+  filter:drop-shadow(0 0 7px rgba(var(--md-accent-color-rgb),.6));
+}
+.sb-toggle:hover::after{opacity:.7;transform:translateY(-50%) scaleY(1);}
+.sb-toggle:active{transform:translateX(2px) scale(.97);}
+/* 侧栏已是展开态时，图标本身转着 90°（main.css），悬停要保留这个角度再放大 */
+#sidebar.sb-open .sb-toggle:hover .sb-ic svg{transform:rotate(90deg) scale(1.12);}
+@media (prefers-reduced-motion: reduce){
+  .sb-toggle,.sb-toggle .sb-ic svg{transition:background .12s ease, color .12s ease;}
+  .sb-toggle:hover,.sb-toggle:active{transform:none;}
+  .sb-toggle:hover .sb-ic svg{transform:none;}
+  #sidebar.sb-open .sb-toggle:hover .sb-ic svg{transform:rotate(90deg);}
+}
 /* ---------- 鼠标特效设置页：子项缩进 + 自定义颜色 ---------- */
 .fx-detail{margin-left:14px;padding-left:12px;border-left:1px solid rgba(var(--md-accent-color-grey-base-rgb),.13);}
 .fx-detail.hidden{display:none;}

@@ -704,8 +704,10 @@ function applyLiveSetting(key, val) {
         b.onclick = function () {
           var s2 = document.getElementById('sidebar');
           if (!s2) return;
-          s2.classList.toggle('sb-open');
+          var open = !s2.classList.contains('sb-open');
+          s2.classList.toggle('sb-open', open);
           setSbToggleLabel();
+          sbAnim(open);
         };
       }
       setSbToggleLabel();
@@ -715,6 +717,19 @@ function applyLiveSetting(key, val) {
       try { console.error('[NE-sidebar] applySidebarMode failed', e); } catch (x) { }
     }
   }
+  // 点“展开/关闭导航”时给窗口变化配一个短动画：方向跟这次是展开还是收起一致
+  // （CSS 侧见 main.css 的 body.sb-anim-open / body.sb-anim-close -> #view 的 keyframes）
+  function sbAnim(open) {
+    try {
+      var bd = document.body;
+      bd.classList.remove('sb-anim-open', 'sb-anim-close');
+      void bd.offsetWidth;                     // 重置动画，连点也能重新触发
+      bd.classList.add(open ? 'sb-anim-open' : 'sb-anim-close');
+      clearTimeout(sbAnim._t);
+      sbAnim._t = setTimeout(function () { bd.classList.remove('sb-anim-open', 'sb-anim-close'); }, 340);
+    } catch (e) { }
+  }
+  window.neSbAnim = sbAnim;                  // 调试钩子
   window.neSidebarMode = applySidebarMode;   // 调试钩子
 
   // ---- liquidGL 试用过、已撤掉（保留结论，别再踩）----

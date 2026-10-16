@@ -17,6 +17,10 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 img{-webkit-user-drag:none;user-drag:none;}
 ::selection{background:rgba(var(--md-accent-color-rgb),.35);}
 html,body{height:100%;margin:0;}
+/* 锁死视口滚动：插件有时会往 body 末尾塞一个 static 的浮动按钮（比一屏还高），
+   文档因此变成可滚动，浏览器在聚焦元素时会顺手把整页上滚 —— 侧栏顶部的 logo 和
+   导航按钮会被滚出窗口。页面内部该滚的地方（#view）不受影响。 */
+html{overflow:hidden;}
 body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-serif);background:var(--frame-bg);color:var(--md-accent-color-secondary);overflow:hidden;}
 /* 与 WinUI 原生标题栏同色：标题栏用的是主题 AppSurfaceDarkenBrush(= --md-accent-color-bg-darken) */
 :root{
@@ -57,25 +61,39 @@ body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-se
 .plg-btn:active{transform:scale(.97);}
 .plg-btn.primary{border-color:var(--md-accent-color);color:var(--md-accent-color);}
 .plg-btn.danger:hover{border-color:#ff7a7a;color:#ff7a7a;}
-#app{height:100vh;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr;background:transparent;}
+#app{height:100vh;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr;background:var(--side-bg);}
 /* 侧栏：默认收起(仅图标)。展开方式有两种（设置→主题/外观→侧边栏悬停展开）：
    - 开(默认/原版)：鼠标悬停展开、移开收回，带 .18s 动画；body.sb-hover
    - 关：不再响应悬停，用侧栏顶部 .sb-toggle 按钮单击展开/再单击收回，无动画；body.sb-nohover */
-#sidebar{grid-row:1;background:var(--side-bg);padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .18s ease;overflow:hidden;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
+/* 侧栏不再自己铺底色：#app 已经用同一个 --side-bg 铺满整窗，两层半透明叠一起侧栏会比周围亮一档 */
+#sidebar{grid-row:1;background:transparent;padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .24s cubic-bezier(.2,.8,.3,1.05);overflow:clip;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
 body.sb-hover #sidebar:hover,#sidebar.sb-open{width:210px;}
-#sidebar .label{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transition:max-width .18s ease,opacity .12s ease;}
-body.sb-hover #sidebar:hover .label,#sidebar.sb-open .label{max-width:180px;opacity:1;}
+#sidebar .label{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transform:translateX(-4px);transition:max-width .24s cubic-bezier(.2,.8,.3,1.05),opacity .16s ease,transform .24s cubic-bezier(.2,.8,.3,1.05);}
+body.sb-hover #sidebar:hover .label,#sidebar.sb-open .label{max-width:180px;opacity:1;transform:none;}
 #sidebar .brand{justify-content:center;}
 body.sb-hover #sidebar:hover .brand,#sidebar.sb-open .brand{justify-content:flex-start;}
-#nav a,a.nav-bottom{justify-content:center;margin:0 0 2px;}
-body.sb-hover #sidebar:hover #nav a,body.sb-hover #sidebar:hover a.nav-bottom,#sidebar.sb-open #nav a,#sidebar.sb-open a.nav-bottom{justify-content:flex-start;}
-/* 按钮模式：无动画（该设置本身就叫"收回弹出动画"），按钮常驻可点（收起时也在 56px 侧栏里） */
-body.sb-nohover #sidebar,body.sb-nohover #sidebar .label{transition:none;}
-body.sb-nohover .sb-toggle{display:flex;}
-.sb-toggle{display:none;align-items:center;gap:8px;justify-content:center;width:100%;padding:8px 12px;margin:0 0 8px;background:none;border:0;border-radius:10px;color:var(--md-accent-color-secondary);cursor:pointer;font:inherit;font-size:14px;}
+#nav a,a.nav-bottom,.sb-toggle{justify-content:center;margin:0 0 2px;}
+body.sb-hover #sidebar:hover #nav a,body.sb-hover #sidebar:hover a.nav-bottom,#sidebar.sb-open #nav a,#sidebar.sb-open a.nav-bottom,body.sb-hover #sidebar:hover .sb-toggle,#sidebar.sb-open .sb-toggle{justify-content:flex-start;}
+/* 展开/关闭导航按钮（#sbToggle）：常驻在 logo 文本下面，布局与配色跟 #nav 里的按钮一致。
+   两种模式都保留过渡 —— 点击展开/收起时侧栏宽度、标签、主区域一起动（动效见 effects.css 末尾）。 */
+.sb-toggle{display:flex;align-items:center;gap:10px;justify-content:center;width:100%;padding:10px 12px;margin:0 0 2px;background:none;border:0;border-radius:10px;color:rgba(var(--md-accent-color-grey-base-rgb),.72);cursor:pointer;font:inherit;font-size:14px;position:relative;text-align:left;}
+/* 按钮模式下也保留过渡：点按钮展开/收起时侧栏宽度和主区域一起动（用户要求点击时有动画） */
+body.sb-nohover #sidebar .label{transition:max-width .24s cubic-bezier(.2,.8,.3,1.05),opacity .16s ease,transform .24s cubic-bezier(.2,.8,.3,1.05);}
 .sb-toggle:hover{background:var(--nm-fill-hover);}
 .sb-toggle:active{transform:scale(.97);}
-.sb-toggle .sb-ic{display:flex;align-items:center;justify-content:center;flex:0 0 16px;}
+.sb-toggle .sb-ic{display:flex;align-items:center;justify-content:center;flex:0 0 16px;width:16px;height:16px;}
+.sb-toggle .sb-ic svg{transition:transform .28s cubic-bezier(.2,.8,.3,1.2),color .18s ease,filter .24s ease;}
+#sidebar.sb-open .sb-toggle .sb-ic svg{transform:rotate(90deg);}
+/* 点展开/关闭按钮时的“窗口变化”动画：#view 顺着侧栏变宽/变窄的方向轻移一下
+   （刻意不作用在 #main 上，免得给固定定位的歌词页造出新的包含块） */
+@keyframes sb-view-open{from{opacity:.86;transform:translateX(-8px);}to{opacity:1;transform:none;}}
+@keyframes sb-view-close{from{opacity:.86;transform:translateX(8px);}to{opacity:1;transform:none;}}
+body.sb-anim-open #view{animation:sb-view-open .3s cubic-bezier(.2,.8,.3,1.05);}
+body.sb-anim-close #view{animation:sb-view-close .3s cubic-bezier(.2,.8,.3,1.05);}
+@media (prefers-reduced-motion: reduce){
+  body.sb-anim-open #view,body.sb-anim-close #view{animation:none;}
+  #sidebar .label,.sb-toggle .sb-ic svg{transition:opacity .12s ease;}
+}
 .brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;padding:0 8px 16px;color:var(--md-accent-color-secondary);}
 .brand-dot{width:10px;height:10px;border-radius:50%;background:var(--md-accent-color);}
 #nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:rgba(var(--md-accent-color-grey-base-rgb),.72);text-decoration:none;font-size:14px;cursor:pointer;}
