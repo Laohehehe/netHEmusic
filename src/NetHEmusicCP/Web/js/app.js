@@ -1,118 +1,24 @@
 // app.js — YesPlayMusic-style full player
-// ---- 前端异常上报：把 JS 错误写进应用日志，便于排查（以前前端报错在日志里完全看不到）----
-window.addEventListener('error', function (e) {
-  try { (window.NE && NE.post) ? NE.post({ type: 'log', msg: '[jserr] ' + (e.message || '') + ' @' + (e.lineno || 0) + ':' + (e.colno || 0) + ' ' + ((e.filename || '').split('/').pop() || '') }) : 0; } catch (x) { }
-}, true);
-window.addEventListener('unhandledrejection', function (e) {
-  try { var r = e.reason; (window.NE && NE.post) ? NE.post({ type: 'log', msg: '[jserr] promise: ' + ((r && r.message) || r) }) : 0; } catch (x) { }
-});
+// 下面的代码仍是同一个 IIFE 闭包（见本文件末尾的 })(); ）。
+// 原本位于此处的两段「闭包外」代码已原样迁出：
+//   js/core/boot.js  ← 异常上报（原 2-8 行）+ rAF 60fps 限帧（原 13-27 行）
+//   js/core/dom.js   ← 滑块填充进度（原 29-62 行）+ 音量气泡（原 64-87 行）
+// 它们必须在 app.js 之前加载（index.html 里已按顺序排好）。
 
 
-// ---- 全局把 requestAnimationFrame 限到 60fps ----
-// 高刷屏（例如 180Hz）下浏览器按显示器刷新率出帧，界面里的 JS 动画没必要跑 180fps
-(function () {
-  var orig = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
-  if (!orig) return;
-  var MIN = 1000 / 62;
-  window.requestAnimationFrame = function (cb) {
-    var last = 0;                       // 每条调用链各自计时，互不抢额度
-    function step(ts) {
-      var now = performance.now();
-      if (now - last < MIN) { orig(step); return; }
-      last = now;
-      cb(ts);
-    }
-    return orig(step);
-  };
-})();
-
-(function () {
-  // ---- 滑块「已填充」进度：轨道由 CSS 自绘（见 main.css），Chromium 自绘后不再画填充段，
-  //      这里把进度写进 --range-p，任何 input[type=range]（含动态渲染出来的）都自动生效。
-  function syncRangeFill(i) {
-    var mn = Number(i.min === '' || i.min === undefined ? 0 : i.min);
-    var mx = Number(i.max === '' || i.max === undefined ? 100 : i.max);
-    var v = Number(i.value);
-    if (!isFinite(mn)) mn = 0; if (!isFinite(mx)) mx = 100; if (!isFinite(v)) v = mn;
-    var p = mx > mn ? Math.max(0, Math.min(100, (v - mn) / (mx - mn) * 100)) : 0;
-    i.style.setProperty('--range-p', p + '%');
-  }
-  function syncRangeFillAll() {
-    var l = document.querySelectorAll('input[type=range]');
-    for (var k = 0; k < l.length; k++) syncRangeFill(l[k]);
-  }
-  window.neSyncRangeFill = syncRangeFill;
-  document.addEventListener('input', function (e) { if (e.target && e.target.type === 'range') syncRangeFill(e.target); }, true);
-  document.addEventListener('change', function (e) { if (e.target && e.target.type === 'range') syncRangeFill(e.target); }, true);
-  var pending = false;
-  function queue() {
-    if (pending) return; pending = true;
-      requestAnimationFrame(function () {
-        pending = false;
-        try { syncRangeFillAll(); } catch (x) { }
-        // 任何 DOM 变动后都补一次离线置灰：列表渲染路径很多，靠每条路径自己记得调用太脆（实测主页列表没灰、面板却灰了）
-        try { if (window.neOfflineMark) window.neOfflineMark(); } catch (x) { }
-      });
-  }
-  function boot() {
-    queue();
-    try { new MutationObserver(queue).observe(document.body, { childList: true, subtree: true }); } catch (x) { }
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-})();
-
-(function () {
-  // ---- 音量滑块：鼠标放上去/拖动时显示当前具体音量 ----
-  var vol = document.getElementById('pl-volume');
-  if (!vol) return;
-  var tip = document.createElement('div');
-  tip.className = 'vol-tip';
-  document.body.appendChild(tip);
-  function pct() { var v = Math.round(Number(vol.value)); return isFinite(v) ? v : 0; }
-  function place() {
-    var r = vol.getBoundingClientRect();
-    if (!r.width) return;
-    var p = Math.max(0, Math.min(1, pct() / 100));
-    tip.style.left = Math.round(r.left + 7 + (r.width - 14) * p) + 'px';
-    tip.style.top = Math.round(r.top - 8) + 'px';
-    tip.textContent = '音量 ' + pct() + '%';
-  }
-  function show() { place(); tip.classList.add('on'); }
-  function hide() { tip.classList.remove('on'); }
-  vol.addEventListener('mouseenter', show);
-  vol.addEventListener('mousemove', place);
-  vol.addEventListener('mouseleave', hide);
-  vol.addEventListener('input', function () { if (tip.classList.contains('on')) place(); });
-  vol.addEventListener('change', function () { if (tip.classList.contains('on')) place(); });
-})();
-
+// ---------------------------------------------------------------------------
+// 已拆到同目录模块文件（按 index.html 的加载顺序，均在 app.js 之前）：
+//   core/boot.js core/dom.js core/settings-live.js core/cache.js
+//   ui/toast.js ui/icons.js ui/theme-accent.js ui/list.js ui/theme-ripple.js
+//   player/hotkeys.js player/dock.js media/audio.js
+//   lyrics/nowplaying.js lyrics/render.js pages/settings.js pages/downloads.js
+// 留在本文件的仍是同一个主闭包：它引用的状态（queue/appSettings/view/NE/…）无法在不改行为的前提下提升为全局。
+// ---------------------------------------------------------------------------
 (function () {
   const NE = window.NE; const $ = s => document.querySelector(s);
   const view = $('#view');
   let queue = []; let playingIndex = -1; let currentList = []; let nowPlaying = null; let appSettings = {};
 
-  function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
-  function fmt(ms) { if (!ms || ms <= 0) return '00:00'; const s = Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
-  function esc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-  // 没有封面时不要输出 src="" —— 空 src 会让浏览器去请求页面自己(index.html)，控制台/日志里全是无谓的加载失败
-  function imgSrc(u, param) { u = String(u || '').replace(/\^\d+\^/, ''); return u ? ' src="' + esc(u + (param || '')) + '"' : ''; }
-  // 兼容两种字段：网易云接口的 snake_case（name/ar/al）与 C# 队列 DTO 的 PascalCase（Title/Artist/...）
-  function normSong(s) {
-    if (!s) return null;
-    var artists = (s.ar || s.artists || []).map(function (a) { return a.name; }).join(' / ');
-    if (!artists && s.Artist) artists = s.Artist;
-    var al = s.al || s.album || {};
-    var pic = al.picUrl || al.pic || s.pic || s.Pic || '';
-    return {
-      Id: (s.id !== undefined && s.id !== null) ? s.id : (s.Id !== undefined ? s.Id : 0),
-      Title: s.name || s.Title || '未知歌曲',
-      Artist: artists || '未知',
-      Album: al.name || s.Album || '',
-      AlbumId: al.id !== undefined ? al.id : (s.AlbumId || 0),
-      Pic: pic,
-      Duration: s.dt || s.duration || s.Duration || 0
-    };
-  }
   // ================= 多语言（前端 i18n） =================
   // 词典由 C# 推来（lang/*.lang）：键 = 中文原文，值 = 译文；键里带 {0}{1} 的是动态模板，正则匹配后替换。
   // 覆盖三层：文本节点 / title·placeholder·aria-label 属性 / 代码里显式调 T() 的拼接串。
@@ -280,27 +186,6 @@ window.addEventListener('unhandledrejection', function (e) {
     hk_lyric: '打开/收起歌词页', hk_close: '关闭歌词页'
   };
   var hotkeys = {};
-  function evKeyName(e) {
-    var p = [];
-    if (e.ctrlKey) p.push('Ctrl');
-    if (e.altKey) p.push('Alt');
-    if (e.shiftKey) p.push('Shift');
-    var code = e.code || '';
-    if (!code) {                                   // 某些输入源不带 code，退回到 key
-      var k = e.key || '';
-      if (k === ' ' || k === 'Spacebar') code = 'Space';
-      else if (k.length === 1) code = k.toUpperCase();
-      else code = k;
-    }
-    if (code.indexOf('Key') === 0) code = code.slice(3);
-    else if (code.indexOf('Digit') === 0) code = code.slice(5);
-    // 单独的修饰键不作为快捷键
-    if (!code || code === 'Control' || code === 'Alt' || code === 'Shift' || code === 'Meta' ||
-        code === 'ControlLeft' || code === 'ControlRight' || code === 'AltLeft' || code === 'AltRight' ||
-        code === 'ShiftLeft' || code === 'ShiftRight') return '';
-    p.push(code);
-    return p.join('+');
-  }
   var HK_OFF = 'none';                     // 存进 config 的“已关闭”标记
   function hotkeysFromSettings(s) {
     hotkeys = {};
@@ -308,9 +193,6 @@ window.addEventListener('unhandledrejection', function (e) {
       var v = String(cfgGet(s, k, HK_DEFAULTS[k]) || HK_DEFAULTS[k]);
       hotkeys[k] = (v === HK_OFF) ? '' : v;   // 空串 = 不绑定
     }
-  }
-  function isTyping(el) {
-    return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
   }
   // ================= 背景音乐律动（Phase B，用真实频谱）=================
   var VZ = {
@@ -663,16 +545,6 @@ window.addEventListener('unhandledrejection', function (e) {
       AU.fading = 0;
     }, Math.round(dur * 1000) + 150);
   }
-  // 续播定位：el.load() 之后 metadata 未就绪时直接写 currentTime 会被丢弃 → 补一个一次性监听
-  function auSeekTo(p, ms) {
-    if (!p || !(ms > 0)) return;
-    var set = function () { try { p.el.currentTime = ms / 1000; } catch (e) { } };
-    set();
-    if (!(p.el.readyState >= 1)) {
-      var once = function () { p.el.removeEventListener('loadedmetadata', once); set(); };
-      p.el.addEventListener('loadedmetadata', once);
-    }
-  }
   function auLoad(url, song, index, autoplay, startMs) {
     auCtx();
     AU.curIndex = (typeof index === 'number') ? index : -1;
@@ -803,35 +675,7 @@ function applyLiveSetting(key, val) {
     if (key === 'ui_material' || key === 'ui_liquid_power' || key === 'ui_liquid_ca' || key === 'ui_liquid_thick' || key === 'ui_liquid_para' || key === 'ui_liquid_fluid') applyGlassUI();
   } catch (e) { }
 }
-function cfgGet(s, k, def) { var v = (s && s.app) ? s.app[k] : undefined; return (v === undefined || v === null || v === '') ? def : v; }
-  function cfgBool(s, k, def) { var v = cfgGet(s, k, def); return String(v) !== 'false' && v !== false; }
 
-  // ---- 液态玻璃开关 + 强度（顶部标题条已随原生标题栏一起取消，不再有标题栏设置项）----
-  function glassPowerValue(s) {
-    var v = Number(cfgGet(s, 'ui_liquid_power', 100));
-    if (!isFinite(v)) v = 100;             // 0 是合法值（= 不折射），不能被 || 吃掉
-    return Math.max(0, Math.min(200, v));
-  }
-  function glassCaValue(s) {
-    var v = Number(cfgGet(s, 'ui_liquid_ca', 50));
-    if (!isFinite(v)) v = 50;              // 0 也是合法值（= 无色散）
-    return Math.max(0, Math.min(100, v));
-  }
-  function glassThickValue(s) {
-    var v = Number(cfgGet(s, 'ui_liquid_thick', 60));
-    if (!isFinite(v)) v = 60;              // 0 = 四周一样厚（改造前原样）
-    return Math.max(0, Math.min(100, v));
-  }
-  function glassParaValue(s) {
-    var v = Number(cfgGet(s, 'ui_liquid_para', 50));
-    if (!isFinite(v)) v = 50;              // 0 = 光带不跟随鼠标
-    return Math.max(0, Math.min(100, v));
-  }
-  function glassFluidValue(s) {
-    var v = Number(cfgGet(s, 'ui_liquid_fluid', 50));
-    if (!isFinite(v)) v = 50;              // 0 = 关掉流体质感（液滴/环境流动/涟漪）
-    return Math.max(0, Math.min(100, v));
-  }
   // ---- liquidGL 试用过、已撤掉（保留结论，别再踩）----
   // 试过把开源库 liquidGL（MIT，WebGPU 快照式玻璃）接成第三种材质，用户实测三个问题：
   //   ① dock 里的按钮全部点不动 —— 库会把目标元素和它的所有子元素设成 pointer-events:none
@@ -937,19 +781,9 @@ function applyPerfAnim(s) {
   }
   // 测试入口：控制台/CDP 里调 window.neToast('文本') 就能弹一条，方便自测（不改变任何动画逻辑）
   window.neToast = function (msg) { toast(msg || '测试提示'); return 'shown'; };
-  // Windows 11 风格的小圆圈加载动画（纯 SVG + CSS，动画定义见 main.css 的 .win-spin）
-  function spinHTML(text) {
-    var dots = '';
-    for (var i = 0; i < 8; i++) dots += '<circle cx="24" cy="7.5" r="3.1" style="--i:' + i + '"></circle>';
-    return '<div class="win-spin-wrap"><svg class="win-spin" viewBox="0 0 48 48" aria-hidden="true">' + dots + '</svg>'
-      + (text ? '<div class="win-spin-text">' + esc(text) + '</div>' : '') + '</div>';
-  }
   function loading() { view.innerHTML = spinHTML(''); }
 
   function play(ns) { NE.post({ type:'play', song: ns }); setPlayer(ns); }
-  function pop(el) { if(!el) return; el.classList.remove('fx-pop'); void el.offsetWidth; el.classList.add('fx-pop'); }
-  // 给插件用的事件广播（宿主不在就什么也不做）
-  function plugEmit(evt, payload) { try { if (window.PLUGHOST) window.PLUGHOST.emit(evt, payload); } catch (e) { } }
   function setPlaying(on) {
     var p = $('#player'); if(p) p.classList.toggle('playing', !!on);
     var pb = $('#pb-play'); if(pb) pb.innerHTML = on ? SVG.pause : SVG.play;
@@ -972,7 +806,6 @@ function applyPerfAnim(s) {
     var svg = qualSvg(qualCur);
     ["pl-qual", "np-qual"].forEach(function (id) { var b = document.getElementById(id); if (b) { b.innerHTML = svg; b.title = "音质：" + (QUAL_LABELS[qualCur] || qualCur); } });
   }
-  function qualClose() { var m = document.getElementById("qual-menu"); if (m) m.classList.remove("show"); }
   function qualOpen(anchor) {
     var m = document.getElementById("qual-menu"); if (!m) return;
     m.innerHTML = "";
@@ -1042,7 +875,6 @@ function applyPerfAnim(s) {
     var v = m[1];
     return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
   }
-  function shade(rgb, k) { return "rgb(" + rgb.map(function (n) { return Math.round(n * k); }).join(",") + ")"; }
   function applyAccentOverrides() {
     try {
       var sch = String((appSettings && appSettings.scheme) || "");
@@ -1076,27 +908,6 @@ function applyPerfAnim(s) {
   // ---- 「跟随封面（自动）」：从当前封面采样主色，推导整套强调色 ----
   var coverColorCache = {};
   var dynamicAccent = null;
-  function boostColor(r, g, b) {
-    var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    var l = (mx + mn) / 2 / 255;
-    var s = mx === mn ? 0 : (mx - mn) / (l > .5 ? (510 - mx - mn) : (mx + mn));
-    s = Math.min(1, s * 1.45 + .12);                 // 提高饱和度，避免灰扑扑
-    l = Math.min(.82, Math.max(.52, l * .95 + .18)); // 压到中亮度，深色底上更清楚
-    function hue2rgb(p2, q2, t) { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1/6) return p2 + (q2 - p2) * 6 * t; if (t < 1/2) return q2; if (t < 2/3) return p2 + (q2 - p2) * (2/3 - t) * 6; return p2; }
-    var r2, g2, b2;
-    if (s === 0) { r2 = g2 = b2 = l; }
-    else {
-      var q = l < .5 ? l * (1 + s) : l + s - l * s, p2 = 2 * l - q;
-      var h = 0;
-      var rr = r, gg = g, bb = b;                      // 统一用 0~255，别和归一化混用
-      if (mx === r) h = (gg - bb) / (mx - mn);
-      else if (mx === g) h = 2 + (bb - rr) / (mx - mn);
-      else h = 4 + (rr - gg) / (mx - mn);
-      h = (h / 6 + 1) % 1;
-      r2 = hue2rgb(p2, q, h + 1/3); g2 = hue2rgb(p2, q, h); b2 = hue2rgb(p2, q, h - 1/3);
-    }
-    return "#" + [r2, g2, b2].map(function (n) { return ("0" + Math.round(n * 255).toString(16)).slice(-2); }).join("");
-  }
   function pickCoverColor(pic) {
     if (!pic) return;
     var url = pic.replace(/^d+^/, "");
@@ -1179,15 +990,6 @@ function applyPerfAnim(s) {
   }
   function setPlayer(ns) { if(!ns) return; scrobSwitchTo(ns); showSongMeta(ns); setPlaying(true); pop($('#pb-play')); plugEmit('track', ns); }
 
-  // ===== 统一图标集：全部描边风格（stroke 2 / round 端点），同一功能只用同一个图标 =====
-  function ico(inner) {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" '
-      + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
-  }
-  // 品牌标（GitHub / Gitee）是实心填充图形，不能用描边那套
-  function icoFill(inner) {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none">' + inner + '</svg>';
-  }
   var SVG = {
     play:    ico('<path d="M8 5v14l11-7z"/>'),
     pause:   ico('<rect x="7" y="4.5" width="3.6" height="15" rx="1.5"/><rect x="13.4" y="4.5" width="3.6" height="15" rx="1.5"/>'),
@@ -1389,20 +1191,6 @@ function applyPerfAnim(s) {
     if (!(v >= 10)) v = 40;
     return Math.max(10, Math.min(200, v));
   }
-  function mqCells(scope) { return scope ? scope.querySelectorAll('.sr-title,.sr-artist,.sr-album,#pl-title,#pl-artist') : []; }
-  // 量文字的真实宽度：拿同 class 的空元素塞进同一个父级（继承同样的字体/变量），
-  // 绝对定位 + width:auto → 收缩到内容宽度，用 getBoundingClientRect 取亚像素精度。
-  // （不能用 scrollWidth：ellipsis 元素在 Chromium 上会报成 clientWidth）
-  function mqTextWidth(c, txt) {
-    var clone = c.cloneNode(false);
-    clone.textContent = txt;
-    clone.removeAttribute('data-mq-text');
-    clone.style.cssText = 'position:absolute;left:-99999px;top:0;width:auto;max-width:none;min-width:0;flex:none;visibility:hidden;pointer-events:none;';
-    (c.parentNode || document.body).appendChild(clone);
-    var w = clone.getBoundingClientRect().width;
-    clone.parentNode.removeChild(clone);
-    return w;
-  }
   function mqStart(row) {
     if (!row || row.dataset.mqOn === '1' || !mqEnabled()) return;
     row.dataset.mqOn = '1';
@@ -1430,15 +1218,6 @@ function applyPerfAnim(s) {
       c.classList.add('sr-mq');
       track.style.animationDuration = Math.max(1.2, (w + MQ_GAP) / speed).toFixed(2) + 's';
     });
-  }
-  function mqStop(row) {
-    if (!row) return;
-    Array.prototype.forEach.call(mqCells(row), function (c) {
-      if (!c.querySelector('.mq-track')) return;
-      c.classList.remove('sr-mq');
-      c.textContent = c.dataset.mqText || '';
-    });
-    row.dataset.mqOn = '';
   }
   view.addEventListener('mouseover', function (e) {
     var row = e.target.closest && e.target.closest('.song-row');
@@ -1514,13 +1293,6 @@ function applyPerfAnim(s) {
     return e.v || null;
   }
   var LYRIC_TTL = 7 * 24 * 60 * 60 * 1000;   // 歌词基本不变，存 7 天
-  /** 网易云「每日推荐」的刷新边界：每天早上 6:00。当前若还没到 6:00，则边界是昨天 6:00。 */
-  function dailyBoundary(nowMs) {
-    var d = new Date(nowMs || Date.now());
-    if (d.getHours() < 6) d.setDate(d.getDate() - 1);
-    d.setHours(6, 0, 0, 0);
-    return d.getTime();
-  }
   window.neDailyBoundary = dailyBoundary;   // 便于自测/排查：传入时间戳可验证 6:00 边界
 
   // ================= 离线播放 =================
@@ -1719,7 +1491,6 @@ function applyPerfAnim(s) {
       if (l.tr === l.s) l.tr = '';
     });
   }
-  function npEl(id) { return document.getElementById(id); }
   function npSetPlaying(on) {
     npPlaying = !!on;
     var b = npEl('np-play'); if (b) b.innerHTML = npPlaying ? SVG.pause : SVG.play;
@@ -1739,24 +1510,6 @@ function applyPerfAnim(s) {
     return out;
   }
 
-  function npRenderSong(ns) {
-    if (!ns) return;
-    var cover = npEl('np-cover'), bg = npEl('np-bg');
-    var wrap = document.querySelector('#np .np-cover-wrap');
-    var pic = ns.Pic ? ns.Pic.replace(/\^\d+\^/, '') : '';
-    if (pic) {
-      cover.src = pic;
-      // 背景用 240px 缩略图放大 —— 比整屏 72px 高斯模糊便宜一个数量级
-      var small = pic + (pic.indexOf('?') >= 0 ? '&' : '?') + 'param=240y240';
-      bg.style.backgroundImage = 'url("' + small + '")';
-    }
-    else { cover.removeAttribute('src'); bg.style.backgroundImage = 'none'; }
-    // 有封面时隐藏占位音符（原来用 img ~ i 兄弟选择器，但 <i> 在 <img> 前面，根本没生效）
-    if (wrap) wrap.classList.toggle('has-cover', !!pic);
-    npEl('np-title').textContent = ns.Title || '';
-    npEl('np-artist').textContent = ns.Artist || '';
-    npEl('np-album').textContent = ns.Album || '';
-  }
 
   // ---- 歌词页外观设置（辉光/阴影/描边/排列/逐字/模糊/曲线）----
   var lyStyles = {
@@ -1842,13 +1595,6 @@ function applyPerfAnim(s) {
     vzApply();                                                   // 背景音乐律动
   }
 
-  // ===== 歌词排版引擎（照 refined-now-playing-netease 的思路重写）=====
-  // 每行绝对定位；按与当前行的“行距 offset”分别算 缩放/模糊/透明度 与位置，
-  // 旋转时把各行放到以左侧远处为圆心的大圆弧上（而不是简单地按行号叠加角度）。
-  function lyScale(off) {
-    var t = Math.max(1 - Math.abs(off) * 0.2, 0);
-    return t * t * t * 0.3 + 0.7;          // 0→1.0  ±1→0.854  ±2→0.765  ±5 以外→0.7
-  }
   function lyBlurPx(off) {
     if (!lyStyles.blur) return 0;
     var a = Math.abs(off); if (a === 0) return 0;
@@ -1857,11 +1603,6 @@ function applyPerfAnim(s) {
     var maxB = lyStyles.blurAmt / 100 * 10;
     if (maxB < 0.3) return 0;
     return Math.min(a * maxB / 3, maxB);
-  }
-  function lyOpacity(off) {
-    var a = Math.abs(off);
-    if (a <= 1) return 1;                  // 相邻行保持清晰
-    return Math.max(1 - 0.4 * (a - 1), 0);
   }
   // 圆弧排列：圆心在左侧，半径随曲率变化
   function lyArc(yOffset, height, curvature) {
@@ -2089,9 +1830,6 @@ function applyPerfAnim(s) {
   }
   // 底部控制条（进度 + 控制键）：鼠标一动就滑出来，停 3 秒自己从底部滑走
   var npBarIdle = 0;
-  function npBarHide() {
-    var b = document.querySelector('#np .np-bar'); if (b) b.classList.add('bar-away');
-  }
   function npBarPoke() {
     var bar = document.querySelector('#np .np-bar'); if (!bar) return;
     if (bar.classList.contains('bar-away')) bar.classList.remove('bar-away');
@@ -2140,27 +1878,6 @@ function applyPerfAnim(s) {
         npIndex = -1;
       } catch (e) { npRenderLyric([]); }
     }
-  }
-  // 封面“飞入”：从 dock 小封面 FLIP 到大封面，让歌词页像是从播放条长出来的
-  function npCoverFlip() {
-    var wrap = document.querySelector('#np .np-cover-wrap');
-    var from = document.getElementById('pl-cover-wrap');
-    if (!wrap || !from) return;
-    var a = from.getBoundingClientRect(), b = wrap.getBoundingClientRect();
-    if (!a.width || !b.width) return;
-    var sx = a.width / b.width, sy = a.height / b.height;
-    var s = Math.max(.12, Math.min(sx, sy));
-    var dx = (a.left + a.width / 2) - (b.left + b.width / 2);
-    var dy = (a.top + a.height / 2) - (b.top + b.height / 2);
-    wrap.style.transition = 'none';
-    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(' + s + ')';
-    wrap.style.opacity = '.85';
-    void wrap.offsetWidth;                       // 强制回流，保证起始帧生效
-    requestAnimationFrame(function () {
-      wrap.style.transition = 'transform .52s cubic-bezier(.2,.8,.25,1), opacity .3s ease';
-      wrap.style.transform = 'none';
-      wrap.style.opacity = '1';
-    });
   }
 
   window.addEventListener('resize', function () { if (npOpen) npLayout(); });
@@ -2438,15 +2155,6 @@ function applyPerfAnim(s) {
     view.innerHTML = ''; view.appendChild(html);
   }
 
-  // ---------- 设置（内嵌主窗口的网页设置页） ----------
-  // 界面字体：把选中的字体写进 CSS 变量 --app-font，空值就撤掉变量用默认字体
-  function applyAppFont(name) {
-    try {
-      var root = document.documentElement, v = String(name || '').trim();
-      if (v) root.style.setProperty('--app-font', '"' + v.replace(/["\\]/g, '') + '"');
-      else root.style.removeProperty('--app-font');
-    } catch (e) { }
-  }
 
   // 下载目录：路径框引用（folder_picked 回来后原地刷新，不用整页重绘）
   let dlDirEl = null;
@@ -3133,19 +2841,6 @@ function applyPerfAnim(s) {
     try { NE.post({ type: 'log', msg: 'ripple origin=' + Math.round(x) + ',' + Math.round(y) + ' viewport=' + window.innerWidth + 'x' + window.innerHeight }); } catch (e) { }
     setTimeout(function () { if (rippleJob && tok === rippleToken) rippleJob = null; }, 2000); // 兜底：未等到配色推送就作废
   }
-  function rippleRadius(x, y) {
-    var dx = Math.max(x, window.innerWidth - x), dy = Math.max(y, window.innerHeight - y);
-    return Math.ceil(Math.sqrt(dx * dx + dy * dy)) + 32;
-  }
-  function rippleRing(x, y) {
-    var r = rippleRadius(x, y);
-    var d = document.createElement('div');
-    d.className = 'nm-ripple-ring';
-    d.style.width = d.style.height = (r * 2) + 'px';
-    d.style.left = x + 'px'; d.style.top = y + 'px';
-    document.body.appendChild(d);
-    setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 900);
-  }
   function themeWithRipple(d) {
     var job = rippleJob; rippleJob = null;
     var after = job ? job.after : [], done = false;
@@ -3662,25 +3357,7 @@ function applyPerfAnim(s) {
   var dlArmTimers = {};      // 「再点一次确认」的复位计时器
   var dlClearTimer = null;   // 「清除下载历史」的复位计时器
 
-  function fmtSize(b) {
-    b = Number(b) || 0;
-    if (b >= 1073741824) return (b / 1073741824).toFixed(2) + ' GB';
-    if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
-    if (b >= 1024) return Math.round(b / 1024) + ' KB';
-    return b + ' B';
-  }
-  function dlPic(p) { return p ? p.replace(/\^\d+\^/, '') + '?param=80y80' : ''; }
   function dlIds() { return dlTasks.map(function (t) { return t.id; }).join(','); }
-  function dlStatusText(t) {
-    switch (t.status) {
-      case 'queued': return '等待下载…';
-      case 'downloading': return '正在下载 ' + Math.round((t.progress || 0) * 100) + '%';
-      case 'paused': return t.done > 0 ? '已暂停（已下 ' + fmtSize(t.done) + '）' : '已暂停';
-      case 'done': return '已完成';
-      case 'failed': return '失败：' + (t.error || '未知原因');
-      default: return t.status || '';
-    }
-  }
 
   // 注意：go() 用 `if (task) { await task; animateView(); }` 判断要不要播入场动画，
   // 所以每个页面函数都必须返回 Promise（之前这里是普通函数，导致切到下载管理没有过渡动画）

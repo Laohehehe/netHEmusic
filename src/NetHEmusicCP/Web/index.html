@@ -207,6 +207,24 @@
 <div id="toast" class="toast" style="display:none"></div>
 <script src="js/api.js"></script>
 <script src="js/plugins.js"></script>
+<!-- app.js 拆分出来的模块：全部只做「原样搬出」的函数声明，无副作用，因此先后顺序不影响行为；
+     只有 app.js 保留主闭包与自执行初始化，必须留在最后。不要调换 app.js 的位置。 -->
+<script src="js/core/boot.js"></script>
+<script src="js/core/dom.js"></script>
+<script src="js/core/settings-live.js"></script>
+<script src="js/core/cache.js"></script>
+<script src="js/ui/toast.js"></script>
+<script src="js/ui/icons.js"></script>
+<script src="js/ui/theme-accent.js"></script>
+<script src="js/ui/list.js"></script>
+<script src="js/ui/theme-ripple.js"></script>
+<script src="js/player/hotkeys.js"></script>
+<script src="js/player/dock.js"></script>
+<script src="js/media/audio.js"></script>
+<script src="js/lyrics/nowplaying.js"></script>
+<script src="js/lyrics/render.js"></script>
+<script src="js/pages/settings.js"></script>
+<script src="js/pages/downloads.js"></script>
 <script src="js/app.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/glass.js"></script>
