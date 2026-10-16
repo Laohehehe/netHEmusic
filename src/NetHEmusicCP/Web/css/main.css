@@ -183,17 +183,31 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 :root.dark{color-scheme:dark;}
 /* 浮层统一毛玻璃：和 dock 一致（半透明/Mica 主题下才协调） */
 .pl-panel,.ctx-menu,.qual-menu{backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);}
-/* Windows 11 风格小圆圈加载动画 */
+/* 加载图标：圆环（底轨 + 进度弧）。弧长在 1/44 之间往复、整体匀速自转，
+   合起来就是「一根小圆条绕着圈跑」（同 Windows 11 开机动画）。
+   周长 = 2πr ≈ 59.7（r=9.5），故 dasharray/dashoffset 均按 59.7 计。 */
 .win-spin-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:56px 0;}
-.win-spin{width:44px;height:44px;}
-.win-spin circle{
-  fill:var(--md-accent-color);opacity:.15;
-  transform-origin:24px 24px;transform:rotate(calc(var(--i) * 45deg));
-  animation:win-dot 1.05s linear infinite;animation-delay:calc(var(--i) * 0.13s);
+.win-spin-wrap svg{width:40px;height:40px;display:block;color:var(--md-accent-color);}
+._spinnerTrack_1i3xo_47{fill:none;stroke:currentColor;stroke-width:2.4;opacity:.16;}
+._spinnerArc_1i3xo_48{
+  fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;
+  stroke-dasharray:1 59.7;animation:spinner-dash 1.35s ease-in-out infinite;
 }
-@keyframes win-dot{0%,100%{opacity:.15;}45%{opacity:1;}}
+._spinnerMotion_1i3xo_42{
+  transform-box:fill-box;transform-origin:50% 50%;
+  animation:spinner-rot 1.35s linear infinite;
+}
+@keyframes spinner-rot{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+@keyframes spinner-dash{
+  0%{stroke-dasharray:1 59.7;stroke-dashoffset:0;}
+  50%{stroke-dasharray:44 59.7;stroke-dashoffset:-16.9;}
+  100%{stroke-dasharray:1 59.7;stroke-dashoffset:-59.7;}
+}
 .win-spin-text{margin-top:2px;font-size:13px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);}
-@media (prefers-reduced-motion: reduce){ .win-spin circle{animation:none;opacity:.6;} }
+@media (prefers-reduced-motion: reduce){
+  ._spinnerMotion_1i3xo_42{animation:none;}
+  ._spinnerArc_1i3xo_48{animation:none;stroke-dasharray:26 59.7;stroke-dashoffset:-10;}
+}
 .song-list{border-radius:var(--radius);overflow:hidden;}
 .song-row{display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;background:var(--md-accent-color-bg-darken);border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.04);transition:background .15s;
   /* 长列表：屏幕外的行跳过布局与绘制（含 hover/切页动画时的重绘），行高用实测值兜底 */
