@@ -39,24 +39,21 @@ public static class AppIdentity
         try { EnsureStartMenuShortcut(); } catch (Exception ex) { Log("创建开始菜单快捷方式失败: " + ex.Message); }
     }
 
-    /// <summary>注册表里登记本 AUMID 的显示名与图标（媒体卡片 / 任务栏据此显示）。</summary>
+    /// <summary>注册表里登记本 AUMID 的显示名与图标（供通知 / 任务栏使用）。</summary>
     private static void RegisterDisplayName()
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\AppUserModelId\" + AumId);
         if (key is null) return;
         key.SetValue("DisplayName", AppConfig.AppName, RegistryValueKind.String);
-        key.SetValue("IconUri", IconPath(), RegistryValueKind.String);
+        key.SetValue("IconUri", AppIconSource(), RegistryValueKind.String);
     }
 
-    /// <summary>应用图标：Shell 的 IconUri 与快捷方式图标只认 .ico / exe（给 png 会变成空图标），
-    /// 所以优先用随包发布的 Assets\icon.ico，其次用 exe 自带的图标。</summary>
-    private static string IconPath()
-    {
-        var exe = Environment.ProcessPath ?? "";
-        var dir = string.IsNullOrEmpty(exe) ? AppContext.BaseDirectory : Path.GetDirectoryName(exe);
-        var ico = Path.Combine(dir ?? "", "Assets", "icon.ico");
-        return File.Exists(ico) ? ico : exe;
-    }
+    /// <summary>
+    /// 应用图标来源：必须是 exe 自己（图标从它的资源里取）。
+    /// 实测（Windows 11）：把 IconUri / 快捷方式图标指向一个独立的 .ico 文件时，Shell 解析不出应用图标，
+    /// 任务栏按钮与系统媒体卡片会退化成“空白文件”图标（白色方块）；换成 exe 路径就正常。
+    /// </summary>
+    private static string AppIconSource() => Environment.ProcessPath ?? "";
 
     /// <summary>
     /// 保证系统里有一个“指向当前 exe 且带 AUMID”的开始菜单快捷方式。
@@ -75,7 +72,7 @@ public static class AppIdentity
             var (target, aumid, icon) = Shortcut.Read(lnk);
             if (!string.Equals(target, exe, StringComparison.OrdinalIgnoreCase)) continue;
             if (string.Equals(aumid, AumId, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(icon, IconPath(), StringComparison.OrdinalIgnoreCase))
+                && string.Equals(icon, AppIconSource(), StringComparison.OrdinalIgnoreCase))
             {
                 LogManager.Debug("开始菜单快捷方式已就绪: " + lnk);
                 return;
@@ -202,7 +199,7 @@ public static class AppIdentity
                 link.SetPath(exe);
                 link.SetWorkingDirectory(Path.GetDirectoryName(exe) ?? "");
                 link.SetDescription(AppConfig.AppName + " 网易云音乐下载器");
-                link.SetIconLocation(IconPath(), 0);
+                link.SetIconLocation(exe, 0);
 
                 var store = (IPropertyStore)com;
                 var key = PkeyAppUserModelId;
