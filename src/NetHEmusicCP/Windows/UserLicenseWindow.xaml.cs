@@ -19,7 +19,7 @@ public sealed partial class UserLicenseWindow : Window
         AppServices.Theme.Apply((FrameworkElement)Content);
         _password = new Random().Next(100000, 999999).ToString();
         LicenseText.Text = BuildAgreement();
-        PasswordLine.Text = "软件启用密码 : " + _password;
+        PasswordLine.Text = "启用密码：" + _password;
         // 居中
         try { AppWindow.Resize(new SizeInt32(920, 640)); } catch { }
     }
@@ -38,19 +38,33 @@ public sealed partial class UserLicenseWindow : Window
 
     private void OnAgree(object sender, RoutedEventArgs e)
     {
-        if ((PassInput.Text ?? "").Trim() == _password)
+        var input = (PassInput.Text ?? string.Empty).Trim();
+        if (input.Length == 0)
+        {
+            ShowPassError("请先输入上方显示的 6 位启用密码");
+            PassInput.Focus(FocusState.Programmatic);
+            return;
+        }
+
+        if (input == _password)
         {
             AppServices.Config.FirstRun = false;
             LogManager.Log("用户协议已同意");
             _tcs.TrySetResult(true);
             Close();
+            return;
         }
-        else
-        {
-            LogManager.Warn("用户协议密码错误");
-            _tcs.TrySetResult(false);
-            Close();
-        }
+
+        LogManager.Warn("用户协议密码错误");
+        ShowPassError("密码不正确，请重新输入");
+        PassInput.Text = string.Empty;
+        PassInput.Focus(FocusState.Programmatic);
+    }
+
+    private void ShowPassError(string text)
+    {
+        PassError.Text = text;
+        PassError.Visibility = Visibility.Visible;
     }
 
     private void OnDisagree(object sender, RoutedEventArgs e)

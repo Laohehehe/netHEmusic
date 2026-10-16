@@ -11,7 +11,8 @@
                 </StackPanel>
                 <TextBlock x:Name="LicenseText" TextWrapping="Wrap" FontSize="14" LineHeight="26" Foreground="{ThemeResource AppTextBrush}"/>
                 <TextBlock x:Name="PasswordLine" FontSize="16" FontWeight="SemiBold" Foreground="#FF6D00" HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                <TextBox x:Name="PassInput" HorizontalAlignment="Center" Width="260" PlaceholderText="请输入 6 位数字密码" MaxLength="6"/>
+                <TextBlock x:Name="PassError" FontSize="12" Foreground="#FF5A5A" HorizontalAlignment="Center" Visibility="Collapsed"/>
+                <TextBox x:Name="PassInput" HorizontalAlignment="Center" Width="260" PlaceholderText="请输入上方显示的 6 位数字密码" MaxLength="6"/>
                 <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
                     <Button x:Name="AgreeBtn" Click="OnAgree" Content="同意并继续" Style="{StaticResource AccentButtonStyle}" Width="150" Height="40"/>
                     <Button x:Name="DisagreeBtn" Click="OnDisagree" Content="不同意并退出" Width="150" Height="40"/>

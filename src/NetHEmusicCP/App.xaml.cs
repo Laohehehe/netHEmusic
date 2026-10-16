@@ -174,6 +174,7 @@ public partial class App : Application
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         LogManager.Log("未处理异常(UI): " + e.Exception);
+        LogManager.Log("未处理异常(UI)堆栈: " + e.Exception.ToString());
         AppServices.SelfRepair.Report(e.Exception);
         e.Handled = false; // 交由默认处理，避免吞掉崩溃；已记录到日志
     }
