@@ -202,8 +202,20 @@ html.no-fx .fx-shake{animation:none;}
 .pl-cover-wrap:not(.has-cover) .pl-cover{opacity:0;}
 
 /* ================= 选项卡界面切换动画 ================= */
-@keyframes view-in{from{opacity:0;transform:translateY(14px) scale(.992);}to{opacity:1;transform:none;}}
-.page.view-in, .big-load.view-in{animation:view-in .3s cubic-bezier(.2,.8,.3,1) both;}
+/* 入场：位移 14px→7px、去掉缩放（整页缩放是“割裂感”的主要来源），曲线更柔、时长略长 */
+@keyframes view-in{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
+.page.view-in, .big-load.view-in{animation:view-in calc(.34s * var(--anim-k,1)) cubic-bezier(.22,.72,.24,1) both;}
+/* 出场：旧页面不再“啪”地消失。app.js 在切换时把被替换下来的旧节点留成一层残影
+   （.view-ghost，尺寸/内边距对齐 #view），新页面挂上来之前先原地扣住（盖住 loading 转圈），
+   新页面一到就加上 .view-ghost-out 开始淡出，与入场的淡入重叠，形成交叉淡入淡出。
+   时长/曲线跟随 --anim-k（设置里的动画速率）。 */
+@keyframes view-out{from{opacity:1;transform:none;}to{opacity:0;transform:translateY(-6px) scale(.997);}}
+.view-ghost{position:absolute;overflow:hidden;pointer-events:none;z-index:6;opacity:1;
+  background:var(--side-bg);}
+.view-ghost-out{animation:view-out calc(.22s * var(--anim-k,1)) cubic-bezier(.4,0,.6,.2) both;}
+.view-ghost .view-ghost-inner{min-height:100%;}
+#main.ghost-on .win-spin-wrap{visibility:hidden;}   /* 残影在时别再露 loading 转圈 */
+html.no-anim-page .view-ghost{display:none !important;}
 /* ================= 图标尺寸统一（SVG 稍微小一点） ================= */
 .row-btn svg{width:20px;height:20px;display:block;}
 .ic-btn svg{width:20px;height:20px;display:block;}
