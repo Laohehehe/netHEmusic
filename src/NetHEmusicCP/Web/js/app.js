@@ -2253,7 +2253,7 @@ function applyPerfAnim(s) {
       rows.forEach(function(r){ g.appendChild(r); });
       return g;
     }
-    function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); }; r.appendChild(t); return r; }
+    function sw(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var t = el('div','set-switch'+(val?' on':'')); t.setAttribute('data-key', key); t.onclick = function(){ var on=!t.classList.contains('on'); t.classList.toggle('on',on); NE.setSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); applyLiveSetting(key, on?'true':'false'); }; r.appendChild(t); return r; }
     // 原生 <select> 的弹层在 WebView2 里定位会飘，这里统一用自定义下拉
     function sel(label, key, val, opts, onPick) { return custSel(label, key, val, opts, onPick); }
     function txt(label, key, val) { var r = el('div','set-row'); r.appendChild(el('label','',label)); var i=el('input'); i.type='text'; i.value=val||''; i.onchange=function(){ NE.setSetting(key, i.value); applyLiveSetting(key, i.value); }; r.appendChild(i); return r; }
@@ -2355,6 +2355,7 @@ function applyPerfAnim(s) {
       var row = el('div','set-row');
       row.appendChild(el('label','',label));
       var t = el('div','set-switch'+(val ? ' on' : '')); t.title = label;
+      t.setAttribute('data-key', key);   // 供 C# 广播状态时反查（见 desktop_lyric_state）
       row.appendChild(t);
       var d = subBlock(subRows, val);
       box.appendChild(row); box.appendChild(d);
@@ -3273,7 +3274,14 @@ function applyPerfAnim(s) {
     if (plOpen) { NE.post({ type: 'queue_get' }); return; }
     if (d && typeof d.index === 'number') playingIndex = d.index;
   });
-  NE.on('desktop_lyric_state', function (d) { if (!LYRIC_LOCKED) setLyricBtn(!!d.on); });
+  // 桌面歌词开关有两个入口：dock 上的「词」按钮、设置页的开关。C# 一广播状态就两边一起同步，
+  // 否则从任意一边改完，另一边还是旧状态（用户报过：设置页关掉后 dock 按钮还亮着）。
+  NE.on('desktop_lyric_state', function (d) {
+    var on = !!d.on;
+    if (!LYRIC_LOCKED) setLyricBtn(on);
+    var swEl = document.querySelector('.set-switch[data-key="desktopLyric"]');
+    if (swEl) swEl.classList.toggle('on', on);
+  });
   // 插件宿主：拉一次插件列表（启用的插件会由 C# 把代码下发回来执行）
   try { if (window.PLUGHOST) window.PLUGHOST.init(); } catch (e) { }
   // 图标字体可用性（Win10 没有 Segoe Fluent Icons，会回退到 MDL2）—— 出方框问题时先看这行

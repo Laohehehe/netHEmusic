@@ -146,7 +146,9 @@ public sealed partial class MainWindow
             case "updateSource": AppServices.Config.Set("Update", "source", value); break;
             case "proxy": AppServices.Config.Set("Network", "proxy", value); break;
             case "language": AppServices.Lang.SetLanguage(value); AppServices.Config.Language = value; PushLang(); break;
-            case "desktopLyric": AppServices.Config.Set("App", "desktop_lyric", b ? "true" : "false"); break;
+            // 走和 dock 上「词」按钮完全相同的路径：写配置 + 真开/关桌面歌词窗口 + 回传 desktop_lyric_state。
+            // 之前这里只写配置，于是设置页关掉桌面歌词后，dock 按钮还亮着（两处状态不一致）。
+            case "desktopLyric": SetDesktopLyric(b); break;
             case "desktopLyricTopmost":
                 AppServices.Config.DesktopLyricTopmost = b;
                 try { _lyricWin?.SetTopmost(b); } catch { }

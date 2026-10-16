@@ -137,14 +137,27 @@ public sealed class AppConfig
     private void CreateDefaultIni()
     {
         var d = new IniDoc();
+        // 默认值 = 项目作者调好的那套观感/手感（见 2026-10-16 的默认配置改动）。
+        // 只有 "第一次运行" 相关项例外：first_run 必须是 true，装完第一次启动才会弹用户协议。
         d.Data["App"] = new(StringComparer.OrdinalIgnoreCase)
         {
             ["first_run"] = "true", ["theme"] = "dark", ["language"] = "zh_cn",
-            ["scheme"] = "dark-blue", ["mica"] = "true",
+            // 外观：纯黑配色 + 亚克力材质 + Mica 透明度
+            ["scheme"] = "pure-black", ["mica"] = "true",
+            ["ui_material"] = "acrylic", ["ui_mica_alpha"] = "55",
             ["desktop_lyric_topmost"] = "true",
             // 注：曾有个 desktop_lyric_vertical 配置项，但从来没有任何地方读/写它（"桌面歌词竖排"这条
             // 需求其实没接上）—— 2026-10-03 死代码清理时删掉；要真做竖排请连 UI 一起加。
-            ["desktop_song_info"] = "true", ["volume"] = "100"
+            ["desktop_song_info"] = "true", ["volume"] = "100",
+            ["close_to_tray"] = "true",
+            // 鼠标特效：拖尾长度/宽度、点击波纹大小、抖动强度
+            ["fx_trail_len"] = "20", ["fx_trail_width"] = "8",
+            ["fx_click_size"] = "10", ["fx_shake_power"] = "100",
+            // 桌面歌词窗口的排版：不发光看不清时才开 glow；阴影/模糊默认关，避免糊字
+            ["lyric_shadow"] = "false", ["lyric_glow"] = "true",
+            ["lyric_curve"] = "30", ["lyric_char_power"] = "100",
+            ["lyric_blur"] = "false", ["lyric_blur_amount"] = "100",
+            ["dl_opacity"] = "100", ["dl_sub_size"] = "15", ["dl_main_size"] = "34"
         };
         d.SectionOrder.Add("App");
         d.Data["Download"] = new(StringComparer.OrdinalIgnoreCase) { ["dir"] = "", ["quality"] = "high", ["concurrent"] = "3" };
