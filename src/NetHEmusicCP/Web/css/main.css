@@ -57,10 +57,12 @@ body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-se
 .plg-btn:active{transform:scale(.97);}
 .plg-btn.primary{border-color:var(--md-accent-color);color:var(--md-accent-color);}
 .plg-btn.danger:hover{border-color:#ff7a7a;color:#ff7a7a;}
-#app{height:100vh;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr;background:transparent;}
-/* 侧栏：默认收起(仅图标)，悬停展开 */
-#sidebar{grid-row:1;background:var(--side-bg);padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .18s ease;overflow:hidden;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
-#sidebar:hover{width:210px;}
+/* 两列固定骨架：第一列恒为 56px 图标位，主内容永远钉在第 2 列。
+   侧栏改成脱离文档流的浮层 —— 展开动画只影响它自己，不再每帧重排 #main。 */
+#app{height:100vh;display:grid;grid-template-columns:56px minmax(0,1fr);grid-template-rows:1fr;background:transparent;position:relative;}
+/* 侧栏：默认收起(仅图标)，悬停展开；展开时覆盖在内容之上并落下投影 */
+#sidebar{position:absolute;left:0;top:0;bottom:0;z-index:60;background:var(--side-bg);padding:18px 8px;display:flex;flex-direction:column;width:56px;transition:width .18s ease,box-shadow .18s ease;overflow:hidden;border-right:1px solid rgba(var(--md-accent-color-grey-base-rgb),.06);}
+#sidebar:hover{width:210px;box-shadow:0 16px 34px rgba(0,0,0,.45);}
 #sidebar .label{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transition:max-width .18s ease,opacity .12s ease;}
 #sidebar:hover .label{max-width:180px;opacity:1;}
 #sidebar .brand{justify-content:center;}
