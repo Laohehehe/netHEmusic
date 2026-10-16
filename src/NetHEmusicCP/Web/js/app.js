@@ -1752,7 +1752,7 @@ function applyPerfAnim(s) {
         // 有逐字时间(yrc)就用真实起唱时间当每个字的延迟，跳动与点亮就落在同一时刻；
         // 没有(yrc 缺失或对不上字)就退回 npLayout 写的 --beat-step（整句时长平均分配）
         var ct = null;
-        try { var u0 = yrcMap[l.t]; if (u0 && u0.length) ct = charTimesFor(txt, u0); } catch (e23) { }
+        try { var u0 = yrcUnitsFor(l.t, txt); if (u0 && u0.length) ct = charTimesFor(txt, u0); } catch (e23) { }
         for (var i = 0; i < txt.length; i++) {
           var stl = '--i:' + i;
           if (ct && ct[i] != null) stl += ';--beat-delay:' + Math.max(0, Math.round(ct[i] - l.t)) + 'ms';
@@ -1774,19 +1774,37 @@ function applyPerfAnim(s) {
   // ---- 逐字填充（KTV 式）：没有逐字时间戳，就在行内按字符数均匀分配 ----
   var npFillCache = { line: -1, n: 0, sung: -1 };
   // ---- 逐字歌词（yrc）：解析出每个字的开始时间与时长 ----
-  var yrcMap = {};                       // 行开始时间(ms) → [{ch,t,d}]
+  var yrcMap = {};                       // 行开始时间(ms) → [{ch,t,d}]（毫秒精确命中的快查表）
+  var yrcList = [];                      // 同一份数据按时间排序，供"行时间有偏差"时模糊匹配
   function parseYrc(txt) {
-    var map = {};
+    var map = {}, list = [];
     try {
       String(txt || "").split("\n").forEach(function (raw) {
         var s = raw.trim(); if (!s || s.charAt(0) !== "[") return;
         var m = /^\[(\d+),(\d+)\]/.exec(s); if (!m) return;
         var lt = parseInt(m[1], 10), rest = s.slice(m[0].length), chars = [], re = /\((\d+),(\d+),\d+\)([^()]*)/g, mm;
         while ((mm = re.exec(rest))) { var t = mm[3]; if (!t) continue; chars.push({ ch: t, t: parseInt(mm[1], 10), d: parseInt(mm[2], 10) }); }
-        if (chars.length) map[lt] = chars;
+        if (chars.length) { map[lt] = chars; list.push({ t: lt, units: chars }); }
       });
+      list.sort(function (a, b) { return a.t - b.t; });
     } catch (e) { }
+    yrcList = list;
     return map;
+  }
+  // yrc 的行时间和 lrc 的行时间经常差几十~几百毫秒（实测 ヒバナ 差 190ms），只按毫秒精确查表会全部落空、
+  // 逐字就退化成"整句平均分配"。所以：先查精确表，再在 ±700ms 内按"时间最近且逐字核对文本能对上"找。
+  function yrcUnitsFor(t, text) {
+    try {
+      var u = yrcMap[t];
+      if (u && u.length && (!text || charTimesFor(text, u))) return u;
+      var best = null, bestD = 701;
+      for (var i = 0; i < yrcList.length; i++) {
+        var d = Math.abs(yrcList[i].t - t); if (d > 700) continue;
+        if (!charTimesFor(text, yrcList[i].units)) continue;
+        if (d < bestD) { bestD = d; best = yrcList[i].units; }
+      }
+      return best;
+    } catch (e) { return null; }
   }
   // 把 yrc 的字（词/音节）摊平成「每个显示字符的起唱时间」，并逐字核对文本对不对得上。
   // 对得上 → 返回和 text 等长的数组（空格位 null）；对不上 → null（调用方退回平均分配）
@@ -1834,7 +1852,7 @@ function applyPerfAnim(s) {
       var t1 = (npLines[npIndex + 1] && npLines[npIndex + 1].t > t0) ? npLines[npIndex + 1].t : (t0 + (cur.d || 4000));
       var pos = (typeof PC !== "undefined") ? pcNow() : npPosMs;
       var spans = ln.querySelectorAll(".ly-ch");
-      var units = yrcMap[t0];
+      var units = yrcUnitsFor(t0, cur.s);
       if (units && !npFillCache.times) npFillCache.times = alignCharTimes(spans, units);
       var times = units ? npFillCache.times : null;
       var sung = 0;
