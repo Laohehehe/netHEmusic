@@ -201,9 +201,20 @@ html.no-fx .fx-shake{animation:none;}
 .pl-cover-wrap .pl-cover{width:100%;height:100%;margin:0;}
 .pl-cover-wrap:not(.has-cover) .pl-cover{opacity:0;}
 
-/* ================= 选项卡界面切换动画 ================= */
-@keyframes view-in{from{opacity:0;transform:translateY(14px) scale(.992);}to{opacity:1;transform:none;}}
-.page.view-in, .big-load.view-in{animation:view-in .3s cubic-bezier(.2,.8,.3,1) both;}
+/* ================= 选项卡界面切换动画（上下滑入滑出 + 淡入淡出，约 0.125s） ================= */
+/* 入场：新页面从屏幕下方滑入，同时淡入。--view-h = #view 的可视高度（app.js 里设置），
+   保证滑入距离正好是一屏；跟随设置里的动画速率 --anim-k。 */
+@keyframes view-in{from{opacity:0;transform:translateY(var(--view-h,100%));}to{opacity:1;transform:none;}}
+.page.view-in, .big-load.view-in{animation:view-in calc(.125s * var(--anim-k,1)) cubic-bezier(.3,.7,.35,1) both;}
+/* 出场：旧页面不再瞬间消失。app.js 在切换时把被替换下来的旧节点留成 .view-ghost，
+   与新页面同时播：旧页面向上滑出屏幕并淡出，新页面从下方滑入并淡入 → 两层相接不割裂。
+   时长/曲线跟随 --anim-k（设置里的动画速率）。 */
+@keyframes view-out{from{opacity:1;transform:none;}to{opacity:0;transform:translateY(calc(-1 * var(--view-h,100%)));}}
+.view-ghost{position:absolute;overflow:hidden;pointer-events:none;z-index:6;background:var(--side-bg);}
+.view-ghost-go{animation:view-out calc(.125s * var(--anim-k,1)) cubic-bezier(.3,.7,.35,1) both;}
+.view-ghost .view-ghost-inner{min-height:100%;}
+#main.ghost-on .win-spin-wrap{visibility:hidden;}   /* 残影在时别再露 loading 转圈 */
+html.no-anim-page .view-ghost{display:none !important;}
 /* ================= 图标尺寸统一（SVG 稍微小一点） ================= */
 .row-btn svg{width:20px;height:20px;display:block;}
 .ic-btn svg{width:20px;height:20px;display:block;}

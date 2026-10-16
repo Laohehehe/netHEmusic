@@ -1296,12 +1296,88 @@ function applyPerfAnim(s) {
     });
   })();
 
-  // 选项卡切换动画：新内容渲染完后播一次入场（淡入 + 轻微上移）
+  // 选项卡切换动画：新内容渲染完后播一次入场（从屏幕下方滑入 + 淡入）
   function animateView() {
     var el = view.firstElementChild; if (!el) return;
     el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
     applyI18n(view); applyI18n($('#topbar'));   // 页面渲染完顺手把中文换掉（en 模式）
   }
+  // 选项卡切换：旧页面不再瞬间消失。渲染是 view.innerHTML='' + appendChild，旧节点会被丢掉，
+  // 这里用 MutationObserver 把它接住做成一层次残影（.view-ghost），等新页面挂上来时两层同时播：
+  // 新页面从屏幕下方滑入并淡入、旧页面向上滑出屏幕并淡出（各约 0.125s，见 effects.css）。
+  var viewGhost = null, lastViewScrollTop = 0, ghostTimer = 0;
+  function viewAnimOff() {
+    var c = document.documentElement.classList;
+    return c.contains('no-anim-page') || c.contains('anim-off');
+  }
+  // --view-h：滑入/滑出的距离 = #view 可视高度（正好一屏）
+  function setViewH() {
+    try { document.documentElement.style.setProperty('--view-h', (view.clientHeight || 0) + 'px'); } catch (e) {}
+  }
+  setViewH();
+  try { view.addEventListener('scroll', function () { lastViewScrollTop = view.scrollTop; }, { passive: true }); } catch (e) {}
+  try { window.addEventListener('resize', setViewH); } catch (e) {}
+  function dropViewGhost() {
+    if (ghostTimer) { clearTimeout(ghostTimer); ghostTimer = 0; }
+    if (viewGhost) { if (viewGhost.parentNode) viewGhost.parentNode.removeChild(viewGhost); viewGhost = null; }
+    var mh = view.parentNode; if (mh && mh.classList) mh.classList.remove('ghost-on');
+  }
+  // 新页面挂上来了 → 残影开始向上滑出（和入场同时播）
+  function ghostSlideOut() {
+    if (!viewGhost || viewGhost.classList.contains('view-ghost-go')) return;
+    var g = viewGhost; setViewH();
+    g.classList.add('view-ghost-go');
+    g.addEventListener('animationend', function () { if (viewGhost === g) dropViewGhost(); });
+  }
+  function pageGhostHold(node, scrollTop) {
+    if (!node || !node.firstChild) return;
+    var host = view.parentNode; if (!host) return;
+    dropViewGhost();
+    // 残影里的 id 要清掉：旧节点上还挂着 set-nav 之类被 getElementById 找的 id，
+    // 残影存活期间会跟新页面抢同一个 id
+    if (node.id) node.removeAttribute('id');
+    var stale = node.querySelectorAll('[id]');
+    for (var i = 0; i < stale.length; i++) stale[i].removeAttribute('id');
+    var g = el('div', 'view-ghost');
+    var inner = el('div', 'view-ghost-inner');
+    setViewH();
+    g.style.top = view.offsetTop + 'px';
+    g.style.left = view.offsetLeft + 'px';
+    g.style.width = view.offsetWidth + 'px';
+    g.style.height = view.offsetHeight + 'px';
+    g.style.padding = getComputedStyle(view).padding;
+    inner.style.marginTop = (-(scrollTop || 0)) + 'px';   // 把旧页面原来的滚动位置补回去
+    inner.appendChild(node);
+    g.appendChild(inner);
+    host.appendChild(g);
+    viewGhost = g;
+    host.classList.add('ghost-on');                // 残影在时先把 loading 转圈藏掉（见 effects.css）
+    ghostTimer = setTimeout(ghostSlideOut, 150);   // 新页面迟迟不来（>150ms）也让旧页面先滑走
+    setTimeout(function () { if (viewGhost === g) dropViewGhost(); }, 1200);
+  }
+  new MutationObserver(function (muts) {
+    if (viewAnimOff()) return;
+    var removed = null, added = null;
+    for (var i = 0; i < muts.length; i++) {
+      var m = muts[i]; if (m.target !== view) continue;
+      var k, n;
+      for (k = 0; k < m.removedNodes.length; k++) {
+        n = m.removedNodes[k];
+        if (n.nodeType === 1 && (n.classList.contains('page') || n.classList.contains('big-load'))) { if (!removed) removed = n; }
+      }
+      for (k = 0; k < m.addedNodes.length; k++) {
+        n = m.addedNodes[k];
+        if (n.nodeType === 1 && (n.classList.contains('page') || n.classList.contains('big-load'))) { if (!added) added = n; }
+      }
+    }
+    if (removed) pageGhostHold(removed, lastViewScrollTop);   // 旧页面先被摘掉（同一批里可能只有一个 loading 转圈）
+    if (added) {
+      setViewH();
+      ghostSlideOut();                                        // 新页面到位 → 旧页面向上滑出，两层交叉
+      if (!added.classList.contains('view-in')) { added.classList.add('view-in'); applyI18n(added); }
+    }
+  }).observe(view, { childList: true });
+  window.neGhostVer = 5;   // 自测标记：确认这一版 app.js 已在页面里生效
   // ---- 页面数据缓存：数据落到 %APPDATA%\netHEmusic\temp，打开页面时读回内存，离开页面就把内存副本丢掉 ----
   var PC_TTL = 10 * 60 * 1000;        // 同一页 10 分钟内直接用缓存，避免数据太旧
   var pcWaiters = {};
