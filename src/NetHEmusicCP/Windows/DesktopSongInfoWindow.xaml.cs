@@ -2,7 +2,7 @@ using System;
 using Windows.Graphics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
-using netHEmusic.Core.Native;
+using netHEmusic.Platform;
 
 namespace netHEmusic.Windows;
 

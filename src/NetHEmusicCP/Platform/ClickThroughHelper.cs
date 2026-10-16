@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace netHEmusic.Core.Native;
+namespace netHEmusic.Platform;
 
 /// <summary>
 /// 桌面歌词悬浮窗辅助：置顶（HWND_TOPMOST）+ 鼠标穿透（WS_EX_TRANSPARENT）+ 不抢焦点（WS_EX_NOACTIVATE）。

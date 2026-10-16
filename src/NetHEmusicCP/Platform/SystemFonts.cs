@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using netHEmusic.Core.Logging;
 
-namespace netHEmusic.Core.Native;
+namespace netHEmusic.Platform;
 
 /// <summary>
 /// 枚举本机已安装的字体族（GDI EnumFontFamiliesEx），给设置里的字体下拉用。

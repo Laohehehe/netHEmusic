@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace netHEmusic.Core.Native;
+namespace netHEmusic.Platform;
 
 /// <summary>
 /// 资源管理器风格的「选择文件夹」对话框。

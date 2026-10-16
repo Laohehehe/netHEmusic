@@ -5,7 +5,7 @@ using System.Linq;
 using netHEmusic.Core.Config;
 using netHEmusic.Core.Logging;
 
-namespace netHEmusic.Core;
+namespace netHEmusic.Core.Maintenance;
 
 /// <summary>
 /// 自修复：记录崩溃/异常，异常进入“修复报告”，可触发清理损坏缓存、重置配置等自愈步骤。

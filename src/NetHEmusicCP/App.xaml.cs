@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using netHEmusic.Core;
+using netHEmusic.Shell;
 using netHEmusic.Core.Logging;
 using netHEmusic.Core.Playback;
 using netHEmusic.Windows;
@@ -44,7 +45,7 @@ public partial class App : Application
 
     private static void RegisterMainWindow(Window w)
     {
-        _mainHwnd = Core.Native.WindowHelper.Hwnd(w);
+        _mainHwnd = Platform.WindowHelper.Hwnd(w);
         _main = w as MainWindow;
         // 监听“新实例已启动”信号 → 把本实例调到前台
         _ = Task.Run(() => { try { while (_activateEvent != null) { _activateEvent.WaitOne(); TrayIcon.ShowMainWindow(_mainHwnd); } } catch { } });
@@ -118,7 +119,7 @@ public partial class App : Application
 
         LogManager.Log($"版本 {AppServices.Version} | PID {Environment.ProcessId} | OS {Environment.OSVersion.Version}");
         // 运行环境快照：排"某台机器图标是方框""歌词位置不对"这类问题时先看这几行
-        foreach (var line in Core.Native.SystemInfo.Lines()) LogManager.Log(line);
+        foreach (var line in Platform.SystemInfo.Lines()) LogManager.Log(line);
 
         // 3) 启动证书检测：计算机未安装启动证书则显示“安装证书”提示，安装成功后才继续，否则退出
         if (!AppServices.CertificatePresent())

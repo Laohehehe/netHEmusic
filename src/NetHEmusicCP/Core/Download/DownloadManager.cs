@@ -12,7 +12,7 @@ using netHEmusic.Core.Api;
 using netHEmusic.Core.Config;
 using netHEmusic.Core.Logging;
 using netHEmusic.Core.Model;
-using netHEmusic.Core.Native;
+using netHEmusic.Platform;
 
 namespace netHEmusic.Core.Download;
 

@@ -3,7 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using netHEmusic.Core.Logging;
 
-namespace netHEmusic.Core.Native;
+namespace netHEmusic.Platform;
 
 /// <summary>删除文件 = 移入回收站（不直接抹掉，给用户后悔的余地）。</summary>
 public static class RecycleBin

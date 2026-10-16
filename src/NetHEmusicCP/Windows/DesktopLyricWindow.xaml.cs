@@ -17,7 +17,7 @@ using Windows.UI.Text;
 using WinRT;
 using netHEmusic.Core;
 using netHEmusic.Core.Logging;
-using netHEmusic.Core.Native;
+using netHEmusic.Platform;
 
 namespace netHEmusic.Windows;
 

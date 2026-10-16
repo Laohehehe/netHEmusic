@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using netHEmusic.Core.Logging;
 
-namespace netHEmusic.Core.Native;
+namespace netHEmusic.Platform;
 
 /// <summary>
 /// 屏蔽标题栏的系统菜单：

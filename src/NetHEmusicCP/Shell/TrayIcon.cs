@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using netHEmusic.Core.Logging;
 
-namespace netHEmusic.Core;
+namespace netHEmusic.Shell;
 
 /// <summary>托盘菜单需要读的状态和能触发的动作（由 MainWindow 提供，取不到就当作不可用）。</summary>
 public sealed class TrayActions

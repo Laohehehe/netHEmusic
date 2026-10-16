@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace netHEmusic.Core.Native;
+namespace netHEmusic.Platform;
 
 /// <summary>
 /// 启动时采集一次运行环境（系统 / CPU / 内存 / 显卡 / 显示器 / 缩放），写进日志头部。

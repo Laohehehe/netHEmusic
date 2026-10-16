@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace netHEmusic.Core.Native;
+namespace netHEmusic.Platform;
 
 /// <summary>Win32 剪贴板写入（用于“分享”复制链接）。unpackaged 应用里比 WinRT Clipboard 更稳。</summary>
 internal static class ClipboardHelper

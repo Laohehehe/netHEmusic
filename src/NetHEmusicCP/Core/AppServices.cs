@@ -5,6 +5,7 @@ using Microsoft.UI.Dispatching;
 using netHEmusic.Core.Api;
 using netHEmusic.Core.Cache;
 using netHEmusic.Core.Config;
+using netHEmusic.Core.Maintenance;
 using netHEmusic.Core.Download;
 using netHEmusic.Core.Localization;
 using netHEmusic.Core.Logging;

@@ -12,7 +12,7 @@ using netHEmusic.Core;
 using netHEmusic.Core.Logging;
 using netHEmusic.Core.Theme;
 
-namespace netHEmusic.Core.Native;
+namespace netHEmusic.Platform;
 
 /// <summary>WinUI3 窗口辅助：图标、16:9 尺寸与居中、窗口材质（Mica/亚克力）、系统菜单主题、实时日志控制台。</summary>
 public static class WindowHelper
