@@ -57,7 +57,18 @@ public sealed class PlayerService
     private int _frontendLoadedIndex = -1;      // 已经下发给网页播放器的曲目下标（-1 = 网页还没有音频）
 
     /// <summary>网页重载后调用：网页里的播放器已经清空。</summary>
-    public void ResetFrontendAudio() { _frontendLoadedIndex = -1; _frontendPlaying = false; }
+    public void ResetFrontendAudio()
+    {
+        _frontendLoadedIndex = -1;
+        _frontendPlaying = false;
+        try { _smtc.PlaybackStatus = MediaPlaybackStatus.Paused; } catch { }   // 页面重载后别继续谎报"正在播放"
+    }
+
+    /// <summary>退出前调用：把会话从系统媒体控件里撤掉。</summary>
+    public void CloseSmtc()
+    {
+        try { _smtc.PlaybackStatus = MediaPlaybackStatus.Closed; } catch { }
+    }
 
     // ---- 记住上一次播放进度：启动时登记，只在随后第一次加载到同一首时生效一次 ----
     private long _resumeSongId = -1;
@@ -82,13 +93,35 @@ public sealed class PlayerService
         return id == songId ? ms : 0;
     }
 
-    /// <summary>网页侧上报的播放状态。</summary>
+    /// <summary>网页侧上报的播放状态（约 1 次/秒 + 播放/暂停强制上报）。</summary>
     public void SetFrontendState(bool playing, long posMs, long durMs)
     {
         _frontendPlaying = playing;
-        try { _smtc.PlaybackStatus = playing ? MediaPlaybackStatus.Playing : MediaPlaybackStatus.Paused; } catch { }
+        try
+        {
+            _smtc.PlaybackStatus = playing ? MediaPlaybackStatus.Playing : MediaPlaybackStatus.Paused;
+            if (durMs > 0)
+            {
+                // 时间轴：StartTime/EndTime/Position 决定浮出控件显示进度，
+                // MinSeekTime/MaxSeekTime 决定 PlaybackPositionChangeRequested 会不会触发（两个都必给）。
+                var dur = TimeSpan.FromMilliseconds(durMs);
+                _smtc.UpdateTimelineProperties(new SystemMediaTransportControlsTimelineProperties
+                {
+                    StartTime = TimeSpan.Zero,
+                    MinSeekTime = TimeSpan.Zero,
+                    MaxSeekTime = dur,
+                    EndTime = dur,
+                    Position = TimeSpan.FromMilliseconds(Math.Clamp(posMs, 0, durMs))
+                });
+            }
+        }
+        catch { }
         PlaybackChanged?.Invoke(playing);
     }
+
+    /// <summary>系统浮出控件拖动进度条。回调不在 UI 线程，必须编组后再进前端桥。</summary>
+    private void OnSmtcPosition(SystemMediaTransportControls sender, PlaybackPositionChangeRequestedEventArgs args)
+        => AppServices.RunOnUi(() => { try { Seek(args.RequestedPlaybackPosition); } catch { } });
 
     public PlayerService(AppConfig config, CacheManager cache)
     {
@@ -101,14 +134,22 @@ public sealed class PlayerService
         _player.MediaOpened += (s, e) => { var ms = _pendingSeekMs; if (ms > 0) { _pendingSeekMs = 0; try { _player.PlaybackSession.Position = TimeSpan.FromMilliseconds(ms); } catch { } } };
         _player.MediaFailed += (s, e) => { LogManager.Error("播放失败: " + e.ErrorMessage); _ = NextAsync(); };
 
+        // 媒体键失效的根因：MediaPlaybackCommandManager 默认启用，会接管 SMTC 的播放/上一首/下一首命令，
+        // 而 frontend_audio=true（默认）时 _player 永远没有 Source → 命令被吃掉空转，ButtonPressed 也就收不到。
+        // 官方文档：要手动控制 SMTC 必须禁用它；本仓库没有 MediaPlayerElement，唯一副作用不适用。
+        _player.CommandManager.IsEnabled = false;
         _smtc = _player.SystemMediaTransportControls;
-        _smtc.IsEnabled = true;
+        _smtc.IsEnabled = true;                        // 必须 true，否则整个会话不出现在系统媒体控件里
+        try { _smtc.PlaybackStatus = MediaPlaybackStatus.Closed; } catch { }   // 启动还没放歌：别在系统浮出控件里留空条目
         _smtc.IsPlayEnabled = true;
         _smtc.IsPauseEnabled = true;
         _smtc.IsNextEnabled = true;
         _smtc.IsPreviousEnabled = true;
+        _smtc.IsStopEnabled = true;
         _smtc.DisplayUpdater.Type = MediaPlaybackType.Music;
         _smtc.ButtonPressed += OnSmtcButton;
+        _smtc.PlaybackPositionChangeRequested += OnSmtcPosition;   // 系统浮出控件拖动进度条
+        LogManager.Log("SMTC 就绪: CommandManager=" + _player.CommandManager.IsEnabled + " IsEnabled=" + _smtc.IsEnabled);
     }
 
     private void OnPlaybackStateChanged(MediaPlaybackSession sender, object args)
@@ -120,12 +161,14 @@ public sealed class PlayerService
 
     private void OnSmtcButton(SystemMediaTransportControls sender, SystemMediaTransportControlsButtonPressedEventArgs args)
     {
+        LogManager.Log("SMTC 按钮: " + args.Button);     // 验收用：区分「按键没送到 shell」和「被 CommandManager 吃掉」
         switch (args.Button)
         {
             case SystemMediaTransportControlsButton.Play: Play(); break;
             case SystemMediaTransportControlsButton.Pause: Pause(); break;
             case SystemMediaTransportControlsButton.Next: _ = NextAsync(); break;
             case SystemMediaTransportControlsButton.Previous: _ = PrevAsync(); break;
+            case SystemMediaTransportControlsButton.Stop: Pause(); Seek(TimeSpan.Zero); break;
         }
     }
 
@@ -327,6 +370,7 @@ public sealed class PlayerService
         try { _player.Pause(); } catch { }
         _queue.Clear();
         _index = -1;
+        try { _smtc.PlaybackStatus = MediaPlaybackStatus.Closed; } catch { }   // 空队列 = 会话从系统媒体控件消失
         QueueChanged?.Invoke(_index, 0);
     }
 
@@ -447,7 +491,10 @@ public sealed class PlayerService
             _smtc.DisplayUpdater.MusicProperties.Artist = s.ArtistsName;
             _smtc.DisplayUpdater.MusicProperties.AlbumTitle = s.AlbumName;
             if (!string.IsNullOrEmpty(s.PicUrl)) { try { _smtc.DisplayUpdater.Thumbnail = RandomAccessStreamReference.CreateFromUri(new Uri(s.PicUrl)); } catch { } }
+            else { try { _smtc.DisplayUpdater.Thumbnail = null; } catch { } }   // 没封面要清空，否则系统浮出控件串上一首的图
             _smtc.DisplayUpdater.Update();
+            // 换歌即恢复会话可见性：清空队列后是 Closed，重新播一首要变回 Playing/Paused
+            _smtc.PlaybackStatus = _frontendPlaying ? MediaPlaybackStatus.Playing : MediaPlaybackStatus.Paused;
         }
         catch { }
     }

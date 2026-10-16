@@ -32,7 +32,10 @@ public sealed partial class MainWindow
         try
         {
             // 允许网页 <audio> 在无用户手势时也能播放（前端播放内核需要：自动下一首 / SMTC 触发）
-            var browserArgs = "--autoplay-policy=no-user-gesture-required";
+            // 同时阻止 WebView2/Chromium 自己注册媒体会话并抢媒体键：否则系统媒体浮出控件里会出现
+            // 一条 msedgewebview2.exe 的重复条目（标题=网页 title），"当前会话"归属还会在两条之间乱跳。
+            // SMTC 统一由 C# 侧（PlayerService）提供元数据与控制。
+            var browserArgs = "--autoplay-policy=no-user-gesture-required --disable-features=MediaSessionService,HardwareMediaKeyHandling";
             // 设置 → 性能 → GPU 加速：关掉后走软件渲染（省 GPU / 兼容老显卡，需重启生效）
             bool gpuOn = !AppServices.Config.Get("App", "perf_gpu", "true").Equals("false", StringComparison.OrdinalIgnoreCase);
             if (!gpuOn)
