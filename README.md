@@ -2,7 +2,7 @@
 
 > **一个更好看的网易云音乐桌面客户端。** 
 
-<p align="center"><img src="resources/Logoo.png" width="200" alt="netHEmusic"></p>
+<p align="center"><img src="resources/logo-wide.png" width="200" alt="netHEmusic"></p>
 
 ---
 
@@ -103,15 +103,22 @@
 ## 📁 目录结构
 ```
 src/NetHEmusicCP       WinUI3 应用
+  Hosting/             WebView2 宿主与 JS⇄C# 消息路由（MainWindow 的 partial 拆分）
   Core/                服务层：配置 / 网络 / 缓存 / 下载 / 播放 / 主题 / 更新 / 安全
-  Windows/             窗口：主窗口、用户协议、证书、更新
+    Maintenance/       自检与修复（SelfRepair）
+  Platform/            Win32 互操作：窗口 / 剪贴板 / 文件夹选择 / 回收站 / 系统信息
+  Shell/               任务栏托盘图标与菜单
+  Windows/             窗口：用户协议、证书、更新、桌面歌词、桌面歌曲信息
   Web/                 前端界面（index.html + css/ + js/）
   Themes/              配色与主题资源
 src/Setup              早期自解压安装器（已被 Inno 取代，保留）
-installer/             Inno Setup 脚本（.iss）与 WiX 脚本（.wxs）
+installer/             Inno Setup 脚本（netHEmusic.iss，CI 使用）
+installer/wix/         WiX 脚本（备选 MSI 方案，CI 未使用）
 resources/             图标与 Logo
 lang/                  语言包（zh_cn / en_US）
 config/                默认配置模板与版本号
+docs/                  内部文档：交接 / 需求 / 变更记录（不入库）
+archive/legacy-qt-python/  旧 Qt6/C++ 与 Python 后端、旧 Web UI（不参与构建，本地归档）
 ```
 
 ---
