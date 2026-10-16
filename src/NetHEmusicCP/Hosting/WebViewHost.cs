@@ -125,7 +125,11 @@ public sealed partial class MainWindow
             WebView.Source = new Uri("https://appassets/index.html");
             LogManager.Log("WebView2 已加载: " + webFolder);
         }
-        catch (Exception e) { LogManager.Error("WebView2 初始化失败: " + e.Message); }
+        catch (Exception e)
+        {
+            LogManager.Error("WebView2 初始化失败: " + e.Message + Environment.NewLine + e);
+            ShowWebViewStartupError(e);
+        }
     }
 
     private string FindWebFolder()
@@ -172,5 +176,93 @@ public sealed partial class MainWindow
             }
             catch { }
         });
+    }
+
+    // ============ WebView2 初始化失败的可见兜底 ============
+    // 页面是窗口唯一的绘制者，WebView2 起不来时窗口只剩材质底（表现成"半透明窗口"/"什么都没有"）。
+    // 以前这里只写日志，用户完全不知道发生了什么；现在把原因、重试、装运行时、开日志都摆到界面上。
+
+    private void ShowWebViewStartupError(Exception e)
+    {
+        AppServices.RunOnUi(() =>
+        {
+            try
+            {
+                bool missingRuntime = IsWebView2RuntimeLikelyMissing(e);
+                StartupErrorTitle.Text = missingRuntime ? "缺少 WebView2 运行时" : "界面组件加载失败";
+                StartupErrorDetail.Text =
+                    (missingRuntime
+                        ? "本机没有安装 Microsoft Edge WebView2 Runtime，程序的界面无法显示。\n" +
+                          "点“下载 WebView2 运行时”装好后再点“重试”即可。"
+                        : "WebView2 初始化失败，程序的界面无法显示。") +
+                    "\n\n错误信息：" + e.Message +
+                    "\n数据目录：" + AppServices.DataDirHint +
+                    "\n日志文件：" + (string.IsNullOrEmpty(LogManager.LogDirectory) ? "（未初始化）" : LogManager.LogFilePath);
+                StartupErrorFixBtn.Visibility = missingRuntime ? Visibility.Visible : Visibility.Collapsed;
+                StartupErrorHint.Text = LogManager.UsingFallback
+                    ? "注意：正常日志目录写不进去，本次日志已写到 " + LogManager.LogDirectory + "（末尾有 [WARN] 行说明原因）"
+                    : "";
+                StartupErrorPanel.Visibility = Visibility.Visible;
+                LogManager.Log("[兜底] 已显示启动失败面板: " + StartupErrorTitle.Text);
+            }
+            catch (Exception ex) { LogManager.Debug("显示启动失败面板失败: " + ex.Message); }
+        });
+    }
+
+    /// <summary>判断是不是"没装 WebView2 运行时"：异常文案 + Evergreen 安装目录是否存在。</summary>
+    private static bool IsWebView2RuntimeLikelyMissing(Exception e)
+    {
+        try
+        {
+            var msg = e.Message ?? "";
+            if (msg.Contains("runtime", StringComparison.OrdinalIgnoreCase) &&
+                (msg.Contains("not found", StringComparison.OrdinalIgnoreCase) || msg.Contains("找不到") || msg.Contains("未安装"))) return true;
+            if (e.GetType().Name.Contains("RuntimeNotFound", StringComparison.OrdinalIgnoreCase)) return true;
+            var all = e.ToString();
+            if (all.Contains("WebView2RuntimeNotFoundException", StringComparison.OrdinalIgnoreCase)) return true;
+            // 显式指定了浏览器目录（测试/绿色版）：以它的存在与否为准
+            var explicitDir = Environment.GetEnvironmentVariable("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER");
+            if (!string.IsNullOrEmpty(explicitDir)) return !Directory.Exists(explicitDir) || !Directory.EnumerateFileSystemEntries(explicitDir).Any();
+            foreach (var root in new[]
+                     {
+                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft", "EdgeWebView", "Application"),
+                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft", "EdgeWebView", "Application")
+                     })
+            {
+                if (Directory.Exists(root) && Directory.EnumerateDirectories(root).Any()) return false;
+            }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private void OnStartupErrorRetry(object sender, RoutedEventArgs e)
+    {
+        LogManager.Log("用户点击重试：重新初始化 WebView2");
+        StartupErrorPanel.Visibility = Visibility.Collapsed;
+        InitWebView();
+    }
+
+    private void OnStartupErrorFix(object sender, RoutedEventArgs e)
+    {
+        // WebView2 Evergreen 引导安装器（微软官方短链，约 2MB，装完自动跟随 Edge 更新）
+        OpenExternal("https://go.microsoft.com/fwlink/p/?LinkId=2124703");
+    }
+
+    private void OnStartupErrorOpenLog(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dir = LogManager.LogDirectory;
+            if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir)) OpenExternal(dir);
+            else OpenExternal(AppServices.DataDirHint);
+        }
+        catch (Exception ex) { LogManager.Debug("打开日志目录失败: " + ex.Message); }
+    }
+
+    private static void OpenExternal(string target)
+    {
+        try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
+        catch (Exception ex) { LogManager.Debug("打开链接/目录失败: " + ex.Message); }
     }
 }

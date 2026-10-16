@@ -36,6 +36,16 @@ public static class AppServices
     /// <summary>主题应用到主界面+推送前端的回调（由 MainWindow 注册）。</summary>
     public static Action? OnThemeApplied;
 
+    /// <summary>启动初始化失败的异常（非 null 表示服务没建起来，主窗口不应继续加载）。</summary>
+    public static Exception? InitError { get; private set; }
+
+    /// <summary>初始化失败发生在哪个阶段（给用户看的诊断信息）。</summary>
+    public static string InitStage { get; private set; } = "";
+
+    /// <summary>诊断用数据目录：连 AppConfig 都没建起来时也能拿到（恒为 %APPDATA%\netHEmusic）。</summary>
+    public static string DataDirHint { get; private set; } =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "netHEmusic");
+
     private static DispatcherQueue? _ui;
     /// <summary>主线程 Dispatcher，MainWindow 启动时注入。</summary>
     public static DispatcherQueue Ui { get => _ui!; set => _ui = value; }
@@ -75,11 +85,18 @@ public static class AppServices
 
     public static void Initialize()
     {
+        InitError = null;
+        InitStage = "配置与日志初始化";
+        try
+        {
         Config = new AppConfig();
+        DataDirHint = Config.DataDir;
 
         // 日志：默认存放 %APPDATA%\netHEmusic\logs\log.txt（5 份轮换）
+        // 目录不可写时 LogManager 会退回 %TEMP% 并把原因写进 LogManager.InitError（启动时会提示用户）
         LogManager.Init(Path.Combine(Config.DataDir, "logs"));
 
+        InitStage = "服务初始化";
         MigrateApiServer();   // 换过 API 供应商：把老配置里存的旧地址强制换掉（只做一次）
 
         Lang = new LangService(Config, ResolveLangRoot());
@@ -111,6 +128,14 @@ public static class AppServices
 
         LogManager.Log("服务已初始化: 语言=" + Lang.CurrentLanguage + " theme=" + Config.Theme);
         LogManager.Log(Config.FirstRun ? "首次运行" : "非首次运行");
+        InitStage = "";
+        }
+        catch (Exception ex)
+        {
+            // 不再让初始化失败静默溜走：记录下来，App.OnLaunched 会弹可见提示并退出
+            InitError = ex;
+            try { LogManager.Error("启动初始化失败（" + InitStage + "）: " + ex.Message, ex); } catch { }
+        }
     }
 
     /// <summary>启动签名证书是否已信任（当前用户 Root / TrustedPublisher 中存在 LaoheTeam.top 或 Laohehehe）。</summary>

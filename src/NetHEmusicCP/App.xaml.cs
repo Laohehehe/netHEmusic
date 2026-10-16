@@ -25,6 +25,7 @@ public partial class App : Application
     private static TrayIcon? _tray;
     private static MainWindow? _main;
     private static volatile bool _exiting;   // 真退出（更新 / 托盘退出）时为 true，关闭拦截要让路
+    private static string? _pendingLogWarning;   // 日志目录不可写的提示，等主窗口起来再弹
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -99,7 +100,21 @@ public partial class App : Application
         if (!AcquireSingleInstance()) { LogManager.Log("已有实例在运行，唤醒后退出"); Environment.Exit(0); return; }
 
         // 1) 初始化全局服务（日志、配置、语言、主题、网络、下载、更新、播放）
+        //    失败时不再静默：弹原生提示（窗口都还没建，只能靠 MessageBox）然后退出
         AppServices.Initialize();
+        if (AppServices.InitError != null)
+        {
+            ReportStartupFailure("初始化全局服务失败", AppServices.InitStage, AppServices.InitError, AppServices.DataDirHint);
+            ExitApp();
+            return;
+        }
+        // 日志目录写不进去（权限/低完整性进程/盘满）：非致命，但必须让用户知道日志被改写到哪了。
+        // 注意：这时主窗口还没建，MessageBox 由 WinUI 线程弹出会被吞掉，所以只记下来，等窗口起来再弹。
+        if (!string.IsNullOrEmpty(LogManager.InitError))
+        {
+            _pendingLogWarning = LogManager.InitError;
+            LogManager.Log("[兜底] 日志目录不可写，稍后弹可见提示：" + LogManager.LogFilePath);
+        }
 
         // 1.1) Shell 身份：注册显示名/图标 + 保证存在带 AUMID 的开始菜单快捷方式，
         //      否则系统媒体卡片与任务栏会显示“未知应用”。
@@ -157,6 +172,16 @@ public partial class App : Application
         RegisterMainWindow(_window);
         // 托盘图标常驻：右键菜单是「最小化后遥控播放」的入口，不该等到关过一次窗口才出现
         try { EnsureTray(); } catch (Exception te) { LogManager.Error("创建托盘图标失败: " + te.Message); }
+
+        // 日志目录不可用的可见提示：窗口已存在，原生弹窗这时才弹得出来
+        if (!string.IsNullOrEmpty(_pendingLogWarning))
+        {
+            LogManager.Log("[兜底] 正在弹出「日志目录不可用」提示");
+            Platform.NativeDialog.Warn("netHEmusic：日志目录不可用",
+                _pendingLogWarning +
+                "\n\n数据目录：" + AppServices.DataDirHint +
+                "\n当前日志：" + LogManager.LogFilePath);
+        }
         }
         catch (Exception ex)
         {
@@ -167,8 +192,28 @@ public partial class App : Application
                 File.WriteAllText(Path.Combine(dir, "startup_error.txt"), "ONLAUNCH:" + Environment.NewLine + ex);
             }
             catch { }
+            ReportStartupFailure("启动过程中出错", "OnLaunched", ex, AppServices.DataDirHint);
             throw;
         }
+    }
+
+    /// <summary>
+    /// 启动期致命错误的可见提示：把阶段、数据目录、日志位置和异常一起摆出来。
+    /// 以前这些只落在日志/startup_error.txt 里，用户看到的是"窗口一片空白"，无从判断。
+    /// </summary>
+    private static void ReportStartupFailure(string title, string stage, Exception? ex, string dataDir)
+    {
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            if (!string.IsNullOrEmpty(stage)) sb.Append("阶段：").Append(stage).AppendLine();
+            sb.Append("数据目录：").Append(dataDir).AppendLine();
+            sb.Append("日志：").Append(string.IsNullOrEmpty(LogManager.LogDirectory) ? "（未初始化）" : LogManager.LogFilePath).AppendLine();
+            if (LogManager.InitError != null) sb.AppendLine().Append(LogManager.InitError).AppendLine();
+            if (ex != null) sb.AppendLine().Append("错误：").Append(ex.GetType().Name).Append("：").Append(ex.Message);
+            Platform.NativeDialog.Error("netHEmusic：" + title, sb.ToString());
+        }
+        catch { }
     }
 
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)

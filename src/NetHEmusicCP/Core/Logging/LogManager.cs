@@ -13,19 +13,67 @@ public static class LogManager
 {
     private static readonly object _lock = new object();
     private static string _dir = "";
+    private static string _fallbackDir = "";
+    private static bool _fallbackActive = false;
     private static bool _consoleEnabled = false;
     private static readonly List<string> _consoleBuffer = new();
 
-    /// <summary>初始化日志目录并执行 5 份轮换。</summary>
+    /// <summary>
+    /// 初始化时的错误：非 null 表示主日志目录不可用（权限 / 低完整性进程 / 磁盘满 …）。
+    /// 能退回 %TEMP% 时日志仍会写，只是换了位置；退回也失败时日志等于关闭。
+    /// 启动时 App 会把这个字符串弹给用户看 —— 不能再让“日志写不进去”变成静默失败。
+    /// </summary>
+    public static string? InitError { get; private set; }
+
+    /// <summary>是否已改用备用日志目录（%TEMP%\netHEmusic-logs）。</summary>
+    public static bool UsingFallback => _fallbackActive;
+
+    /// <summary>当前日志目录。</summary>
+    public static string LogDirectory => _dir;
+
+    /// <summary>初始化日志目录并执行 5 份轮换。目录不可写时自动退回 %TEMP% 并记录 InitError。</summary>
     public static void Init(string directory)
     {
         lock (_lock)
         {
+            InitError = null;
+            _fallbackActive = false;
             _dir = directory;
-            Directory.CreateDirectory(_dir);
-            Rotate();
+            var err = Probe(directory);
+            if (err != null)
+            {
+                var fb = Path.Combine(Path.GetTempPath(), "netHEmusic-logs");
+                var err2 = Probe(fb);
+                if (err2 == null)
+                {
+                    _dir = fb;
+                    _fallbackDir = fb;
+                    _fallbackActive = true;
+                    InitError = "日志目录不可写：" + directory + "\n原因：" + err + "\n已改用：" + fb;
+                }
+                else
+                {
+                    InitError = "日志目录不可写：" + directory + "\n原因：" + err + "\n备用目录也不可用：" + fb + "\n原因：" + err2;
+                }
+            }
+            try { Rotate(); } catch { }
             WriteFile("----- netHEmusic 日志开始 " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " -----");
+            if (InitError != null) WriteFile("[WARN] " + InitError.Replace("\n", " | "));
         }
+    }
+
+    /// <summary>目录可用性探测：能建目录、能写、能删 → 返回 null；否则返回错误描述。</summary>
+    private static string? Probe(string dir)
+    {
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var probe = Path.Combine(dir, ".write_probe");
+            File.WriteAllText(probe, "ok");
+            File.Delete(probe);
+            return null;
+        }
+        catch (Exception ex) { return ex.GetType().Name + ": " + ex.Message; }
     }
 
     /// <summary>启动时轮换日志：log.txt→log1→...→log5，log5(存在则删除)。</summary>
@@ -97,14 +145,34 @@ public static class LogManager
     private static void WriteFile(string line)
     {
         if (string.IsNullOrEmpty(_dir)) return;
-        try
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            File.AppendAllText(
-                Path.Combine(_dir, "log.txt"),
-                line + Environment.NewLine,
-                new UTF8Encoding(false));
+            try
+            {
+                File.AppendAllText(
+                    Path.Combine(_dir, "log.txt"),
+                    line + Environment.NewLine,
+                    new UTF8Encoding(false));
+                return;
+            }
+            catch
+            {
+                // 写入中途失败（盘满 / 权限变化 / 低完整性进程）：切到 %TEMP% 兜底一次，别再静默丢日志
+                if (_fallbackActive) return;
+                try
+                {
+                    var fb = string.IsNullOrEmpty(_fallbackDir)
+                        ? Path.Combine(Path.GetTempPath(), "netHEmusic-logs")
+                        : _fallbackDir;
+                    Directory.CreateDirectory(fb);
+                    _fallbackDir = fb;
+                    _fallbackActive = true;
+                    _dir = fb;
+                    InitError ??= "日志写入失败，已改用：" + fb;
+                }
+                catch { return; }
+            }
         }
-        catch { /* 日志写入失败不抛出 */ }
     }
 
     /// <summary>敏感信息脱敏：token / cookie / password 等值替换为 XlogintokenX。</summary>
