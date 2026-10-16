@@ -4,6 +4,11 @@
   <Import Project="$(MSBuildThisFileDirectory)..\..\build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\build.local.props')" />
   <PropertyGroup>
     <NetHEApiBase Condition="'$(NetHEApiBase)' == ''">$(NETHE_API_BASE)</NetHEApiBase>
+    <!-- 版本号唯一来源：仓库根的 config/version.txt。
+         csproj 的 Version/AssemblyVersion/FileVersion、生成的 BuildInfo.Version（AppServices / DownloadManager /
+         UpdateManager 都用它）都从这里取，避免"改了 5 处漏了 2 处"。发布脚本（installer/*.iss、src/Setup）
+         仍各自持有一份，属于打包侧，见 README。 -->
+    <NetHEVersion Condition="'$(NetHEVersion)' == ''">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\..\config\version.txt').Trim())</NetHEVersion>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -28,11 +33,11 @@
     <PublishSingleFile>false</PublishSingleFile>
     <ApplicationIcon>..\..\resources\icon.ico</ApplicationIcon>
 
-    <Version>26.10.3.40</Version>
-    <AssemblyVersion>26.10.3.40</AssemblyVersion>
-    <FileVersion>26.10.3.40</FileVersion>
+    <Version>$(NetHEVersion)</Version>
+    <AssemblyVersion>$(NetHEVersion)</AssemblyVersion>
+    <FileVersion>$(NetHEVersion)</FileVersion>
     <Product>netHEmusic 网易云音乐下载器</Product>
-    <Description>netHEmusic - 网易云音乐第三方 WinUI3 + Fluent 下载/播放器（26.10.3.40）</Description>
+    <Description>netHEmusic - 网易云音乐第三方 WinUI3 + Fluent 下载/播放器（$(NetHEVersion)）</Description>
     <Company>netHEmusic</Company>
     <Copyright>Copyright (C) 2026 netHEmusic</Copyright>
     <Authors>laohehehe</Authors>
@@ -56,21 +61,28 @@
   </ItemGroup>
 
   <!-- 编译期生成 API 地址常量：仓库源码里不出现任何地址。
-       用 InitialTargets 保证在任何编译步骤之前跑（挂在 BeforeCompile 上会被 WinUI 的 XAML 编译抢先）。 -->
+       用 InitialTargets 保证在任何编译步骤之前跑（挂在 BeforeCompile 上会被 WinUI 的 XAML 编译抢先）。
+       同一个目标里顺带生成 BuildInfo.Version —— 应用侧唯一的版本号常量来源。 -->
   <Target Name="GenerateApiSecrets">
     <PropertyGroup>
       <_ApiSecretsDir>$(IntermediateOutputPath)</_ApiSecretsDir>
       <_ApiSecretsFile>$(_ApiSecretsDir)ApiSecrets.g.cs</_ApiSecretsFile>
+      <_BuildInfoFile>$(_ApiSecretsDir)BuildInfo.g.cs</_BuildInfoFile>
     </PropertyGroup>
     <MakeDir Directories="$(_ApiSecretsDir)" Condition="!Exists('$(_ApiSecretsDir)')" />
     <WriteLinesToFile File="$(_ApiSecretsFile)" Overwrite="true"
       Lines="// &lt;auto-generated&gt; 由 csproj 的 GenerateApiSecrets 目标生成，不要手改%3B 真实值见本地 build.local.props&#xA;namespace netHEmusic.Core { internal static class ApiSecrets { public const string Base = &quot;$(NetHEApiBase)&quot;%3B } }" />
+    <WriteLinesToFile File="$(_BuildInfoFile)" Overwrite="true"
+      Lines="// &lt;auto-generated&gt; 由 csproj 的 GenerateApiSecrets 目标生成，不要手改%3B 版本号唯一来源是仓库根的 config/version.txt&#xA;namespace netHEmusic { internal static class BuildInfo { public const string Version = &quot;$(NetHEVersion)&quot;%3B } }" />
     <ItemGroup>
       <Compile Include="$(_ApiSecretsFile)" Condition="'$(NetHEApiSecretsAdded)' != 'true'" />
       <FileWrites Include="$(_ApiSecretsFile)" />
+      <Compile Include="$(_BuildInfoFile)" Condition="'$(NetHEBuildInfoAdded)' != 'true'" />
+      <FileWrites Include="$(_BuildInfoFile)" />
     </ItemGroup>
     <PropertyGroup>
       <NetHEApiSecretsAdded>true</NetHEApiSecretsAdded>
+      <NetHEBuildInfoAdded>true</NetHEBuildInfoAdded>
     </PropertyGroup>
   </Target>
 

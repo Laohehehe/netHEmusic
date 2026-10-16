@@ -20,7 +20,8 @@ namespace netHEmusic.Core;
 /// </summary>
 public static class AppServices
 {
-    public const string Version = "26.10.3.40";   // 版本号 = 26.M.D.X，X 为当日修改次数（每次改动 +1）
+    // 版本号唯一来源：仓库根 config/version.txt → csproj 生成 BuildInfo.Version（编译期常量）
+    public const string Version = BuildInfo.Version;
     public static AppConfig Config { get; private set; } = null!;
     public static NetEaseClient Netease { get; private set; } = null!;
     public static DownloadManager Download { get; private set; } = null!;
