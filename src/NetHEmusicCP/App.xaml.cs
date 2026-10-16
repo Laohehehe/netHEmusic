@@ -80,13 +80,11 @@ public partial class App : Application
         }
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string appId);
-
     public App()
     {
-        // 显式 AppUserModelID：任务栏 / Windows 媒体卡片不再显示“未知应用”
-        try { SetCurrentProcessExplicitAppUserModelID("Laohehehe.netHEmusic"); } catch { }
+        // 显式 AppUserModelID：任务栏 / Windows 媒体卡片不再显示“未知应用”。
+        // 光设进程 AUMID 不够，显示名/图标还要注册（见 OnLaunched 里的 EnsureRegistered）。
+        Platform.AppIdentity.SetProcessAppUserModelId();
         InitializeComponent();
         // 全局未处理异常：写日志并提示，避免静默崩溃（自修复）
         UnhandledException += OnUnhandledException;
@@ -102,6 +100,10 @@ public partial class App : Application
 
         // 1) 初始化全局服务（日志、配置、语言、主题、网络、下载、更新、播放）
         AppServices.Initialize();
+
+        // 1.1) Shell 身份：注册显示名/图标 + 保证存在带 AUMID 的开始菜单快捷方式，
+        //      否则系统媒体卡片与任务栏会显示“未知应用”。
+        Platform.AppIdentity.EnsureRegistered();
 
         var cmd = Environment.GetCommandLineArgs();
         bool debuggerMode = cmd.Any(a => a.Equals("-debugger", StringComparison.OrdinalIgnoreCase));

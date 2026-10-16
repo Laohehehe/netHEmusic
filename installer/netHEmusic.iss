@@ -58,9 +58,11 @@ Source: "..\resources\Laohehehe.cer"; DestDir: "{app}"; Flags: ignoreversion
 #endif
 
 [Icons]
-Name: "{group}\netHEmusic"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
+; AppUserModelID 必须和程序里的 AppIdentity.AumId 一致：系统媒体卡片/任务栏靠它查应用名与图标，
+; 少了这个参数就会显示“未知应用”（程序启动时也会自补，这里写上可以免掉那次修补）。
+Name: "{group}\netHEmusic"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; AppUserModelID: "Laohehehe.netHEmusic"
 Name: "{group}\卸载 netHEmusic"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\netHEmusic"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autodesktop}\netHEmusic"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: desktopicon; AppUserModelID: "Laohehehe.netHEmusic"
 
 [Run]
 ; 证书必须装进【本机】存储：UAC 的同意窗口是 consent.exe 以 SYSTEM 身份弹的，只认 LocalMachine。

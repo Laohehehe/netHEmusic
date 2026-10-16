@@ -54,6 +54,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="..\..\resources\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Shell 的 AppUserModelID IconUri / 快捷方式图标只认 exe 或 .ico（png 会被忽略成空图标），
+         所以单独随包发布一份 .ico（与 ApplicationIcon 用的是同一个文件） -->
+    <None Include="..\..\resources\icon.ico" Link="Assets\icon.ico" CopyToOutputDirectory="PreserveNewest" />
     <!-- 证书是 gitignore 的（只有本机 / 发布时才有），所以必须加 Exists 判断：
          否则全新的 clone（比如 GitHub Actions 上）会因为拷不到这个文件直接编译失败（MSB3030） -->
     <None Include="..\..\resources\LaoheTeam.cer" Link="Assets\LaoheTeam.cer" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\resources\LaoheTeam.cer')" />
