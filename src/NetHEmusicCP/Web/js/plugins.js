@@ -27,6 +27,31 @@
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
   function toast(t) { try { window.toast ? window.toast(t) : log(t); } catch (e) { } }
 
+  // 插件「开/关」（以及新增/卸载）后必须重载界面才会真正生效 —— 这里记住“当前已生效”的开关快照，
+  // 一旦发现清单里的开关状态和快照不一致，就在插件页顶部提示一句 + 给一个一键「重载」。
+  var plgApplied = null;      // id -> enabled（本次页面加载时真正生效的状态）
+  function snapshotApplied() {
+    plgApplied = {};
+    (HOST.list || []).forEach(function (it) { plgApplied[it.id] = !!it.enabled; });
+  }
+  function changedPlugins() {
+    var out = [];
+    if (!plgApplied) return out;
+    (HOST.list || []).forEach(function (it) {
+      var had = Object.prototype.hasOwnProperty.call(plgApplied, it.id);
+      if (!had || !!plgApplied[it.id] !== !!it.enabled) out.push({ name: it.name || it.id, on: !!it.enabled, isNew: !had });
+    });
+    Object.keys(plgApplied).forEach(function (id) {
+      if (!(HOST.list || []).some(function (x) { return x.id === id; })) out.push({ name: id, gone: true });
+    });
+    return out;
+  }
+  function reloadPlugins() {
+    toast('正在重载…');
+    post({ type: 'plugin_reload' });
+    setTimeout(function () { try { location.reload(); } catch (e) { } }, 80);
+  }
+
   // 改插件设置项：写进插件自己的数据目录，并回调插件
   HOST.setPluginSetting = function (pid, key, val) {
     HOST.settingValues[pid + '/' + key] = val;
@@ -187,6 +212,7 @@
     HOST.allPerms = (d && d.perms) || [];
     HOST.dir = (d && d.dir) || '';
     HOST.market = (d && d.market) || '';
+    if (!plgApplied) snapshotApplied();   // 首次拿到清单 = 当前真正生效的开关状态
     loadEnabled();
     if (window.__onPluginsChanged) { try { window.__onPluginsChanged(); } catch (e) { } }
   });
@@ -262,7 +288,8 @@
       sw.classList.toggle('on', on);
       it.enabled = on;
       post({ type: 'plugin_toggle', id: it.id, on: on });
-      toast(on ? ('已启用 ' + it.name + '（重载页面后生效）') : ('已停用 ' + it.name));
+      toast(on ? ('已启用 ' + it.name) : ('已停用 ' + it.name));
+      paint();   // 顶部「需要重载」提示条按最新开关状态刷新
     };
     head.appendChild(sw);
     c.appendChild(head);
@@ -335,6 +362,27 @@
       bar.appendChild(tools);
       page.appendChild(bar);
 
+      // 顶部提示条：检测到插件开/关（含新增、卸载）改动还没重载时显示
+      var note = el('div','plg-note');
+      note.hidden = true;
+      note.appendChild(el('span','plg-note-dot'));
+      var noteTxt = el('div','plg-note-txt');
+      note.appendChild(noteTxt);
+      var noteBtn = el('button','plg-btn primary','重载');
+      noteBtn.title = '重载界面，让插件的开/关立刻生效';
+      noteBtn.onclick = function () { reloadPlugins(); };
+      note.appendChild(noteBtn);
+      page.appendChild(note);
+
+      function refreshNote() {
+        var ch = changedPlugins();
+        note.hidden = ch.length === 0;
+        if (note.hidden) { noteTxt.innerHTML = ''; return; }
+        noteTxt.innerHTML = '检测到插件的更改（开/关）：<b>' + ch.map(function (x) {
+          return esc(x.name) + '（' + (x.gone ? '已卸载' : (x.on ? '开' : '关')) + (x.isNew ? '·新增' : '') + '）';
+        }).join('、') + '</b>，需要重载以应用设置';
+      }
+
       var body = el('div','plg-body');
       page.appendChild(body);
       page.appendChild(el('p','muted','插件目录：' + esc(HOST.dir || '（未就绪）') + '　·　插件代码直接跑在界面里，请只安装你信任的插件。'));
@@ -384,6 +432,7 @@
         tabInstalled.classList.toggle('on', curTab === 'installed');
         tabMarket.classList.toggle('on', curTab === 'market');
         if (curTab === 'market') renderMarket(); else renderInstalled();
+        refreshNote();
       }
       window.__paintPlugins = repaint;
 

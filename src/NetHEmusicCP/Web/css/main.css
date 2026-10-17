@@ -61,6 +61,20 @@ body{font-family:var(--app-font,'Segoe UI Variable','Segoe UI',system-ui,sans-se
 .plg-btn:active{transform:scale(.97);}
 .plg-btn.primary{border-color:var(--md-accent-color);color:var(--md-accent-color);}
 .plg-btn.danger:hover{border-color:#ff7a7a;color:#ff7a7a;}
+/* 插件开/关改动后需要重载才生效：插件页顶部提示条 */
+.plg-note{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:11px 14px;border-radius:10px;
+  background:rgba(var(--md-accent-color-rgb),.12);border:1px solid rgba(var(--md-accent-color-rgb),.42);
+  font-size:13px;line-height:1.5;color:var(--md-accent-color-secondary);
+  animation:plg-note-in .22s cubic-bezier(.2,.8,.3,1) both;}
+.plg-note[hidden]{display:none;}
+.plg-note .plg-note-dot{width:8px;height:8px;border-radius:50%;background:var(--md-accent-color);box-shadow:0 0 10px rgba(var(--md-accent-color-rgb),.85);flex:0 0 auto;}
+.plg-note .plg-note-txt{flex:1 1 auto;min-width:0;}
+.plg-note .plg-note-txt b{color:var(--md-accent-color);font-weight:600;}
+.plg-note .plg-btn{flex:0 0 auto;}
+.plg-note .plg-btn.primary{background:var(--md-accent-color);color:rgba(0,0,0,.85);border-color:transparent;font-weight:600;}
+.plg-note .plg-btn.primary:hover{filter:brightness(1.08);color:rgba(0,0,0,.85);}
+@keyframes plg-note-in{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+html.no-anim-page .plg-note{animation:none;}
 #app{height:100vh;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr;background:var(--side-bg);}
 /* 侧栏：默认收起(仅图标)。展开方式有两种（设置→主题/外观→侧边栏悬停展开）：
    - 开(默认/原版)：鼠标悬停展开、移开收回，带 .18s 动画；body.sb-hover
