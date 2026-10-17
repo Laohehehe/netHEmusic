@@ -356,9 +356,8 @@
       var tools = el('div','plg-tools');
       var bDir = el('button','plg-btn','打开插件文件夹');
       bDir.onclick = function () { post({ type: 'plugins_open_dir' }); };
-      var bReload = el('button','plg-btn','重载');
-      bReload.title = '重新加载界面：让插件的开/关改动生效，并重新扫描插件目录';
-      bReload.onclick = function () { reloadPlugins(); };
+      var bReload = el('button','plg-btn','重新加载全部');
+      bReload.onclick = function () { post({ type: 'plugin_reload' }); toast('已重新下发插件代码'); };
       tools.appendChild(bDir); tools.appendChild(bReload);
       bar.appendChild(tools);
       page.appendChild(bar);
@@ -369,17 +368,19 @@
       note.appendChild(el('span','plg-note-dot'));
       var noteTxt = el('div','plg-note-txt');
       note.appendChild(noteTxt);
+      var noteBtn = el('button','plg-btn primary','重载');
+      noteBtn.title = '重载界面，让插件的开/关立刻生效';
+      noteBtn.onclick = function () { reloadPlugins(); };
+      note.appendChild(noteBtn);
       page.appendChild(note);
 
       function refreshNote() {
         var ch = changedPlugins();
-        var dirty = ch.length > 0;
-        note.hidden = !dirty;
-        bReload.classList.toggle('accent', dirty);   // 有改动时右上角「重载」亮成主题色
-        if (!dirty) { noteTxt.innerHTML = ''; return; }
+        note.hidden = ch.length === 0;
+        if (note.hidden) { noteTxt.innerHTML = ''; return; }
         noteTxt.innerHTML = '检测到插件的更改（开/关）：<b>' + ch.map(function (x) {
           return esc(x.name) + '（' + (x.gone ? '已卸载' : (x.on ? '开' : '关')) + (x.isNew ? '·新增' : '') + '）';
-        }).join('、') + '</b>，需要重载以应用设置 —— 点右上角「重载」';
+        }).join('、') + '</b>，需要重载以应用设置';
       }
 
       var body = el('div','plg-body');
