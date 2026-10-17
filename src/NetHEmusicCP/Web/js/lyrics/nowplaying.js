@@ -10,7 +10,9 @@
     var wrap = document.querySelector('#np .np-cover-wrap');
     var pic = ns.Pic ? ns.Pic.replace(/\^\d+\^/, '') : '';
     if (pic) {
-      cover.src = pic;
+      // 封面只用于 300px 上下的展示，取 400y400 缩略图即可：原来直接用 2400x2400 原图，
+      // 单张解码就要 ~23MB，是“内存只涨不降”的一大来源
+      cover.src = pic + (pic.indexOf('?') >= 0 ? '&' : '?') + 'param=400y400';
       // 背景用 240px 缩略图放大 —— 比整屏 72px 高斯模糊便宜一个数量级
       var small = pic + (pic.indexOf('?') >= 0 ? '&' : '?') + 'param=240y240';
       bg.style.backgroundImage = 'url("' + small + '")';

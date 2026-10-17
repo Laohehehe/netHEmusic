@@ -1040,7 +1040,7 @@ function applyPerfAnim(s) {
     $('#pl-title').textContent = ns.Title;
     $('#pl-artist').textContent = ns.Artist;
     var c = $('#pl-cover'), wrap = $('#pl-cover-wrap');
-    if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,''); if(wrap) wrap.classList.add('has-cover'); try { if (String((appSettings && appSettings.scheme) || '') === 'dynamic-auto') pickCoverColor(ns.Pic); } catch (e7) { } }
+    if(ns.Pic){ c.src = ns.Pic.replace(/\^\d+\^/,'') + '?param=200y200'; if(wrap) wrap.classList.add('has-cover'); try { if (String((appSettings && appSettings.scheme) || '') === 'dynamic-auto') pickCoverColor(ns.Pic); } catch (e7) { } }
     else { c.removeAttribute('src'); if(wrap) wrap.classList.remove('has-cover'); }
     kickLikes();          // 切歌后同步爱心状态（首次会自动拉一次「我喜欢的音乐」）
   }
@@ -1088,7 +1088,7 @@ function applyPerfAnim(s) {
       return true;
     };
     r.innerHTML = '<div class="sr-idx">'+String(i+1).padStart(2,'0')+'</div>'+
-      '<img class="sr-cover" loading="lazy"'+imgSrc(ns.Pic,'?param=80y80')+'>'+
+      '<img class="sr-cover" loading="lazy" decoding="async"'+imgSrc(ns.Pic,'?param=48y48')+'>'+
       '<div class="sr-title">'+esc(ns.Title)+'</div><div class="sr-artist">'+esc(ns.Artist)+'</div>'+
       '<div class="sr-album">'+esc(ns.Album)+'</div><div class="sr-dur">'+fmt(ns.Duration)+'</div>'+
       '<button class="row-btn primary" data-do="play" title="播放">'+SVG.play+'</button>'+
@@ -1200,12 +1200,20 @@ function applyPerfAnim(s) {
     mask.onclick = function (e) { if (e.target === mask) close(); };
     return mask;
   }
-  // 长列表分批渲染：先渲 LIST_CHUNK 条，底部哨兵进视口再追加一批（配合 CSS content-visibility 让屏幕外的行不参与布局/绘制）
+  // 长列表渲染：
+  //   · 短列表（<= LIST_VIRT_MIN 条）：先渲 LIST_CHUNK 条，底部哨兵进视口再追加一批
+  //   · 长列表：走虚拟列表 —— DOM 里只保留「视口 + 上下缓冲」那一段行，其余用上下占位块撑出滚动高度。
+  //     以前整页铺满（400 首 ≈ 1.2 万节点）时，每进出一次页面渲染进程就涨 ~10MB 且不回收；
+  //     虚拟列表后 DOM 恒定在 ~120 行内，300+ 的歌单反复进出、滑到底也不再累积。
   var LIST_CHUNK = 50;
+  var LIST_VIRT_MIN = 120, VIRT_BUFFER = 55;
+  var virtStop = null;                                  // 上一份虚拟列表的清理函数（换页时要摘掉监听）
   function renderSongs(arr, container) {
     currentList = arr.map(normSong);
+    if (virtStop) { try { virtStop(); } catch (eV) { } virtStop = null; }
     container.innerHTML = '';
     container.classList.add('song-list');
+    if (currentList.length > LIST_VIRT_MIN) { renderSongsVirt(container); return currentList; }
     var sentinel = el('div', 'list-more');
     container.appendChild(sentinel);
     var shown = 0, io = null;
@@ -1231,6 +1239,52 @@ function applyPerfAnim(s) {
       }
     }
     return currentList;
+  }
+  // 虚拟列表：按滚动位置只铺出可见区 + 上下 VIRT_BUFFER 行，其余用占位块撑高
+  function renderSongsVirt(container) {
+    var n = currentList.length;
+    var topPad = el('div', 'list-pad'), botPad = el('div', 'list-pad'), win = el('div', 'list-win');
+    container.appendChild(topPad); container.appendChild(win); container.appendChild(botPad);
+    var rowH = 0, winA = -1, winB = -1, raf = 0, dead = false;
+    function listTop() {
+      var vr = view.getBoundingClientRect();
+      return container.getBoundingClientRect().top - vr.top + view.scrollTop;
+    }
+    function paint() {
+      raf = 0;
+      if (dead || !win.isConnected) { dead = true; return; }
+      if (!rowH) {                                     // 先量一行的高度（行高固定，量一次就够）
+        var probe = songRow(currentList[0], 0);
+        win.appendChild(probe);
+        rowH = probe.offsetHeight || 52;
+        win.innerHTML = '';
+      }
+      if (!rowH) return;
+      var rel = Math.max(0, view.scrollTop - listTop());
+      var start = Math.floor(rel / rowH);
+      var visible = Math.ceil((view.clientHeight || 600) / rowH) + 2;
+      var a = Math.max(0, start - VIRT_BUFFER);
+      var b = Math.min(n, start + visible + VIRT_BUFFER);
+      if (a === winA && b === winB) return;
+      winA = a; winB = b;
+      var frag = document.createDocumentFragment();
+      for (var i = a; i < b; i++) frag.appendChild(songRow(currentList[i], i));
+      win.textContent = '';
+      win.appendChild(frag);
+      topPad.style.height = (a * rowH) + 'px';
+      botPad.style.height = Math.max(0, (n - b) * rowH) + 'px';
+      try { markOfflineRows(); } catch (eM) { }
+    }
+    function onScroll() { if (!raf && !dead) raf = requestAnimationFrame(paint); }
+    try { view.addEventListener('scroll', onScroll, { passive: true }); } catch (e1) { }
+    try { window.addEventListener('resize', onScroll); } catch (e2) { }
+    virtStop = function () {
+      dead = true;
+      if (raf) { try { cancelAnimationFrame(raf); } catch (e3) { } raf = 0; }
+      try { view.removeEventListener('scroll', onScroll); } catch (e4) { }
+      try { window.removeEventListener('resize', onScroll); } catch (e5) { }
+    };
+    raf = requestAnimationFrame(paint);
   }
 
   // ---- 长名称走马灯：鼠标悬停到某一行时，把放不下的歌名/歌手/专辑滚动显示完整 ----
@@ -1319,7 +1373,11 @@ function applyPerfAnim(s) {
   try { window.addEventListener('resize', setViewH); } catch (e) {}
   function dropViewGhost() {
     if (ghostTimer) { clearTimeout(ghostTimer); ghostTimer = 0; }
-    if (viewGhost) { if (viewGhost.parentNode) viewGhost.parentNode.removeChild(viewGhost); viewGhost = null; }
+    if (viewGhost) {
+      // 残影里的封面图先摘掉 src 再销毁：解码后的位图不再被引用，渲染进程能尽快回收
+      try { var gim = viewGhost.getElementsByTagName('img'); for (var gi = 0; gi < gim.length; gi++) gim[gi].removeAttribute('src'); } catch (egi) { }
+      if (viewGhost.parentNode) viewGhost.parentNode.removeChild(viewGhost); viewGhost = null;
+    }
     var mh = view.parentNode; if (mh && mh.classList) mh.classList.remove('ghost-on');
   }
   // 新页面挂上来了 → 残影开始向上滑出（和入场同时播）
