@@ -305,9 +305,7 @@
       b.onclick = function () { curPluginPage = it.id + '/' + p.id; paint(); };
       acts.appendChild(b);
     });
-    var reloadBtn = el('button','plg-btn','重新加载');
-    reloadBtn.onclick = function () { post({ type: 'plugin_reload' }); toast('已重新下发插件代码'); };
-    acts.appendChild(reloadBtn);
+    // 单个插件的「重新加载」已合并到右上角统一的「重载」按钮（原来那个只重发全部插件代码，没额外作用）
     var un = el('button','plg-btn danger','卸载');
     un.onclick = function () {
       if (!confirm(I18N('卸载插件「{0}」？\\n\\n目录会被移到 plugins\\.trash 下（可手动恢复）。', it.name))) return;
@@ -356,8 +354,9 @@
       var tools = el('div','plg-tools');
       var bDir = el('button','plg-btn','打开插件文件夹');
       bDir.onclick = function () { post({ type: 'plugins_open_dir' }); };
-      var bReload = el('button','plg-btn','重新加载全部');
-      bReload.onclick = function () { post({ type: 'plugin_reload' }); toast('已重新下发插件代码'); };
+      var bReload = el('button','plg-btn','重载');
+      bReload.title = '重新加载界面：让插件的开/关改动生效，并重新扫描插件目录';
+      bReload.onclick = function () { reloadPlugins(); };
       tools.appendChild(bDir); tools.appendChild(bReload);
       bar.appendChild(tools);
       page.appendChild(bar);
