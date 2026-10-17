@@ -1242,7 +1242,8 @@ function applyPerfAnim(s) {
   }
   // 虚拟列表：按滚动位置只铺出可见区 + 上下 VIRT_BUFFER 行，其余用占位块撑高
   function renderSongsVirt(container) {
-    var n = currentList.length;
+    var list = currentList;                        // 捕获本次列表：paint 是异步的，currentList 可能已被别的页面换掉
+    var n = list.length;
     var topPad = el('div', 'list-pad'), botPad = el('div', 'list-pad'), win = el('div', 'list-win');
     container.appendChild(topPad); container.appendChild(win); container.appendChild(botPad);
     var rowH = 0, winA = -1, winB = -1, raf = 0, dead = false;
@@ -1254,7 +1255,7 @@ function applyPerfAnim(s) {
       raf = 0;
       if (dead || !win.isConnected) { dead = true; return; }
       if (!rowH) {                                     // 先量一行的高度（行高固定，量一次就够）
-        var probe = songRow(currentList[0], 0);
+        var probe = songRow(list[0] || {}, 0);
         win.appendChild(probe);
         rowH = probe.offsetHeight || 52;
         win.innerHTML = '';
@@ -1268,7 +1269,7 @@ function applyPerfAnim(s) {
       if (a === winA && b === winB) return;
       winA = a; winB = b;
       var frag = document.createDocumentFragment();
-      for (var i = a; i < b; i++) frag.appendChild(songRow(currentList[i], i));
+      for (var i = a; i < b; i++) { var sx = list[i]; if (!sx) continue; frag.appendChild(songRow(sx, i)); }
       win.textContent = '';
       win.appendChild(frag);
       topPad.style.height = (a * rowH) + 'px';
