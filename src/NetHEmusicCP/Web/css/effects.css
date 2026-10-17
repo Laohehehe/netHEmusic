@@ -420,9 +420,22 @@ html.no-anim-page .page.view-in, html.no-anim-page .big-load.view-in{animation:n
   color:rgba(255,255,255,.42);
   transform-origin:left center;
   /* 注意：不要给每行加 will-change —— 73 行会各自提升为合成层，CPU/内存都会爆 */
-  transition:transform .62s var(--ly-ease), filter .62s ease, opacity .62s ease, color .4s ease;
+  transition:transform .62s var(--ly-ease), filter .62s ease, opacity .62s ease, color .4s ease, background .3s ease;
 }
 .np-line.on{color:#fff;}
+/* 歌词行：可点击跳转 —— 悬浮时整句放大/提亮 + 一层药丸底，提示“这句能点” */
+.np-line[data-t]{cursor:pointer;}
+.np-line .np-orig,.np-line .np-sub{
+  transform-origin:center center;   /* 单独给子元素居中缩放：整行是 left origin（弧线用），直接缩整行会往右歪 */
+  transition:transform .34s cubic-bezier(.2,.8,.3,1.25), letter-spacing .34s ease, opacity .3s ease;
+}
+.np-line[data-t]:hover{color:#fff;background:rgba(255,255,255,.07);border-radius:12px;}
+.np-line[data-t]:hover .np-orig{transform:scale(1.045) translateY(-1px);letter-spacing:.012em;}
+.np-line[data-t]:hover .np-sub{transform:scale(1.015);}
+.np-line[data-t]:active .np-orig{transform:scale(.995);}
+/* 滚轮浏览歌词时轨道用短过渡，跟手一点 */
+.np.np-scrolling .np-lyric-inner{transition-duration:.16s !important;}
+html.no-anim-np .np-line .np-orig,html.no-anim-np .np-line .np-sub{transition:none !important;}
 /* 底部控制条（两行：进度 + 控制，整体更靠下） */
 .np-bar{
   position:absolute;left:0;right:0;bottom:0;padding:26px 34px 14px;

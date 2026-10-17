@@ -1608,6 +1608,10 @@ function applyPerfAnim(s) {
   var npOpen = false, npLines = [], npIndex = -1, npSongId = 0;
   try { document.getElementById('np').classList.add('hidden'); } catch (e) { }
   var npDurMs = 0, npPosMs = 0, npPlaying = false;   // 由 position / playing 消息维护
+  // 歌词手动浏览（滚轮）：相对“当前行自动居中”的像素偏移。
+  // 偏移非 0 时可视效果以视口中心那行为中心、且不跟着换行移动；停手 5 秒自动滑回当前行。
+  var npScrollOff = 0, npBrowseTimer = 0, npTrackAnchor = null;
+  var npGeomTrack = { base: [], h: [] };             // npLayout 算出的静态行位（滚动钳位 / 视口中心行用）
   var npTr = [], npRo = [];                           // 翻译 / 罗马音（与 npLines 同时间轴）
   // 把翻译与罗马音按时间戳挂到原词行上（允许 ±500ms 误差）
   function npMergeSubLines() {
@@ -1778,35 +1782,39 @@ function applyPerfAnim(s) {
     // 静态基准位置（从未缩放行高累加）
     base[0] = 0;
     for (var i = 1; i < nodes.length; i++) base[i] = base[i - 1] + h[i - 1] + space;
+    // 可视效果的中心行：平时就是当前播放行；手动滚动浏览时改成视口中心那一行（否则翻出来的行全是透明的）
+    var visCur = npVisCur(base, h, cur);
     for (var i = 0; i < nodes.length; i++) {
-      var off = i - cur;
+      var off = i - visCur;
       s[i] = off === 0 ? 1 : lyScale(off);
       b[i] = off === 0 ? 0 : lyBlurPx(off);
       o[i] = off === 0 ? 1 : lyOpacity(off);
     }
     var centerY = wrap.clientHeight * 0.5;
     var off3, extraTop, left, deg, rel;
+    // 浏览时按偏移把绘制窗口撑大，保证滚出来的行有渲染（平时只画当前行 ±10）
+    var browsePad = npScrollOff ? Math.ceil(Math.abs(npScrollOff) / Math.max(24, h[cur] + space)) : 0;
     for (var i = 0; i < nodes.length; i++) {
-      var n = nodes[i]; var off2 = i - cur;
-      // 只保留当前行附近的行参与绘制（73 行全画会明显吃 CPU/GPU）
-      var near = Math.abs(off2) <= 10;
+      var n = nodes[i]; var off2 = i - visCur;
+      // 只保留中心行附近的行参与绘制（73 行全画会明显吃 CPU/GPU）
+      var near = Math.abs(off2) <= 10 + browsePad || (browsePad > 0 && Math.abs(i - cur) <= 10);
       if (!near) { n.style.display = 'none'; continue; }
       if (n.style.display === 'none') n.style.display = '';
       n.style.top = base[i].toFixed(1) + 'px';
       extraTop = 0; left = 0; deg = 0;
       if (curved) {
-        var yOff = base[cur] - base[i];
+        var yOff = base[visCur] - base[i];
         var arc = lyArc(yOff, h[i] * s[i], curvature);
         deg = arc.rotate; extraTop = arc.extraTop; left = arc.left;
         rel = Math.abs(yOff * 2 / Math.max(1, window.innerHeight));
         o[i] = Math.min(o[i], Math.max(1 - Math.pow(rel, 1.15) * 1.2, 0));
       }
       n.style.transform = 'translateY(' + extraTop.toFixed(1) + 'px) translateX(' + left.toFixed(1) + 'px) scale(' + s[i].toFixed(3) + ')' + (curved ? (' rotate(' + deg.toFixed(2) + 'deg)') : '');
-      // 只给当前行附近的行加 filter（远处本来就透明看不见，还给 70 个元素加模糊层会很贵）
+      // 只给中心行附近的行加 filter（远处本来就透明看不见，还给 70 个元素加模糊层会很贵）
       n.style.filter = (b[i] > 0.05 && Math.abs(off2) <= 4) ? 'blur(' + b[i].toFixed(2) + 'px)' : '';
       n.style.opacity = o[i].toFixed(3);
       n.style.zIndex = String(900 - Math.abs(off2));
-      // 错落：离当前行越远，动得越晚一点（换行时形成波浪感）
+      // 错落：离中心行越远，动得越晚一点（换行时形成波浪感）
       var dly = off2 === 0 ? 0 : Math.min(Math.abs(off2), 4) * 22 + 16;
       n.style.transitionDelay = dly + 'ms';
       n.classList.toggle('on', i === cur && npIndex >= 0);
@@ -1824,14 +1832,90 @@ function applyPerfAnim(s) {
         }
       }
     } catch (e21) { }
-    // 容器整体滑动，使当前行居中（这一层是有过渡的，换行不再瞬移）
-    box.style.transform = 'translateY(' + (centerY - base[cur] - h[cur] / 2).toFixed(1) + 'px)';
+    // 容器整体滑动，使当前行居中（这一层是有过渡的，换行不再瞬移）；浏览时叠加手动偏移
+    npGeomTrack.base = base; npGeomTrack.h = h;
+    npSetTrack();
     lyPrevIndex = cur;
+  }
+  // 视口中心对应的行：不浏览就是当前播放行；浏览时取最靠近视口中心的那行
+  function npVisCur(base, h, cur) {
+    if (!npScrollOff) return cur;
+    var want = base[cur] + (h[cur] || 0) / 2 - npScrollOff;
+    var best = cur, bestD = Infinity;
+    for (var k = 0; k < base.length; k++) {
+      var d = Math.abs(base[k] + (h[k] || 0) / 2 - want);
+      if (d < bestD) { bestD = d; best = k; }
+    }
+    return best;
+  }
+  // 轨道 transform：让当前行居中，再叠加浏览偏移（浏览时换行不移动视野）
+  function npSetTrack() {
+    var box = npEl('np-lyric-inner'), wrap = npEl('np-lyric');
+    if (!box || !wrap) return;
+    var g = npGeomTrack; if (!g.base || !g.base.length) return;
+    var cur = (npIndex < 0) ? 0 : Math.min(npIndex, g.base.length - 1);
+    var anchor = g.base[cur] + (g.h[cur] || 0) / 2;
+    if (npScrollOff && npTrackAnchor != null) npScrollOff += anchor - npTrackAnchor;   // 播放行变了也不动视野
+    npTrackAnchor = anchor;
+    npClampScroll();
+    box.style.transform = 'translateY(' + (wrap.clientHeight * 0.5 - anchor + npScrollOff).toFixed(1) + 'px)';
+  }
+  // 偏移钳位：往上最多露到第一行，往下最多露到最后一行
+  function npClampScroll() {
+    var g = npGeomTrack; if (!g.base || !g.base.length) return;
+    var cur = (npIndex < 0) ? 0 : Math.min(npIndex, g.base.length - 1);
+    var anchor = g.base[cur] + (g.h[cur] || 0) / 2, n = g.base.length;
+    var up = anchor - (g.base[0] + (g.h[0] || 0) / 2);
+    var dn = (g.base[n - 1] + (g.h[n - 1] || 0) / 2) - anchor;
+    if (npScrollOff > up) npScrollOff = up;
+    if (npScrollOff < -dn) npScrollOff = -dn;
+  }
+  var npWheelIdle = 0;
+  // 结束浏览：滑回当前行
+  function npBrowseEnd() {
+    clearTimeout(npBrowseTimer);
+    var n = npEl('np'); if (n) n.classList.remove('np-scrolling');
+    if (!npScrollOff) return;
+    npScrollOff = 0; npTrackAnchor = null;
+    npLayout();
+  }
+  // 滚轮浏览歌词（设置面板自己会滚，别抢它的滚轮）
+  function npWheel(e) {
+    if (!npOpen) return;
+    var t = e.target;
+    if (t && t.closest && t.closest('.np-settings')) return;
+    var g = npGeomTrack; if (!g.base || !g.base.length) return;
+    var d = e.deltaY || 0;
+    if (e.deltaMode === 1) d *= 40; else if (e.deltaMode === 2) d *= 400;
+    if (!d) return;
+    e.preventDefault();
+    var before = npScrollOff;
+    npScrollOff -= d;
+    npClampScroll();
+    if (npScrollOff === before) return;               // 已经到头，不动
+    var n = npEl('np');
+    if (n) n.classList.add('np-scrolling');            // 滚轮期间用短过渡，跟手一点
+    clearTimeout(npWheelIdle);
+    npWheelIdle = setTimeout(function () { var e2 = npEl('np'); if (e2) e2.classList.remove('np-scrolling'); }, 260);
+    npLayout();                                        // 重算可视效果 + 轨道
+    clearTimeout(npBrowseTimer);
+    npBrowseTimer = setTimeout(npBrowseEnd, 5000);     // 停手 5 秒回到当前行
+  }
+  // 点击某行歌词 → 跳到那行的时间
+  function npSeekTo(ms) {
+    if (!(ms >= 0)) return;
+    NE.post({ type: 'seek', pos: ms });
+    npPosMs = ms; pcKick();
+    npScrollOff = 0; npTrackAnchor = null; clearTimeout(npBrowseTimer);
+    var n = npEl('np'); if (n) n.classList.remove('np-scrolling');
+    npSync(ms);            // 立刻高亮/居中到该行；宿主回来的 position 消息会继续同步
+    npLayout();
   }
 
   function npRenderLyric(lines) {
     var box = npEl('np-lyric-inner'); if (!box) return;
     npGeom.h = []; npGeom.fs = 0;      // 重建歌词 → 行高缓存作废
+    npScrollOff = 0; npTrackAnchor = null; clearTimeout(npBrowseTimer);   // 换歌/重建歌词 → 回到自动跟随
     box.innerHTML = '';
     if (!lines.length) { box.innerHTML = '<div class="np-line on" style="top:45%">暂无歌词</div>'; return; }
     var chars = !!lyStyles.charAnim;
@@ -1857,6 +1941,11 @@ function applyPerfAnim(s) {
       if (l.ro) div.appendChild(el('div', 'np-sub np-ro', esc(l.ro)));
       if (l.tr) div.appendChild(el('div', 'np-sub np-tr', esc(l.tr)));
       box.appendChild(div);
+      if (typeof l.t === 'number' && l.t >= 0) {          // 点这行 → 跳到这句的时间
+        div.dataset.t = String(l.t);
+        div.setAttribute('title', fmt(l.t) + ' · 点击跳转');
+        div.addEventListener('click', function () { npSeekTo(l.t); });
+      }
     });
     npIndex = -1;
     npLayout();
@@ -1993,6 +2082,7 @@ function applyPerfAnim(s) {
     var np = npEl('np'); if (!np) return;
     np.addEventListener('mousemove', npBarPoke);
     np.addEventListener('mouseenter', npBarPoke);
+    np.addEventListener('wheel', npWheel, { passive: false });   // 滚轮浏览歌词
     np.addEventListener('mouseleave', function () {          // 鼠标移出歌词页就早点收起，别等到 3 秒
       clearTimeout(npBarIdle);
       npBarIdle = setTimeout(function () { if (npOpen) npBarHide(); }, 1200);
