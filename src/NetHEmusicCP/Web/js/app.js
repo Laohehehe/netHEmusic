@@ -1428,7 +1428,11 @@ function applyPerfAnim(s) {
         if (n.nodeType === 1 && (n.classList.contains('page') || n.classList.contains('big-load'))) { if (!added) added = n; }
       }
     }
-    if (removed) pageGhostHold(removed, lastViewScrollTop);   // 旧页面先被摘掉（同一批里可能只有一个 loading 转圈）
+    if (removed) {
+      pageGhostHold(removed, lastViewScrollTop);   // 旧页面先被摘掉（同一批里可能只有一个 loading 转圈）
+      // 「即用即丢」：通知宿主让 WebView2 渲染进程收缩内部缓存（布局/绘制/解码图），见 WebViewHost.TrimRendererMemory
+      try { NE.post({ type: 'page_leave' }); } catch (ePL) { }
+    }
     if (added) {
       setViewH();
       ghostSlideOut();                                        // 新页面到位 → 旧页面向上滑出，两层交叉

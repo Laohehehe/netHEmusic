@@ -132,8 +132,32 @@ public sealed partial class MainWindow
         }
     }
 
-    private string FindWebFolder()
+    // 「即用即丢」：网页切走一个页面后，让渲染进程把内部缓存（布局/绘制/图片解码）主动收缩。
+    // MemoryUsageTargetLevel=Low 只是给渲染进程一个“可以省内存”的信号，收缩后立刻恢复 High，
+    // 避免长期 Low 拖慢动画；1.2s 后自动回 High。
+    private void TrimRendererMemory()
     {
+        try
+        {
+            var core = WebView?.CoreWebView2; if (core == null) return;
+            core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
+            var dq = WebView.DispatcherQueue;
+            dq?.TryEnqueue(async () =>
+            {
+                try
+                {
+                    await Task.Delay(1200);
+                    if (WebView?.CoreWebView2 != null)
+                        WebView.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal;
+                }
+                catch { }
+            });
+            LogManager.Debug("渲染进程内存收缩(Low → 1.2s 后 High)");
+        }
+        catch (Exception ex) { LogManager.Debug("渲染进程内存收缩失败: " + ex.Message); }
+    }
+
+    private string FindWebFolder()    {
         // 开发期优先使用“源码 Web 目录”：改 HTML/CSS/JS 后无需重新构建，热重载即可看到效果
         var root = AppContext.BaseDirectory;
         for (int i = 0; i < 12 && !string.IsNullOrEmpty(root); i++)

@@ -79,6 +79,7 @@ public sealed partial class MainWindow
                 // 都已经删掉 —— 网页侧现在统一走 type:"api" 的通用转发（js/api.js：cloudsearch / playlist/track/all /
                 // lyric/new），登录 cookie 由 /api 自己拿；下载页只有「清除下载历史」(dl_history_clear) 和单条 dl_delete。
                 case "discover": _ = HandleWebDiscover(); break;
+                case "page_leave": TrimRendererMemory(); break;   // 网页切页后“即用即丢”：让渲染进程收缩缓存
                 case "play": HandleWebPlay(doc); break;
                 case "play_list": HandleWebPlayList(doc); break;
                 case "download": HandleWebDownload(doc); break;
