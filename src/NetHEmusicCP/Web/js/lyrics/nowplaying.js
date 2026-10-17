@@ -25,6 +25,11 @@
 
   function npBarHide() {
     var b = document.querySelector('#np .np-bar'); if (b) b.classList.add('bar-away');
+    // 齿轮（歌词显示设置）跟着控制条一起收起（#np 上的 bar-away 只作用于齿轮）；
+    // 设置面板开着时不收，否则就没法再点齿轮把它收起来了
+    var s = document.getElementById('np-settings');
+    if (s && s.classList.contains('show')) return;
+    var n = document.getElementById('np'); if (n) n.classList.add('bar-away');
   }
 
   // 封面“飞入”：从 dock 小封面 FLIP 到大封面，让歌词页像是从播放条长出来的

@@ -1983,6 +1983,9 @@ function applyPerfAnim(s) {
   function npBarPoke() {
     var bar = document.querySelector('#np .np-bar'); if (!bar) return;
     if (bar.classList.contains('bar-away')) bar.classList.remove('bar-away');
+    // 齿轮的隐现状态挂在 #np 上（见 nowplaying.js 的 npBarHide），一起恢复
+    var npBox = npEl('np');
+    if (npBox && npBox.classList.contains('bar-away')) npBox.classList.remove('bar-away');
     clearTimeout(npBarIdle);
     npBarIdle = setTimeout(function () { if (npOpen) npBarHide(); }, 3000);
   }
@@ -2167,7 +2170,7 @@ function applyPerfAnim(s) {
   function npToggleSettings(force) {
     var p = npEl('np-settings'); if (!p) return;
     var on = (force === undefined) ? !p.classList.contains('show') : !!force;
-    if (on) npBuildSettings();
+    if (on) { npBuildSettings(); npBarPoke(); }   // 面板一开就把控制条/齿轮唤回来，且面板开着时齿轮不参与自动收起
     p.classList.toggle('show', on);
     p.setAttribute('aria-hidden', on ? 'false' : 'true');
     var g = npEl('np-gear'); if (g) g.classList.toggle('on', on);
