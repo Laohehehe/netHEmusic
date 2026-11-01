@@ -1257,7 +1257,10 @@ function applyPerfAnim(s) {
       if (!rowH) {                                     // 先量一行的高度（行高固定，量一次就够）
         var probe = songRow(list[0] || {}, 0);
         win.appendChild(probe);
-        rowH = probe.offsetHeight || 52;
+        // 兜底值必须等于 .song-row 的真实高度：38(封面)+8*2(padding)+1(border)=55，
+        // 与 main.css 里 contain-intrinsic-size 的 38px 内容盒配套（52 是旧行高的遗留值，
+        // 一旦量不到真实高度就会按 52 撑占位，整窗漂移十几行）
+        rowH = probe.offsetHeight || 55;
         win.innerHTML = '';
       }
       if (!rowH) return;
