@@ -1111,9 +1111,7 @@ function applyPerfAnim(s) {
         r.classList.toggle('sel', !!multiOn && multiSel.has(r.getAttribute('data-sid') || ''));
       });
       host.querySelectorAll('.multi-btn').forEach(function (b) {
-        b.classList.toggle('on', !!multiOn);
-        var tx = b.querySelector('.mb-tx');
-        if (tx) tx.textContent = multiOn ? '退出多选' : '多选';
+        b.classList.toggle('on', !!multiOn);   // 只靠主题色表示多选态，文字始终保持「多选」
         b.title = multiOn ? '退出多选' : '多选（Ctrl+左键也可以）';
       });
       renderMultiDock();
