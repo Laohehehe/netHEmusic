@@ -186,6 +186,10 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .dl-preview{height:26px;border-radius:8px;margin:2px 8px 9px;
   border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);
   box-shadow:inset 0 1px 0 rgba(var(--md-accent-color-grey-base-rgb),.08);}
+/* 动态颜色模式（流光/流体）：预览条循环流动，示意桌面歌词不是静态渐变 */
+.dl-preview.dyn{background-size:220% 100% !important;animation:dlPrevFlow 2.8s linear infinite;}
+@keyframes dlPrevFlow{from{background-position:0% 50%;}to{background-position:-220% 50%;}}
+html.anim-off .dl-preview.dyn{animation:none;}
 .dl-presets{display:flex;align-items:center;gap:8px;}
 .dl-preset{width:56px;height:26px;border-radius:7px;cursor:pointer;padding:0;
   border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.22);

@@ -2983,7 +2983,11 @@ function applyPerfAnim(s) {
     function dlColorSection() {
       var host = el('div', 'dl-color');
       var mode = String(cfgGet(s, 'dl_color_mode', 'single') || 'single');
-      if (mode !== 'dual' && mode !== 'quad' && mode !== 'custom') mode = 'single';
+      if (mode !== 'dual' && mode !== 'quad' && mode !== 'custom' && mode !== 'flow' && mode !== 'fluid') mode = 'single';
+      var flowSpeed = Number(cfgGet(s, 'dl_flow_speed', 40)); if (!isFinite(flowSpeed)) flowSpeed = 40;
+      flowSpeed = Math.max(1, Math.min(100, Math.round(flowSpeed)));
+      var fluidTurb = Number(cfgGet(s, 'dl_fluid_turb', 50)); if (!isFinite(fluidTurb)) fluidTurb = 50;
+      fluidTurb = Math.max(0, Math.min(100, Math.round(fluidTurb)));
       var st = {
         dir: String(cfgGet(s, 'dl_color_dir', 'lr') || 'lr'),
         angle: Number(cfgGet(s, 'dl_color_angle', 90)) || 90,
@@ -3000,7 +3004,7 @@ function applyPerfAnim(s) {
       if (mode === 'dual' && st.dir === 'diag') st.dir = 'lr';   // 双色没有四角
 
       function save(k, v) { NE.setSetting(k, v); }
-      function stopCount() { return mode === 'single' ? 1 : (mode === 'dual' ? 2 : (mode === 'quad' ? 4 : st.count)); }
+      function stopCount() { return mode === 'single' ? 1 : (mode === 'dual' ? 2 : (mode === 'quad' || mode === 'flow' || mode === 'fluid' ? 4 : st.count)); }
       function colorAt(i) { return normHex(st.colors[i], DL_DEF_COLORS[i % DL_DEF_COLORS.length]); }
       function gradDeg() { return mode === 'custom' ? (st.angle + 90) + 'deg' : (st.dir === 'tb' ? '180deg' : (st.dir === 'diag' ? '135deg' : '90deg')); }
 
@@ -3009,19 +3013,26 @@ function applyPerfAnim(s) {
         var cols = [];
         for (var i = 0; i < stopCount(); i++) cols.push(colorAt(i));
         p.style.background = 'linear-gradient(' + gradDeg() + ',' + cols.join(',') + ')';
+        // 动态模式的预览条自己也动起来，让人一眼看出这不是静态渐变
+        if (mode === 'flow' || mode === 'fluid') p.classList.add('dyn');
         return p;
       }
 
       function rowMode() {
         return sel('颜色模式', 'dl_color_mode', mode, [
           { v: 'single', t: '单色' }, { v: 'dual', t: '双色' },
-          { v: 'quad', t: '四色' }, { v: 'custom', t: '自定义' }
+          { v: 'quad', t: '四色' }, { v: 'custom', t: '自定义' },
+          { v: 'flow', t: '流光（动态）' }, { v: 'fluid', t: '流体（动态）' }
         ], function (v) {
           mode = v;
           save('dl_color_mode', v);
           if (v === 'dual') { st.dir = 'lr'; save('dl_color_dir', 'lr'); }
           if (v === 'quad' && st.dir === 'lr') { st.dir = 'diag'; save('dl_color_dir', 'diag'); }
           if (v === 'quad') { st.count = 4; save('dl_color_count', 4); }
+          // 动态模式同样用 4 个色标当调色板；流光默认走四角方向，流体没有方向概念
+          if (v === 'flow' || v === 'fluid') { st.count = 4; save('dl_color_count', 4); }
+          if (v === 'flow' && st.dir === 'lr') { st.dir = 'diag'; save('dl_color_dir', 'diag'); }
+          if (v === 'fluid') { st.dir = 'lr'; save('dl_color_dir', 'lr'); }
           rebuild();
         });
       }
@@ -3110,11 +3121,17 @@ function applyPerfAnim(s) {
         host.appendChild(previewEl());
         host.appendChild(rowMode());
         host.appendChild(rowPreset());
-        if (mode !== 'single') host.appendChild(rowDir());
+        if (mode !== 'single' && mode !== 'fluid') host.appendChild(rowDir());
         if (mode === 'custom') host.appendChild(rowCount());
         var n = stopCount();
         for (var i = 0; i < n; i++) host.appendChild(rowStop(i, mode === 'custom'));
         if (mode === 'custom') host.appendChild(rowAngle());
+        // 动态模式的节奏控制：流光 = 色带滑动速度；流体 = 速度 + 湍动幅度
+        if (mode === 'flow') host.appendChild(rng2('流动速度', 'dl_flow_speed', flowSpeed, 1, 100, '', 1));
+        if (mode === 'fluid') {
+          host.appendChild(rng2('流动速度', 'dl_flow_speed', flowSpeed, 1, 100, '', 1));
+          host.appendChild(rng2('湍动幅度', 'dl_fluid_turb', fluidTurb, 0, 100, '', 1));
+        }
         // 描边：单色模式给「描边颜色」，渐变模式换成「按渐变最深色加深 N%」
         if (mode === 'single') {
           host.appendChild(colorRow2('描边颜色', 'dl_stroke_color', String(cfgGet(s, 'dl_stroke_color', '#000000')), DL_STROKE_COLORS, '#000000'));

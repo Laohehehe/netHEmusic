@@ -24,6 +24,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 桌面歌词的「流体」颜色模式要往 WriteableBitmap 的像素缓冲直写（IBuffer → IMemoryBufferByteAccess） -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>NU1701</NoWarn>
 
     <!-- 无打包（unpackaged）自包含部署：便于自签名 + 安装包分发 -->

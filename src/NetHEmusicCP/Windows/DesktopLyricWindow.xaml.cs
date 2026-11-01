@@ -6,11 +6,13 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
@@ -66,6 +68,9 @@ public sealed partial class DesktopLyricWindow : Window
         Root.PointerReleased += OnDragEnd;
         Root.PointerCaptureLost += (s, e) => { if (_dragging) { _dragging = false; SavePosition(); } };
         Activated += (s, e) => ApplyTopmost();
+
+        // 窗口关掉后定时器还在跑就会碰到已释放的位图，一定要停
+        Closed += (s, e) => StopAnim();
 
         RestorePosition();
         ApplySettings();
@@ -131,11 +136,12 @@ public sealed partial class DesktopLyricWindow : Window
             var stroke = ParseColor(cfg.Get("App", "dl_stroke_color", ""), Color.FromArgb(255, 0, 0, 0));
             // 颜色模式：single 单色 / dual 双色 / quad 四色 / custom 自定义色标（设置页那张「歌词颜色」卡片）
             var colorMode = (cfg.Get("App", "dl_color_mode", "single") ?? "single").Trim().ToLowerInvariant();
-            if (colorMode != "dual" && colorMode != "quad" && colorMode != "custom") colorMode = "single";
+            if (colorMode != "dual" && colorMode != "quad" && colorMode != "custom" && colorMode != "flow" && colorMode != "fluid")
+                colorMode = "single";
             var colorDir = (cfg.Get("App", "dl_color_dir", "lr") ?? "lr").Trim().ToLowerInvariant();
-            // 各模式支持的渐变方向：双色只有左右/上下；四色多了「四角」（= 对角线四色）；自定义用角度
+            // 各模式支持的渐变方向：双色只有左右/上下；四色和流光多出「四角」（= 对角线四色）；自定义用角度
             if (colorMode == "dual" && colorDir != "tb") colorDir = "lr";
-            else if (colorMode == "quad" && colorDir != "tb" && colorDir != "diag") colorDir = "lr";
+            else if ((colorMode == "quad" || colorMode == "flow") && colorDir != "tb" && colorDir != "diag") colorDir = "lr";
             int colorCount = (int)Clamp(ParseNum(cfg.Get("App", "dl_color_count", "4"), 4), 2, 64);
             var colors = new List<Color>();
             var positions = new List<double>();
@@ -147,7 +153,21 @@ public sealed partial class DesktopLyricWindow : Window
             }
             if (colors.Count == 0) colors.Add(fill);
             double colorAngle = Clamp(ParseNum(cfg.Get("App", "dl_color_angle", "90"), 90), 0, 360);
-            var fillBrush = BuildFillBrush(colorMode, colorDir, colors, positions, colorAngle);
+            _animSpeed = Clamp(ParseNum(cfg.Get("App", "dl_flow_speed", "40"), 40), 1, 100);
+            _turb = Clamp(ParseNum(cfg.Get("App", "dl_fluid_turb", "50"), 50), 0, 100);
+            // 动态模式（流光 / 流体）每次重设都要先把上一次的定时器和画刷拆掉
+            StopAnim();
+            Brush fillBrush;
+            if (colorMode == "flow" || colorMode == "fluid")
+            {
+                // 这两个模式拿调色板当色带用，只有一种颜色就自动补一个提亮色，不然「流」不起来
+                var pal = colors.Count >= 2 ? colors : new List<Color> { colors[0], Lighten(colors[0], 0.45) };
+                fillBrush = colorMode == "flow" ? StartFlow(pal, colorDir, colorAngle) : StartFluid(pal);
+            }
+            else
+            {
+                fillBrush = BuildFillBrush(colorMode, colorDir, colors, positions, colorAngle);
+            }
 
             // 描边：单色模式用「描边颜色」；渐变模式改成「按渐变里最深的一色加深 N%」——
             // 用户要求只让「描边颜色」这一项随模式变化，描边粗细/其它设置不动。
@@ -227,6 +247,189 @@ public sealed partial class DesktopLyricWindow : Window
     }
 
     private static double Luma(Color c) => 0.299 * c.R + 0.587 * c.G + 0.114 * c.B;
+
+    // ---------------- 动态颜色：流光（A） / 噪声流体（B） ----------------
+    //
+    // 文字只能吃一个 XAML Brush，拿不到着色器，所以两种效果都走「定时器每帧改画刷」：
+    //   flow  —— 9 个固定 Offset 的色标，每帧按相位从调色板取插值色 → 色带整体滑动（无缝，相位取模）
+    //   fluid —— 每帧把 192x64 的域扭曲噪声写进 WriteableBitmap，用 ImageBrush 拉伸铺到文字上
+
+    private DispatcherQueueTimer? _animTimer;
+    private string _animMode = "";
+    private readonly List<GradientStop> _flowStops = new();
+    private List<Color> _flowPalette = new();
+    private double _flowPhase;
+    private WriteableBitmap? _fluidBmp;
+    private byte[]? _fluidPx;
+    private IntPtr _fluidPtr;
+    private int _fluidCap;
+    private Color[] _fluidLut = Array.Empty<Color>();
+    private double _fluidT;
+    private double _animSpeed = 40;
+    private double _turb = 50;
+
+    private const int FlowStops = 9;
+    private const int FluidW = 192, FluidH = 64;
+
+    [ComImport, Guid("905a0fef-bc53-11df-8c49-001e4fc686da"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private unsafe interface IMemoryBufferByteAccess
+    {
+        void GetBuffer(out byte* buffer, out uint capacity);
+    }
+
+    private void StopAnim()
+    {
+        _animMode = "";
+        _flowStops.Clear();
+        _flowPalette = new List<Color>();
+        if (_animTimer != null) { try { _animTimer.Stop(); } catch { } _animTimer = null; }
+        _fluidBmp = null;
+        _fluidPx = null;
+        _fluidPtr = IntPtr.Zero;
+        _fluidLut = Array.Empty<Color>();
+    }
+
+    private void EnsureTimer()
+    {
+        if (_animTimer != null) { _animTimer.Start(); return; }
+        _animTimer = DispatcherQueue.CreateTimer();
+        _animTimer.Interval = TimeSpan.FromMilliseconds(33);
+        _animTimer.Tick += (s, e) => StepAnim();
+        _animTimer.Start();
+    }
+
+    private void StepAnim()
+    {
+        if (_animMode == "flow") StepFlow();
+        else if (_animMode == "fluid") StepFluid(0.033);
+        else if (_animTimer != null) _animTimer.Stop();
+    }
+
+    /// <summary>流光：色标位置固定，颜色跟着相位在调色板上滑过去（相位对 1 取模，所以循环处无跳变）。</summary>
+    private void StepFlow()
+    {
+        var n = _flowPalette.Count;
+        if (n < 2 || _flowStops.Count == 0) return;
+        _flowPhase = (_flowPhase + 0.033 * (0.05 + _animSpeed / 100.0 * 0.55)) % 1.0;
+        var count = _flowStops.Count;
+        for (var i = 0; i < count; i++)
+        {
+            var u = i / (double)(count - 1) + _flowPhase;
+            _flowStops[i].Color = SamplePalette(_flowPalette, u);
+        }
+    }
+
+    private Brush StartFlow(List<Color> pal, string dir, double angle)
+    {
+        _flowPalette = pal;
+        _flowPhase = 0;
+        double sx = 0, sy = 0.5, ex = 1, ey = 0.5;
+        if (dir == "tb") { sx = 0.5; sy = 0; ex = 0.5; ey = 1; }
+        else if (dir == "diag") { sx = 0; sy = 0; ex = 1; ey = 1; }
+        else if (dir == "custom")
+        {
+            var rad = angle * Math.PI / 180.0;
+            double dx = Math.Cos(rad) * 0.5, dy = Math.Sin(rad) * 0.5;
+            sx = 0.5 - dx; sy = 0.5 - dy; ex = 0.5 + dx; ey = 0.5 + dy;
+        }
+        var brush = new LinearGradientBrush { StartPoint = new Point(sx, sy), EndPoint = new Point(ex, ey) };
+        for (var i = 0; i < FlowStops; i++)
+        {
+            var off = i / (double)(FlowStops - 1);
+            var gs = new GradientStop { Offset = off, Color = SamplePalette(pal, off) };
+            _flowStops.Add(gs);
+            brush.GradientStops.Add(gs);
+        }
+        _animMode = "flow";
+        EnsureTimer();
+        return brush;
+    }
+
+    private Brush StartFluid(List<Color> pal)
+    {
+        _fluidLut = new Color[256];
+        for (var i = 0; i < 256; i++) _fluidLut[i] = SamplePalette(pal, i / 256.0);
+        _fluidPx = new byte[FluidW * FluidH * 4];
+        _fluidBmp = new WriteableBitmap(FluidW, FluidH);
+        _fluidPtr = FluidPointer();           // 位图的后备缓冲地址是稳定的，取一次就够
+        _fluidT = 0;
+        _animMode = "fluid";
+        EnsureTimer();
+        StepFluid(0.033);                    // 先画一帧，免得首帧是空白
+        return new ImageBrush { ImageSource = _fluidBmp, Stretch = Stretch.Fill };
+    }
+
+    private unsafe IntPtr FluidPointer()
+    {
+        if (_fluidBmp == null) return IntPtr.Zero;
+        var buf = _fluidBmp.PixelBuffer;
+        var access = buf.As<IMemoryBufferByteAccess>();
+        byte* p = null; uint cap = 0;
+        try { access.GetBuffer(out p, out cap); }
+        catch (Exception e) { LogManager.Debug("[fluid] GetBuffer 失败: " + e.Message); return IntPtr.Zero; }
+        _fluidCap = (int)Math.Min(cap, (uint)(FluidW * FluidH * 4));
+        return (IntPtr)p;
+    }
+
+    /// <summary>流体：两层正弦做域扭曲，再按扭曲后的坐标去调色板取色 —— 看起来像油膜一样缓慢翻滚。</summary>
+    private unsafe void StepFluid(double dt)
+    {
+        if (_fluidBmp == null || _fluidPx == null || _fluidLut.Length == 0 || _fluidPtr == IntPtr.Zero) return;
+        _fluidT += dt * (0.15 + _animSpeed / 100.0 * 1.9);
+        var turb = 0.35 + _turb / 100.0 * 1.6;
+        var t = _fluidT;
+        var px = _fluidPx;
+        var idx = 0;
+        for (var y = 0; y < FluidH; y++)
+        {
+            var v = y / (double)FluidH;
+            for (var x = 0; x < FluidW; x++)
+            {
+                var u = x / (double)FluidW;
+                // 域扭曲：两个不同频率/方向的正弦叠加，avoid 规则条纹
+                var wx = Math.Sin(v * 6.0 * turb + t * 1.1) * 0.5
+                       + Math.Sin((u + v) * 4.0 * turb - t * 0.7) * 0.35;
+                var wy = Math.Cos(u * 5.0 * turb + t * 0.9) * 0.5
+                       + Math.Cos((u - v) * 3.0 * turb + t * 0.55) * 0.3;
+                var s = (u + wx * 0.30) * 0.55 + (v + wy * 0.30) * 0.45;
+                s -= Math.Floor(s);
+                var c = _fluidLut[(int)(s * 255.999) & 255];
+                px[idx++] = c.B; px[idx++] = c.G; px[idx++] = c.R; px[idx++] = 255;
+            }
+        }
+        try
+        {
+            var len = _fluidCap > 0 ? Math.Min(_fluidCap, px.Length) : px.Length;
+            Marshal.Copy(px, 0, _fluidPtr, len);
+            _fluidBmp.Invalidate();
+        }
+        catch (Exception e) { LogManager.Debug("桌面歌词流体写入失败: " + e.Message); _animMode = ""; }
+    }
+
+    /// <summary>把调色板当循环色带去取色（u 可超出 0..1，自动环绕）。</summary>
+    private static Color SamplePalette(List<Color> p, double u)
+    {
+        var n = p.Count;
+        if (n == 0) return Colors.White;
+        if (n == 1) return p[0];
+        var pos = (u % 1.0 + 1.0) % 1.0 * n;
+        var i0 = (int)Math.Floor(pos) % n;
+        var i1 = (i0 + 1) % n;
+        var f = pos - Math.Floor(pos);
+        var a = p[i0]; var b = p[i1];
+        return Color.FromArgb(
+            (byte)Math.Round(a.A + (b.A - a.A) * f),
+            (byte)Math.Round(a.R + (b.R - a.R) * f),
+            (byte)Math.Round(a.G + (b.G - a.G) * f),
+            (byte)Math.Round(a.B + (b.B - a.B) * f));
+    }
+
+    private static Color Lighten(Color c, double f)
+    {
+        byte Ch(byte v) => (byte)Math.Round(v + (255 - v) * f);
+        return Color.FromArgb(c.A, Ch(c.R), Ch(c.G), Ch(c.B));
+    }
+
 
     /// <summary>把颜色整体加深 pct%（每通道乘 1-pct/100），用来从渐变主色推描边色。</summary>
     private static Color Darken(Color c, double pct)
