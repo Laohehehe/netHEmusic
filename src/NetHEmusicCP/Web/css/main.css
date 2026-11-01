@@ -443,9 +443,10 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 /* 胶囊仓浮在 dock 上方，底部留够空间免得挡住最后几行 */
 body.multi-open #view{padding-bottom:176px;}
 
-/* 多选胶囊仓 */
-.multi-dock{position:absolute;left:14px;right:14px;bottom:96px;z-index:19;
-  display:flex;align-items:center;gap:12px;padding:8px 14px;border-radius:18px;
+/* 多选胶囊仓：宽度由内容撑开，左右边界即内容边界，整体水平居中 */
+.multi-dock{position:absolute;left:0;right:0;margin:0 auto;width:fit-content;max-width:calc(100% - 28px);
+  bottom:96px;z-index:19;
+  display:flex;align-items:center;gap:10px;padding:6px 12px;border-radius:16px;
   background:var(--card-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.12);
   box-shadow:0 12px 32px rgba(0,0,0,.38);backdrop-filter:blur(12px);
   opacity:0;transform:translateY(10px) scale(.985);pointer-events:none;
@@ -453,9 +454,9 @@ body.multi-open #view{padding-bottom:176px;}
 .multi-dock.show{opacity:1;transform:none;pointer-events:auto;}
 .md-count{font-size:12px;color:var(--md-accent-color-secondary);white-space:nowrap;opacity:.85;}
 .md-btns{display:flex;align-items:center;gap:2px;flex-wrap:wrap;}
-.md-sep{color:rgba(var(--md-accent-color-grey-base-rgb),.28);font-size:12px;padding:0 6px;user-select:none;}
+.md-sep{color:rgba(var(--md-accent-color-grey-base-rgb),.28);font-size:12px;padding:0 4px;user-select:none;}
 /* 胶囊仓按钮：形状是「svg 在上、文字在下」的竖排 */
-.md-btn{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:64px;padding:4px 8px;
+.md-btn{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px;padding:3px 7px;
   border:none;border-radius:10px;background:transparent;color:var(--md-accent-color-secondary);cursor:pointer;
   transition:background .15s ease,color .15s ease,transform .18s ease;}
 .md-btn svg{width:18px;height:18px;display:block;fill:none;stroke:currentColor;}
