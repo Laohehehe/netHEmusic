@@ -58,6 +58,10 @@ public sealed partial class MainWindow
             ["repoGitee"] = "https://gitee.com/" + AppServices.Config.UpdateGiteeRepo,
             ["toast"] = AppServices.Config.Get("App", "toast", "true").Equals("true", StringComparison.OrdinalIgnoreCase),
             ["version"] = AppServices.Version,
+#if DEBUG
+            // 仅 Debug（dev）构建：网页顶栏据此显示「当前运行版本为Dev」胶囊；Release 构建里没有这个字段
+            ["dev"] = true,
+#endif
             // 缓存（[Cache] 段）：设置-性能 里显示位置/上限，以及当前实际占用
             ["cacheDir"] = AppServices.Config.CacheDir,
             ["cacheLimitMb"] = AppServices.Config.CacheLimitMb,

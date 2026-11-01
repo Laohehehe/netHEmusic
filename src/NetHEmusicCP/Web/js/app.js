@@ -3536,10 +3536,18 @@ function applyPerfAnim(s) {
     var ff = document.fonts;
     NE.post({ type: 'log', msg: '[env] SegoeFluentIcons=' + ff.check('16px "Segoe Fluent Icons"') + ' MDL2=' + ff.check('16px "Segoe MDL2 Assets"') });
   } catch (e0) { }
+  // dev 构建徽章（顶栏右侧淡绿色胶囊）：宿主 settings.dev 只在 Debug 构建里为 true，
+  // Release 下这个字段不存在 → 徽章保持 hidden，线上用户看不到
+  function applyDevBadge(s) {
+    var b = document.getElementById('devBadge'); if (!b) return;
+    var dev = !!(s && (s.dev === true || s.dev === 'true'));
+    b.hidden = !dev;
+  }
   // 启动时同步：播放模式 / （未锁定时）桌面歌词状态 / 上次的播放列表
   NE.getSettings().then(function (s) {
     try {
       appSettings = s || {};
+      applyDevBadge(s);                                        // Debug 版顶栏标记
       applyGlassUI();
       applySidebarMode(s);                                     // 侧边栏展开方式（悬停 / 按钮）
       applyNetState();                                          // 启动时按网络状态给未缓存的歌置灰                                          // 顶部标题条渐变 + 液态玻璃

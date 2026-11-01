@@ -136,6 +136,14 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .set-nav{display:none;flex:1 1 auto;min-width:0;gap:8px;overflow-x:auto;overflow-y:hidden;scroll-behavior:smooth;scrollbar-width:none;}
 #topbar.set-mode .set-nav{display:flex;}
 .set-nav::-webkit-scrollbar{display:none;}
+/* dev 构建徽章：顶栏靠右的淡绿色胶囊（仅 Debug 版由宿主 settings.dev 打开） */
+.dev-badge{margin-left:auto;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
+  padding:4px 12px 4px 11px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.2;
+  color:#a8f0bd;background:rgba(110,231,150,.14);border:1px solid rgba(110,231,150,.42);
+  box-shadow:inset 0 0 0 1px rgba(110,231,150,.06);
+  white-space:nowrap;pointer-events:none;user-select:none;letter-spacing:.01em;}
+.dev-badge[hidden]{display:none;}
+.dev-badge .dev-dot{width:6px;height:6px;border-radius:50%;background:#7fe79a;box-shadow:0 0 6px rgba(127,231,154,.9);flex:0 0 auto;}
 .set-nav.fade-l{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 22px);mask-image:linear-gradient(to right,transparent 0,#000 22px);}
 .set-nav.fade-r{-webkit-mask-image:linear-gradient(to left,transparent 0,#000 22px);mask-image:linear-gradient(to left,transparent 0,#000 22px);}
 .set-nav.fade-l.fade-r{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 22px,#000 calc(100% - 22px),transparent 100%);mask-image:linear-gradient(to right,transparent 0,#000 22px,#000 calc(100% - 22px),transparent 100%);}
