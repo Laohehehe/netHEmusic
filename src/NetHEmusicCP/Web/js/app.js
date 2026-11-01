@@ -1134,15 +1134,25 @@ function applyPerfAnim(s) {
     b.onclick = function (e) { e.stopPropagation(); toggleMulti(); };
     return b;
   }
-  // 列表 + 右上角工具条（替掉原来裸的 renderSongs 容器）
+  // 列表 + 多选按钮：页面有「播放全部 / 下载全部」那一行时并进同一行靠右，否则退回列表右上角工具条
   function songBlock(songs) {
     var box = el('div', 'list-block');
     var bar = el('div', 'list-bar');
-    bar.appendChild(multiBtn());
+    var btn = multiBtn();
+    bar.appendChild(btn);
     box.appendChild(bar);
     var dl = el('div');
     renderSongs(songs, dl);
     box.appendChild(dl);
+    // 调用时页面还没挂到 #view 上，等挂载后一帧再把按钮搬进 .action-row（取最后一个，避开切页残影）
+    requestAnimationFrame(function () {
+      if (!btn.isConnected) return;
+      var rows = view.querySelectorAll('.action-row');
+      var row = rows.length ? rows[rows.length - 1] : null;
+      if (!row) return;
+      row.appendChild(btn);
+      bar.remove();
+    });
     return box;
   }
 

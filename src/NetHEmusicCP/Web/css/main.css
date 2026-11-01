@@ -262,7 +262,7 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
   ._spinnerArc_1i3xo_48{animation:none;stroke-dasharray:26 59.7;stroke-dashoffset:-10;}
 }
 .song-list{border-radius:var(--radius);overflow:hidden;}
-.song-row{display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;background:var(--md-accent-color-bg-darken);border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.04);transition:background .15s;
+.song-row{position:relative;display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;background:var(--md-accent-color-bg-darken);border-bottom:1px solid rgba(var(--md-accent-color-grey-base-rgb),.04);transition:background .22s cubic-bezier(.4,0,.2,1);
   /* 长列表：屏幕外的行跳过布局与绘制（含 hover/切页动画时的重绘），行高用实测值兜底。
      注意：38px 必须是「内容盒」高度（.sr-cover 的 38px），加上 padding 8*2 与 border 1 后
      才等于真实行高 55px；这里若写成 52，离屏行会按 52+16+1=69 占位，和视口内 55 的行
@@ -272,7 +272,7 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 /* 分批加载的哨兵：只占 1px，靠 rootMargin 提前触发 */
 .song-list .list-more{height:1px;}
 .song-row:hover{background:var(--nm-fill-hover);}
-.sr-idx{width:26px;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);text-align:right;font-variant-numeric:tabular-nums;}
+.sr-idx{position:relative;width:26px;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);text-align:right;font-variant-numeric:tabular-nums;}
 .sr-cover{width:38px;height:38px;border-radius:6px;object-fit:cover;background:rgba(var(--md-accent-color-grey-base-rgb),.1);}
 .sr-title{flex:2;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sr-artist{flex:1.4;min-width:0;font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -286,7 +286,9 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .sr-dur{width:46px;font-size:11px;color:rgba(var(--md-accent-color-grey-base-rgb),.4);}
 /* 歌曲行内的单图标 SVG 按钮 */
 /* 歌曲行内的单图标 SVG 按钮（外观在 effects.css 里统一覆盖） */
-.row-btn{width:30px;height:30px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:50%;background:transparent;color:rgba(var(--md-accent-color-grey-base-rgb),.7);cursor:pointer;transition:background .15s,color .15s;}
+.row-btn{width:30px;height:30px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:50%;background:transparent;color:rgba(var(--md-accent-color-grey-base-rgb),.7);cursor:pointer;
+  transition:background .15s cubic-bezier(.4,0,.2,1),color .15s cubic-bezier(.4,0,.2,1),
+    opacity .2s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.2,.8,.3,1);}
 .row-btn:hover{background:var(--nm-fill);color:var(--md-accent-color);}
 .row-btn svg{width:20px;height:20px;fill:none;}
 .row-btn.primary{color:var(--md-accent-color);}
@@ -422,24 +424,40 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .action-row .icon-btn{margin-left:auto;}
 
 /* ================= 歌曲多选 ================= */
-/* 列表工具条：只放右上角那个「多选」按钮，跟列表右缘对齐 */
+/* 列表工具条：页面里没有 .action-row 时，多选按钮退回列表右上角 */
 .list-bar{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:0 0 6px;padding:0 2px;}
 .multi-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 13px;border-radius:999px;
   border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.14);background:transparent;color:var(--md-accent-color-secondary);
   font-size:12px;font-weight:600;cursor:pointer;
-  transition:background .15s ease,color .15s ease,border-color .15s ease,transform .18s ease;}
-.multi-btn svg{width:14px;height:14px;display:block;fill:none;stroke:currentColor;stroke-width:2.4;}
+  transition:background .22s cubic-bezier(.4,0,.2,1),color .22s cubic-bezier(.4,0,.2,1),
+    border-color .22s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.2,.8,.3,1);}
+.multi-btn svg{width:14px;height:14px;display:block;fill:none;stroke:currentColor;stroke-width:2.4;
+  transition:transform .34s cubic-bezier(.34,1.4,.64,1);}
 .multi-btn:hover{background:var(--nm-fill-hover);color:var(--md-accent-color);}
 .multi-btn:active{transform:scale(.96);}
 .multi-btn.on{background:rgba(var(--md-accent-color-rgb),.16);border-color:rgba(var(--md-accent-color-rgb),.5);color:var(--md-accent-color);}
+.multi-btn.on svg{transform:rotate(-180deg);}
+/* 有 .action-row 时按钮并入「播放全部 / 下载全部」那一行并靠右（app.js 在挂载后就地搬过去） */
+.action-row > .multi-btn{margin-left:auto;}
+/* 那一行本来就有靠右的刷新按钮时，多选按钮紧跟其后 */
+.action-row > .icon-btn + .multi-btn{margin-left:8px;}
 
-/* 选中行：左侧色条 + 高亮；序号位置换成勾号（.sr-idx 的文本仍是索引，右键菜单靠它取下标） */
-.song-row.sel{background:rgba(var(--md-accent-color-rgb),.14);box-shadow:inset 3px 0 0 var(--md-accent-color);}
-.song-row.sel .sr-idx{position:relative;color:transparent;}
-.song-row.sel .sr-idx::after{content:"✓";position:absolute;right:0;top:50%;transform:translateY(-50%);
-  color:var(--md-accent-color);font-size:13px;font-weight:700;}
-/* 多选态下收起行内快捷按钮，左键只用来勾选 */
-.song-list.multi .song-row .row-btn{display:none;}
+/* 选中行：色条从中间向上下展开、背景淡入、序号换成勾号（.sr-idx 文本仍是索引，右键菜单靠它取下标） */
+.song-row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0;
+  background:var(--md-accent-color);transform:scaleY(0);transform-origin:50% 50%;
+  transition:transform .3s cubic-bezier(.34,1.32,.64,1);}
+.song-row.sel::before{transform:scaleY(1);}
+.song-row.sel{background:rgba(var(--md-accent-color-rgb),.14);}
+.sr-idx::after{content:"✓";position:absolute;right:0;top:50%;opacity:0;
+  transform:translateY(-50%) scale(.55);color:var(--md-accent-color);font-size:13px;font-weight:700;
+  transition:opacity .18s cubic-bezier(.4,0,.2,1),transform .3s cubic-bezier(.34,1.4,.64,1);}
+.song-row.sel .sr-idx{color:transparent;}
+.song-row.sel .sr-idx::after{opacity:1;transform:translateY(-50%) scale(1);}
+/* 行内快捷按钮：main.css 先于 effects.css 加载，用更高特异性保证 opacity/transform 也在过渡里 */
+.song-row .row-btn{transition:color .18s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.2,.8,.3,1.3),
+  filter .22s cubic-bezier(.4,0,.2,1),opacity .2s cubic-bezier(.4,0,.2,1);}
+/* 多选态下收起行内快捷按钮（淡出 + 右移，保留占位免得整行跳动），左键只用来勾选 */
+.song-list.multi .song-row .row-btn{opacity:0;transform:translateX(10px) scale(.86);pointer-events:none;}
 /* 胶囊仓浮在 dock 上方，底部留够空间免得挡住最后几行 */
 body.multi-open #view{padding-bottom:176px;}
 
@@ -449,9 +467,19 @@ body.multi-open #view{padding-bottom:176px;}
   display:flex;align-items:center;gap:10px;padding:6px 12px;border-radius:16px;
   background:var(--card-bg);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.12);
   box-shadow:0 12px 32px rgba(0,0,0,.38);backdrop-filter:blur(12px);
-  opacity:0;transform:translateY(10px) scale(.985);pointer-events:none;
-  transition:opacity .18s ease,transform .18s cubic-bezier(.2,.8,.3,1);}
+  opacity:0;transform:translateY(16px) scale(.94);pointer-events:none;
+  transition:opacity .22s cubic-bezier(.4,0,.2,1),transform .3s cubic-bezier(.2,.9,.25,1);}
 .multi-dock.show{opacity:1;transform:none;pointer-events:auto;}
+/* 胶囊内按钮错开浮入（每次进入多选重放一遍） */
+.multi-dock.show .md-btns > *{animation:mdIn .34s cubic-bezier(.2,.8,.3,1) both;}
+.multi-dock.show .md-btns > *:nth-child(2){animation-delay:.02s}
+.multi-dock.show .md-btns > *:nth-child(3){animation-delay:.04s}
+.multi-dock.show .md-btns > *:nth-child(4){animation-delay:.06s}
+.multi-dock.show .md-btns > *:nth-child(5){animation-delay:.08s}
+.multi-dock.show .md-btns > *:nth-child(6){animation-delay:.1s}
+.multi-dock.show .md-btns > *:nth-child(7){animation-delay:.12s}
+.multi-dock.show .md-btns > *:nth-child(8){animation-delay:.14s}
+@keyframes mdIn{from{opacity:0;transform:translateY(7px) scale(.9);}to{opacity:1;transform:none;}}
 .md-count{font-size:12px;color:var(--md-accent-color-secondary);white-space:nowrap;opacity:.85;}
 .md-btns{display:flex;align-items:center;gap:2px;flex-wrap:wrap;}
 .md-sep{color:rgba(var(--md-accent-color-grey-base-rgb),.28);font-size:12px;padding:0 4px;user-select:none;}

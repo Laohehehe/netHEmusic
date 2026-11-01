@@ -736,6 +736,14 @@ html.anim-tuned .np,html.anim-tuned .np-wrap,html.anim-tuned .np-cover-wrap,html
 html.anim-tuned .np-bar,html.anim-tuned .np-gear,html.anim-tuned .np-lyric-inner,html.anim-tuned .np-settings{
   transition-duration:calc(.2s * var(--anim-k)) !important;transition-timing-function:var(--anim-ease) !important;
 }
+/* 多选：多选按钮 / 胶囊仓 / 选中行的色条与勾号都跟随动画速率预设 */
+html.anim-tuned .multi-btn,html.anim-tuned .multi-dock,html.anim-tuned .md-btn,
+html.anim-tuned .song-row::before,html.anim-tuned .sr-idx::after{
+  transition-duration:calc(.24s * var(--anim-k)) !important;transition-timing-function:var(--anim-ease) !important;
+}
+html.anim-tuned .multi-dock.show .md-btns > *{
+  animation-duration:calc(.34s * var(--anim-k)) !important;animation-timing-function:var(--anim-ease) !important;
+}
 html.anim-tuned .np-line{transition-duration:calc(.62s * var(--anim-k)) !important;}
 html.anim-tuned .np-cover-wrap{transition-duration:calc(.5s * var(--anim-k)) !important;}
 html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
