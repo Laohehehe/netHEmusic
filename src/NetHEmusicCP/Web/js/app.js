@@ -3653,10 +3653,39 @@ function applyPerfAnim(s) {
   // 点击播放条封面 → 进入歌词页
   $('#pl-cover').onclick = () => openNowPlaying();
   $('#pl-like').onclick = toggleLike;   // 真正的喜欢/取消喜欢（见上方 toggleLike）
-  // ---- 音量：滑块与真实音量双向同步；点喇叭图标静音/恢复 ----
+  // ---- 音量：悬浮在喇叭上浮出竖向胶囊（底部 0、顶部 100），移开自动收起；点喇叭静音/恢复 ----
   var lastVol = 80;
+  var volWrap = $('#vol-wrap'), volPop = $('#vol-pop'), volNum = $('#vol-pop-num');
+  var volHideT = 0, volDrag = false;
+  function volPlace() {
+    if (!volWrap || !volPop) return;
+    var fr = document.getElementById('player');
+    var wr = volWrap.getBoundingClientRect();
+    var lift = 46;
+    if (fr) {
+      var pr = fr.getBoundingClientRect();
+      lift = Math.max(10, Math.round(wr.top - pr.top) + 8);   // 让胶囊整体落在 dock 上方，不压住播放条
+    }
+    volPop.style.bottom = (Math.round(wr.height) + lift) + 'px';
+  }
+  function volShow() {
+    if (!volWrap) return;
+    clearTimeout(volHideT);
+    volPlace();
+    volWrap.classList.add('show');
+    if (volPop) volPop.setAttribute('aria-hidden', 'false');
+  }
+  function volHideSoon(ms) {
+    if (!volWrap || volDrag) return;      // 拖动滑块期间不收起
+    clearTimeout(volHideT);
+    volHideT = setTimeout(function () {
+      volWrap.classList.remove('show');
+      if (volPop) volPop.setAttribute('aria-hidden', 'true');
+    }, ms);
+  }
   function updateVolUI(v) {
     var s = $('#pl-volume'); if (s) s.value = v;
+    if (volNum) volNum.textContent = String(v);
     var ic = $('#pl-vol-icon');
     if (ic) {
       ic.innerHTML = v <= 0 ? SVG.volMute : SVG.volOn;
@@ -3672,9 +3701,26 @@ function applyPerfAnim(s) {
     try { if (window.AU) { AU.vol = v; if (typeof auSetVolume === 'function') auSetVolume(v); } } catch (e) { }
     if (post) NE.post({ type: 'volume', v: v });
   }
-  $('#pl-volume').oninput = e => applyVolume(e.target.value, true);
+  $('#pl-volume').oninput = e => { volShow(); applyVolume(e.target.value, true); };
   var volIcon0 = $('#pl-vol-icon');
   if (volIcon0) volIcon0.onclick = () => { var cur = Number($('#pl-volume').value) || 0; applyVolume(cur > 0 ? 0 : lastVol, true); };
+  // 悬浮展开：喇叭与胶囊都算「悬浮区」，两者之间的 10px 间隙留 160ms 缓冲，鼠标穿过不会闪一下收起
+  if (volWrap) {
+    volWrap.addEventListener('mouseenter', volShow);
+    volWrap.addEventListener('mouseleave', function () { volHideSoon(160); });
+    if (volPop) {
+      volPop.addEventListener('pointerenter', volShow);
+      volPop.addEventListener('pointerleave', function () { volHideSoon(160); });
+      volPop.addEventListener('focusin', volShow);
+      volPop.addEventListener('focusout', function () { volHideSoon(220); });
+      volPop.addEventListener('pointerdown', function () { volDrag = true; volShow(); });
+    }
+    window.addEventListener('pointerup', function () {
+      if (!volDrag) return;
+      volDrag = false;
+      volHideSoon(260);                   // 拖完松手：鼠标若已离开就慢慢收起
+    });
+  }
   NE.on('volume_changed', function (d) { applyVolume(d.v, false); });
 
   // ---- 全窗口歌词页：按钮 / Esc / 进度条跳转 ----

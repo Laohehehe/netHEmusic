@@ -185,8 +185,13 @@
         </div>
       </div>
       <div class="pl-right">
-        <span class="pl-vol" id="pl-vol-icon" title="音量"><i class="ic">&#xE767;</i></span>
-        <input id="pl-volume" type="range" min="0" max="100" value="80">
+        <div class="vol-wrap" id="vol-wrap">
+          <span class="pl-vol" id="pl-vol-icon" title="音量"><i class="ic">&#xE767;</i></span>
+          <div class="vol-pop" id="vol-pop" aria-hidden="true">
+            <span class="vol-pop-num" id="vol-pop-num">80</span>
+            <input id="pl-volume" type="range" min="0" max="100" value="80" aria-label="音量">
+          </div>
+        </div>
         <button id="pl-like" title="喜欢" class="ic-btn"></button>
         <button id="pl-dl" title="下载" class="ic-btn"></button>
       <button id="pl-qual" title="音质" class="ic-btn"></button>

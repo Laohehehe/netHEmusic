@@ -193,13 +193,13 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .cache-txt{font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.55);white-space:nowrap;font-variant-numeric:tabular-nums;}
 /* 滑块：显式画轨道和滑块头（不依赖 WebView 的原生控件着色 —— 浅色配色下原生轨道会发黑）；
    自绘轨道后 Chromium 不再自动画「已填充」段，用 --range-p 变量补一条 accent 渐变（见 app.js syncRangeFill） */
-.set-row input[type=range],#pl-volume{
+.set-row input[type=range]{
   -webkit-appearance:none;appearance:none;height:6px;border-radius:3px;outline:none;cursor:pointer;
   background:
     linear-gradient(var(--md-accent-color),var(--md-accent-color)) left center/var(--range-p,0%) 100% no-repeat,
     rgba(var(--md-accent-color-grey-base-rgb),.20);
 }
-.set-row input[type=range]::-webkit-slider-thumb,#pl-volume::-webkit-slider-thumb{
+.set-row input[type=range]::-webkit-slider-thumb{
   -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
   background:var(--md-accent-color);box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:pointer;
 }
@@ -328,7 +328,42 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
 .pl-bar{flex:1;height:4px;border-radius:3px;background:rgba(var(--md-accent-color-grey-base-rgb),.16);overflow:hidden;}
 #pl-fill{height:100%;width:0;background:var(--md-accent-color);border-radius:3px;}
 .pl-right{display:flex;align-items:center;gap:10px;width:210px;justify-content:flex-end;}
-#pl-volume{width:90px;accent-color:var(--md-accent-color);}
+/* 音量：喇叭图标 + 悬浮竖向胶囊（最底下 0、最顶上 100）。
+   水平滑块已移除，只保留同一个 #pl-volume（改成竖向），快捷键/静音/宿主同步逻辑不变。 */
+.vol-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.vol-pop{
+  position:absolute;left:50%;bottom:calc(100% + 10px);z-index:2;
+  width:36px;height:156px;padding:13px 0 12px;border-radius:18px;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;
+  background:var(--md-accent-color-bg-darken);
+  border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.14);
+  box-shadow:0 12px 30px rgba(0,0,0,.34);
+  backdrop-filter:blur(8px);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translate(-50%,7px) scale(.94);transform-origin:bottom center;
+  transition:opacity .24s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),
+             transform .24s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),
+             visibility 0s linear .24s;
+}
+.vol-wrap.show .vol-pop{
+  opacity:1;visibility:visible;pointer-events:auto;
+  transform:translate(-50%,0) scale(1);
+  transition-delay:0s,0s,0s;
+}
+.vol-pop-num{font-size:11px;line-height:1;font-variant-numeric:tabular-nums;
+  color:rgba(var(--md-accent-color-grey-base-rgb),.72);}
+#pl-volume{
+  -webkit-appearance:none;appearance:none;flex:0 0 auto;
+  writing-mode:vertical-lr;direction:rtl;                 /* 竖向，且 0 在最下面、100 在最上面 */
+  width:6px;height:104px;border-radius:3px;outline:none;cursor:pointer;
+  background:
+    linear-gradient(var(--md-accent-color),var(--md-accent-color)) bottom center/100% var(--range-p,0%) no-repeat,
+    rgba(var(--md-accent-color-grey-base-rgb),.22);
+}
+#pl-volume::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--md-accent-color);box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:pointer;
+}
 .ctx-menu{position:fixed;z-index:999;min-width:150px;background:var(--md-accent-color-bg-darken);border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.12);border-radius:10px;padding:6px;box-shadow:0 10px 24px rgba(0,0,0,.4);transform-origin:top left;animation:ctx-pop .16s cubic-bezier(.2,.8,.3,1.15);}
 /* 右键菜单弹出动画：display:none → block 时 CSS 动画会自动重播 */
 @keyframes ctx-pop{from{opacity:0;transform:translateY(-6px) scale(.96);}to{opacity:1;transform:none;}}

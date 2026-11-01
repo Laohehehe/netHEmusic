@@ -37,30 +37,9 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 
-(function () {
-  // ---- 音量滑块：鼠标放上去/拖动时显示当前具体音量 ----
-  var vol = document.getElementById('pl-volume');
-  if (!vol) return;
-  var tip = document.createElement('div');
-  tip.className = 'vol-tip';
-  document.body.appendChild(tip);
-  function pct() { var v = Math.round(Number(vol.value)); return isFinite(v) ? v : 0; }
-  function place() {
-    var r = vol.getBoundingClientRect();
-    if (!r.width) return;
-    var p = Math.max(0, Math.min(1, pct() / 100));
-    tip.style.left = Math.round(r.left + 7 + (r.width - 14) * p) + 'px';
-    tip.style.top = Math.round(r.top - 8) + 'px';
-    tip.textContent = '音量 ' + pct() + '%';
-  }
-  function show() { place(); tip.classList.add('on'); }
-  function hide() { tip.classList.remove('on'); }
-  vol.addEventListener('mouseenter', show);
-  vol.addEventListener('mousemove', place);
-  vol.addEventListener('mouseleave', hide);
-  vol.addEventListener('input', function () { if (tip.classList.contains('on')) place(); });
-  vol.addEventListener('change', function () { if (tip.classList.contains('on')) place(); });
-})();
+// ---- 音量不再需要单独的百分比气泡：竖向胶囊里的 #vol-pop-num 就是当前音量，
+//      展开/收起由 app.js 的音量段统一处理（volShow / volHideSoon）。
+//      原先这里是一段给水平 #pl-volume 定位气泡的 IIFE，滑块改竖向胶囊后已移除。
 
 // ---- 以下为自 app.js 搬出的纯函数（无闭包依赖）----
 
