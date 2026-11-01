@@ -2971,6 +2971,163 @@ function applyPerfAnim(s) {
       }
       return r;
     }
+    // ---- 桌面歌词颜色：单色 / 双色 / 四色 / 自定义渐变 ----
+    // 四色「四角」= 沿对角线的四色渐变（C# 侧同样实现：WinUI 的文本只能吃一个画刷，没有网格渐变）
+    var DL_GRAD_PRESETS = [
+      { n: '紫雾', c: ['#b18fd8', '#8d84b1', '#c98fc0', '#a67eac'] },
+      { n: '钢蓝', c: ['#8fa2c6', '#7f8ead', '#7f9fc0', '#8190ad'] },
+      { n: '暖橙', c: ['#cfa184', '#b28d79', '#c98a63', '#b2907f'] },
+      { n: '青绿', c: ['#7fc39c', '#659c7b', '#86c2b0', '#789c9a'] }
+    ];
+    var DL_DEF_COLORS = ['#ffffff', '#66ccff', '#ff9ec4', '#ffd75e', '#b79bff', '#7be3c8'];
+    function dlColorSection() {
+      var host = el('div', 'dl-color');
+      var mode = String(cfgGet(s, 'dl_color_mode', 'single') || 'single');
+      if (mode !== 'dual' && mode !== 'quad' && mode !== 'custom') mode = 'single';
+      var st = {
+        dir: String(cfgGet(s, 'dl_color_dir', 'lr') || 'lr'),
+        angle: Number(cfgGet(s, 'dl_color_angle', 90)) || 90,
+        count: Math.max(2, Math.min(64, Number(cfgGet(s, 'dl_color_count', 4)) || 4)),
+        colors: [], positions: []
+      };
+      for (var ci = 0; ci < 64; ci++) {
+        st.colors.push(normHex(cfgGet(s, 'dl_color_' + (ci + 1), ''), DL_DEF_COLORS[ci % DL_DEF_COLORS.length]));
+        var pv = cfgGet(s, 'dl_color_pos_' + (ci + 1), '');
+        st.positions.push(pv === '' || pv === null || pv === undefined ? null : Number(pv));
+      }
+      if (mode === 'single') st.colors[0] = normHex(cfgGet(s, 'dl_color', '#ffffff'), '#ffffff');
+      if (st.dir !== 'tb' && st.dir !== 'diag') st.dir = 'lr';
+      if (mode === 'dual' && st.dir === 'diag') st.dir = 'lr';   // 双色没有四角
+
+      function save(k, v) { NE.setSetting(k, v); }
+      function stopCount() { return mode === 'single' ? 1 : (mode === 'dual' ? 2 : (mode === 'quad' ? 4 : st.count)); }
+      function colorAt(i) { return normHex(st.colors[i], DL_DEF_COLORS[i % DL_DEF_COLORS.length]); }
+      function gradDeg() { return mode === 'custom' ? (st.angle + 90) + 'deg' : (st.dir === 'tb' ? '180deg' : (st.dir === 'diag' ? '135deg' : '90deg')); }
+
+      function previewEl() {
+        var p = el('div', 'dl-preview');
+        var cols = [];
+        for (var i = 0; i < stopCount(); i++) cols.push(colorAt(i));
+        p.style.background = 'linear-gradient(' + gradDeg() + ',' + cols.join(',') + ')';
+        return p;
+      }
+
+      function rowMode() {
+        return sel('颜色模式', 'dl_color_mode', mode, [
+          { v: 'single', t: '单色' }, { v: 'dual', t: '双色' },
+          { v: 'quad', t: '四色' }, { v: 'custom', t: '自定义' }
+        ], function (v) {
+          mode = v;
+          save('dl_color_mode', v);
+          if (v === 'dual') { st.dir = 'lr'; save('dl_color_dir', 'lr'); }
+          if (v === 'quad' && st.dir === 'lr') { st.dir = 'diag'; save('dl_color_dir', 'diag'); }
+          if (v === 'quad') { st.count = 4; save('dl_color_count', 4); }
+          rebuild();
+        });
+      }
+
+      function rowPreset() {
+        var r = el('div', 'set-row');
+        r.appendChild(el('label', '', '渐变预设'));
+        var box = el('div', 'dl-presets');
+        DL_GRAD_PRESETS.forEach(function (p) {
+          var b = el('button', 'dl-preset');
+          b.type = 'button';
+          b.title = p.n;
+          b.style.background = 'linear-gradient(135deg,' + p.c.join(',') + ')';
+          b.onclick = function (e) {
+            e.stopPropagation();
+            mode = 'quad'; st.dir = 'diag'; st.count = 4;
+            save('dl_color_mode', 'quad'); save('dl_color_dir', 'diag'); save('dl_color_count', 4);
+            p.c.forEach(function (c, i) { st.colors[i] = c; st.positions[i] = null; save('dl_color_' + (i + 1), c); save('dl_color_pos_' + (i + 1), ''); });
+            rebuild();
+          };
+          box.appendChild(b);
+        });
+        r.appendChild(box);
+        return r;
+      }
+
+      function rowDir() {
+        var opts = mode === 'dual'
+          ? [{ v: 'lr', t: '左右' }, { v: 'tb', t: '上下' }]
+          : [{ v: 'lr', t: '左右' }, { v: 'tb', t: '上下' }, { v: 'diag', t: '四角（对角）' }];
+        return sel('渐变方向', 'dl_color_dir', st.dir, opts, function (v) { st.dir = v; save('dl_color_dir', v); rebuild(); });
+      }
+
+      function rowCount() {
+        var r = el('div', 'set-row');
+        r.appendChild(el('label', '', '色标数量'));
+        var i = el('input'); i.type = 'number'; i.className = 'set-num'; i.min = 2; i.max = 64; i.step = 1; i.value = st.count;
+        i.onchange = function () {
+          var v = parseInt(i.value, 10);
+          if (!isFinite(v) || v < 2 || v > 64) { i.value = String(st.count); toast('请输入 2 ~ 64 之间的整数'); return; }
+          st.count = v; save('dl_color_count', v); rebuild();
+        };
+        r.appendChild(ctlRow(i, el('span', 'set-value', '个')));
+        return r;
+      }
+
+      function rowStop(i, showPos) {
+        var r = el('div', 'set-row dl-stop-row');
+        r.appendChild(el('label', '', mode === 'single' ? '歌词颜色' : ('色标 ' + (i + 1))));
+        var box = el('div', 'dl-stop');
+        var inp = el('input'); inp.type = 'color'; inp.value = colorAt(i);
+        inp.onchange = function () {
+          var h = normHex(inp.value, colorAt(i));
+          st.colors[i] = h;
+          save('dl_color_' + (i + 1), h);
+          if (mode === 'single') save('dl_color', h);
+          rebuild();
+        };
+        box.appendChild(inp);
+        if (showPos) {
+          var pos = el('input'); pos.type = 'number'; pos.className = 'set-num dl-pos'; pos.min = 0; pos.max = 100; pos.step = 1;
+          pos.placeholder = Math.round(i / Math.max(1, stopCount() - 1) * 100) + '';
+          pos.title = '色标位置（留空 = 均匀分布）';
+          pos.value = st.positions[i] === null ? '' : st.positions[i];
+          pos.onchange = function () {
+            var raw = String(pos.value).trim();
+            if (raw === '') { st.positions[i] = null; save('dl_color_pos_' + (i + 1), ''); return; }
+            var v = parseInt(raw, 10);
+            if (!isFinite(v) || v < 0 || v > 100) { pos.value = st.positions[i] === null ? '' : st.positions[i]; toast('位置请输入 0 ~ 100'); return; }
+            st.positions[i] = v; pos.value = String(v); save('dl_color_pos_' + (i + 1), v);
+          };
+          box.appendChild(el('span', 'dl-pos-lb', '位置'));
+          box.appendChild(pos);
+          box.appendChild(el('span', 'dl-pos-lb', '%'));
+        }
+        r.appendChild(box);
+        return r;
+      }
+
+      function rowAngle() {
+        return rng2('渐变角度', 'dl_color_angle', st.angle, 0, 360, '°', 1);
+      }
+
+      function rebuild() {
+        host.textContent = '';
+        host.appendChild(previewEl());
+        host.appendChild(rowMode());
+        host.appendChild(rowPreset());
+        if (mode !== 'single') host.appendChild(rowDir());
+        if (mode === 'custom') host.appendChild(rowCount());
+        var n = stopCount();
+        for (var i = 0; i < n; i++) host.appendChild(rowStop(i, mode === 'custom'));
+        if (mode === 'custom') host.appendChild(rowAngle());
+        // 描边：单色模式给「描边颜色」，渐变模式换成「按渐变最深色加深 N%」
+        if (mode === 'single') {
+          host.appendChild(colorRow2('描边颜色', 'dl_stroke_color', String(cfgGet(s, 'dl_stroke_color', '#000000')), DL_STROKE_COLORS, '#000000'));
+        } else {
+          var boost = Number(cfgGet(s, 'dl_stroke_boost', 40));
+          if (!(boost >= 0)) boost = 40;
+          host.appendChild(rng2('描边加深', 'dl_stroke_boost', boost, 0, 95, '%', 1));
+        }
+        host.appendChild(rng2('描边粗细', 'dl_stroke_width', dlStrokeW, 0, 5, 'px', 0.1));
+      }
+      rebuild();
+      return host;
+    }
     // 自定义下拉：opts 支持字符串数组或 [{v:值,t:显示名}]；onPick(值) 用于即时生效
     function custSel(label, key, val, opts, onPick) {
       var list0 = opts || [];
@@ -3180,9 +3337,7 @@ function applyPerfAnim(s) {
         fontRow('歌词字体','dl_font', String(cfgGet(s,'dl_font',''))),
         rng2('主行字号','dl_main_size', Number(cfgGet(s,'dl_main_size',34))||34, 14, 96, 'px'),
         rng2('副行字号','dl_sub_size', Number(cfgGet(s,'dl_sub_size',20))||20, 10, 64, 'px'),
-        colorRow2('歌词颜色','dl_color', String(cfgGet(s,'dl_color','#ffffff')), DL_TEXT_COLORS, '#ffffff'),
-        colorRow2('描边颜色','dl_stroke_color', String(cfgGet(s,'dl_stroke_color','#000000')), DL_STROKE_COLORS, '#000000'),
-        rng2('描边粗细','dl_stroke_width', dlStrokeW, 0, 5, 'px', 0.1),   // 0 = 不描边
+        dlColorSection(),                                              // 歌词颜色（模式/预设/方向/色标/角度/描边）
         rng2('不透明度','dl_opacity', Number(cfgGet(s,'dl_opacity',100))||100, 10, 100, '%'),
         sw('主行加粗','dl_bold', cfgBool(s,'dl_bold',true)),
         sw('显示下一句 / 译文','dl_show_sub', cfgBool(s,'dl_show_sub',true))

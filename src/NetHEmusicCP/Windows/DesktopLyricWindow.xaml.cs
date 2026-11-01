@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.UI;
@@ -55,9 +56,9 @@ public sealed partial class DesktopLyricWindow : Window
         try { ClickThroughHelper.EnsureLayered(WinRT.Interop.WindowNative.GetWindowHandle(this)); } catch { }   // 透明的前提
 
         _main = new StrokeText(MainHost, 34, Microsoft.UI.Text.FontWeights.SemiBold,
-                               Colors.White, Color.FromArgb(255, 0, 0, 0), 1.7);
+                               new SolidColorBrush(Colors.White), Color.FromArgb(255, 0, 0, 0), 1.7);
         _sub = new StrokeText(SubHost, 20, Microsoft.UI.Text.FontWeights.Normal,
-                              Color.FromArgb(255, 255, 255, 255), Color.FromArgb(255, 0, 0, 0), 1.5);
+                              new SolidColorBrush(Color.FromArgb(255, 255, 255, 255)), Color.FromArgb(255, 0, 0, 0), 1.5);
         _baseFont = _main.FontFamily;
 
         Root.PointerPressed += OnDragStart;
@@ -128,6 +129,35 @@ public sealed partial class DesktopLyricWindow : Window
             double subSize = Clamp(ParseNum(cfg.Get("App", "dl_sub_size", ""), 20), 10, 64);
             var fill = ParseColor(cfg.Get("App", "dl_color", ""), Colors.White);
             var stroke = ParseColor(cfg.Get("App", "dl_stroke_color", ""), Color.FromArgb(255, 0, 0, 0));
+            // 颜色模式：single 单色 / dual 双色 / quad 四色 / custom 自定义色标（设置页那张「歌词颜色」卡片）
+            var colorMode = (cfg.Get("App", "dl_color_mode", "single") ?? "single").Trim().ToLowerInvariant();
+            if (colorMode != "dual" && colorMode != "quad" && colorMode != "custom") colorMode = "single";
+            var colorDir = (cfg.Get("App", "dl_color_dir", "lr") ?? "lr").Trim().ToLowerInvariant();
+            // 各模式支持的渐变方向：双色只有左右/上下；四色多了「四角」（= 对角线四色）；自定义用角度
+            if (colorMode == "dual" && colorDir != "tb") colorDir = "lr";
+            else if (colorMode == "quad" && colorDir != "tb" && colorDir != "diag") colorDir = "lr";
+            int colorCount = (int)Clamp(ParseNum(cfg.Get("App", "dl_color_count", "4"), 4), 2, 64);
+            var colors = new List<Color>();
+            var positions = new List<double>();
+            for (var i = 1; i <= colorCount; i++)
+            {
+                if (!TryParseColor(cfg.Get("App", "dl_color_" + i, ""), out var cc)) continue;   // 没配过就跳过（色标数量可变）
+                colors.Add(cc);
+                positions.Add(ParseNum(cfg.Get("App", "dl_color_pos_" + i, ""), -1));
+            }
+            if (colors.Count == 0) colors.Add(fill);
+            double colorAngle = Clamp(ParseNum(cfg.Get("App", "dl_color_angle", "90"), 90), 0, 360);
+            var fillBrush = BuildFillBrush(colorMode, colorDir, colors, positions, colorAngle);
+
+            // 描边：单色模式用「描边颜色」；渐变模式改成「按渐变里最深的一色加深 N%」——
+            // 用户要求只让「描边颜色」这一项随模式变化，描边粗细/其它设置不动。
+            if (colorMode != "single")
+            {
+                double boost = Clamp(ParseNum(cfg.Get("App", "dl_stroke_boost", "40"), 40), 0, 95);
+                var deepest = colors[0];
+                foreach (var c in colors) if (Luma(c) < Luma(deepest)) deepest = c;
+                stroke = Darken(deepest, boost);
+            }
             // 描边粗细：原来是按字号算死的（主行 size/20 = 1.7px），字小的时候描边糊成一团，
             // 现在改成设置里自由调（0 = 完全不描边）
             double strokeW = Clamp(ParseNum(cfg.Get("App", "dl_stroke_width", ""), 1.0), 0, 6);
@@ -144,15 +174,16 @@ public sealed partial class DesktopLyricWindow : Window
 
             _main.FontFamily = ff;
             _sub.FontFamily = ff;
-            _main.SetStyle(mainSize, bold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal, fill, stroke, strokeW);
-            _sub.SetStyle(subSize, Microsoft.UI.Text.FontWeights.Normal, fill, stroke, strokeW);
+            _main.SetStyle(mainSize, bold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal, fillBrush, stroke, strokeW);
+            _sub.SetStyle(subSize, Microsoft.UI.Text.FontWeights.Normal, fillBrush, stroke, strokeW);
             _main.Opacity = opacity;
             _sub.Opacity = opacity;
             SubHost.Visibility = showSub ? Visibility.Visible : Visibility.Collapsed;
 
             FitToContent();
             LogManager.Debug("桌面歌词外观: font=" + (font.Length > 0 ? font : "(默认)") + " main=" + mainSize + " sub=" + subSize +
-                             " color=" + fill + " stroke=" + stroke + " strokeW=" + strokeW + " opacity=" + opacity + " bold=" + bold + " sub=" + showSub);
+                             " mode=" + colorMode + "/" + colorDir + " stops=" + colors.Count + " angle=" + colorAngle +
+                             " cols=" + string.Join("|", colors) + " stroke=" + stroke + " strokeW=" + strokeW + " opacity=" + opacity + " bold=" + bold + " sub=" + showSub);
         }
         catch (Exception e) { LogManager.Debug("桌面歌词应用设置失败: " + e.Message); }
     }
@@ -162,20 +193,67 @@ public sealed partial class DesktopLyricWindow : Window
 
     private static double Clamp(double v, double lo, double hi) => v < lo ? lo : (v > hi ? hi : v);
 
-    private static Color ParseColor(string raw, Color def)
+    /// <summary>
+    /// 按颜色模式造填充画刷。四色「四角」= 沿对角线的四色渐变（WinUI 3 的文本只能吃一个 Brush，
+    /// 没有网格渐变，所以四个角各自一色的效果靠对角线四点逼近）。
+    /// </summary>
+    private static Brush BuildFillBrush(string mode, string dir, List<Color> cols, List<double> offs, double angle)
     {
+        if (cols.Count == 0) return new SolidColorBrush(Colors.White);
+        if (mode == "single" || cols.Count < 2) return new SolidColorBrush(cols[0]);
+
+        double sx = 0, sy = 0.5, ex = 1, ey = 0.5;      // 默认左右
+        if (mode == "custom")
+        {
+            var rad = angle * Math.PI / 180.0;           // 角度按屏幕坐标系：0° 向右、90° 向下
+            double dx = Math.Cos(rad) * 0.5, dy = Math.Sin(rad) * 0.5;
+            sx = 0.5 - dx; sy = 0.5 - dy; ex = 0.5 + dx; ey = 0.5 + dy;
+        }
+        else if (dir == "tb") { sx = 0.5; sy = 0; ex = 0.5; ey = 1; }
+        else if (dir == "diag") { sx = 0; sy = 0; ex = 1; ey = 1; }
+
+        var brush = new LinearGradientBrush { StartPoint = new Point(sx, sy), EndPoint = new Point(ex, ey) };
+        var stops = new List<(double off, Color c)>();
+        for (var i = 0; i < cols.Count; i++)
+        {
+            // 位置没配（-1）就按序号均匀铺开；配了就按百分比
+            double off = offs[i] >= 0 ? offs[i] : (double)i / (cols.Count - 1);
+            stops.Add((off, cols[i]));
+        }
+        stops.Sort((a, b) => a.off.CompareTo(b.off));     // GradientStopCollection 必须按 Offset 递增
+        foreach (var (off, c) in stops)
+            brush.GradientStops.Add(new GradientStop { Color = c, Offset = Clamp(off, 0, 1) });
+        return brush;
+    }
+
+    private static double Luma(Color c) => 0.299 * c.R + 0.587 * c.G + 0.114 * c.B;
+
+    /// <summary>把颜色整体加深 pct%（每通道乘 1-pct/100），用来从渐变主色推描边色。</summary>
+    private static Color Darken(Color c, double pct)
+    {
+        double k = 1.0 - Clamp(pct, 0, 95) / 100.0;
+        return Color.FromArgb(c.A, (byte)Math.Round(c.R * k), (byte)Math.Round(c.G * k), (byte)Math.Round(c.B * k));
+    }
+
+    private static bool TryParseColor(string raw, out Color c)
+    {
+        c = default;
         try
         {
             var s = (raw ?? "").Trim().TrimStart('#');
             if (s.Length == 6) s = "FF" + s;
-            if (s.Length != 8) return def;
-            return Color.FromArgb(byte.Parse(s.Substring(0, 2), NumberStyles.HexNumber),
-                                  byte.Parse(s.Substring(2, 2), NumberStyles.HexNumber),
-                                  byte.Parse(s.Substring(4, 2), NumberStyles.HexNumber),
-                                  byte.Parse(s.Substring(6, 2), NumberStyles.HexNumber));
+            if (s.Length != 8) return false;
+            c = Color.FromArgb(byte.Parse(s.Substring(0, 2), NumberStyles.HexNumber),
+                               byte.Parse(s.Substring(2, 2), NumberStyles.HexNumber),
+                               byte.Parse(s.Substring(4, 2), NumberStyles.HexNumber),
+                               byte.Parse(s.Substring(6, 2), NumberStyles.HexNumber));
+            return true;
         }
-        catch { return def; }
+        catch { return false; }
     }
+
+    private static Color ParseColor(string raw, Color def)
+        => TryParseColor(raw, out var c) ? c : def;
 
     // ---------------- 对外接口 ----------------
 
@@ -496,11 +574,11 @@ public sealed partial class DesktopLyricWindow : Window
         private readonly TextBlock _front;
 
         public StrokeText(Panel host, double fontSize, FontWeight weight,
-                          Color fill, Color stroke, double strokeWidth)
+                          Brush fill, Color stroke, double strokeWidth)
         {
             foreach (var _ in Ring)
             {
-                var t = NewBlock(fontSize, weight, stroke);
+                var t = NewBlock(fontSize, weight, new SolidColorBrush(stroke));
                 _strokes.Add(t);
                 host.Children.Add(t);
             }
@@ -536,7 +614,7 @@ public sealed partial class DesktopLyricWindow : Window
             set { foreach (var t in _strokes) t.Opacity = value; _front.Opacity = value; }
         }
 
-        public void SetStyle(double size, FontWeight weight, Color fill, Color stroke, double strokeWidth)
+        public void SetStyle(double size, FontWeight weight, Brush fill, Color stroke, double strokeWidth)
         {
             var lh = LineHeightOf(size);
             var hasStroke = strokeWidth > 0.05;                  // 0 = 不描边：8 个描边层直接隐藏，省掉排版/合成开销
@@ -553,18 +631,18 @@ public sealed partial class DesktopLyricWindow : Window
             _front.FontSize = size;
             _front.LineHeight = lh;
             _front.FontWeight = weight;
-            _front.Foreground = new SolidColorBrush(fill);
+            _front.Foreground = fill;                            // Color 或 LinearGradientBrush 都能直接吃
         }
 
         // 行高按字号算死（1.28 倍）：不能交给字体自己报 —— 有些装饰字体（如"萝莉体"）
         // 行高度量偏小，长句换行后两行会叠在一起，看着就是"下句被当前句遮挡"
         private static double LineHeightOf(double size) => Math.Ceiling(size * 1.28);
 
-        private static TextBlock NewBlock(double size, FontWeight weight, Color c) => new()
+        private static TextBlock NewBlock(double size, FontWeight weight, Brush f) => new()
         {
             FontSize = size,
             FontWeight = weight,
-            Foreground = new SolidColorBrush(c),
+            Foreground = f,
             TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Center,
             IsTextScaleFactorEnabled = false,

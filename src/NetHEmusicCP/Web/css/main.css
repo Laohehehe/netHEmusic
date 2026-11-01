@@ -181,6 +181,24 @@ a.nav-bottom.on{position:relative;background:var(--nm-fill-strong);color:var(--m
     transition:transform .12s,box-shadow .12s;}
 .sw:hover{transform:scale(1.2);}
 .sw.on{box-shadow:0 0 0 2px var(--md-accent-color);}
+/* 桌面歌词颜色：渐变预览条 / 预设色卡 / 色标编辑 */
+.dl-color{display:flex;flex-direction:column;gap:2px;margin:2px 0 6px;}
+.dl-preview{height:26px;border-radius:8px;margin:2px 8px 9px;
+  border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);
+  box-shadow:inset 0 1px 0 rgba(var(--md-accent-color-grey-base-rgb),.08);}
+.dl-presets{display:flex;align-items:center;gap:8px;}
+.dl-preset{width:56px;height:26px;border-radius:7px;cursor:pointer;padding:0;
+  border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.22);
+  transition:transform .14s,box-shadow .14s;}
+.dl-preset:hover{transform:translateY(-1px) scale(1.04);box-shadow:0 4px 12px rgba(0,0,0,.35);}
+.dl-preset:active{transform:scale(.98);}
+.dl-stop-row .dl-stop{display:flex;align-items:center;gap:8px;min-width:0;}
+.dl-stop input[type=color]{width:34px;height:24px;padding:0;border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.22);
+  border-radius:6px;background:transparent;cursor:pointer;}
+.dl-stop input[type=color]::-webkit-color-swatch-wrapper{padding:2px;}
+.dl-stop input[type=color]::-webkit-color-swatch{border:none;border-radius:4px;}
+.dl-stop .dl-pos{width:56px;}
+.dl-pos-lb{font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.5);}
 /* 子项：主开关关掉 / 上级没选中时整块收起（和「鼠标特效」一个做法） */
 .set-detail{margin-left:14px;padding-left:12px;border-left:1px solid rgba(var(--md-accent-color-grey-base-rgb),.13);}
 .set-detail.hidden{display:none;}
