@@ -1076,11 +1076,218 @@ function applyPerfAnim(s) {
     modeOrder:  ico('<line x1="4" x2="19" y1="12" y2="12"/><polyline points="14 6 20 12 14 18"/>'),
     modeList:   ico('<polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'),
     modeSingle: ico('<polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="16" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" stroke="none">1</text>'),
-    modeRandom: ico('<polyline points="16 3 21 3 21 8"/><line x1="4" x2="21" y1="20" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" x2="21" y1="15" y2="21"/><line x1="4" x2="9" y1="4" y2="9"/>')
+    modeRandom: ico('<polyline points="16 3 21 3 21 8"/><line x1="4" x2="21" y1="20" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" x2="21" y1="15" y2="21"/><line x1="4" x2="9" y1="4" y2="9"/>'),
+    // 多选：勾
+    check:      ico('<polyline points="20 6 9 17 4 12"/>')
   };
+
+  // ================= 歌曲多选 =================
+  // 进入方式：① 列表右上角「多选」按钮切状态 ② 任意时刻 Ctrl+左键点行。
+  // 多选态下左键点行 = 勾选/取消（不再播放），dock 上方浮出胶囊仓做批量操作。
+  var multiOn = false;
+  var multiSel = new Set();          // 选中歌曲的 id（字符串）
+  var MD_ACTS = [
+    { k: 'next',  ic: 'playNext', t: '下一首播放' },
+    { k: 'queue', ic: 'add',      t: '添加到播放列表' },
+    { k: 'pl',    ic: 'playlist', t: '添加到歌单' },
+    { k: 'dl',    ic: 'dl',       t: '下载' },
+    { k: 'like',  ic: 'heart',    t: '喜欢' }
+  ];
+  function multiSongs() {
+    var src = (currentList && currentList.length) ? currentList : [];
+    var out = [];
+    for (var i = 0; i < src.length; i++) {
+      var s = src[i];
+      if (s && multiSel.has(String(s.Id))) out.push(s);
+    }
+    return out;
+  }
+  function syncMulti() {
+    try {
+      document.body.classList.toggle('multi-open', !!multiOn);
+      var host = $('#view') || document;
+      host.querySelectorAll('.song-list').forEach(function (l) { l.classList.toggle('multi', !!multiOn); });
+      host.querySelectorAll('.song-row').forEach(function (r) {
+        r.classList.toggle('sel', !!multiOn && multiSel.has(r.getAttribute('data-sid') || ''));
+      });
+      host.querySelectorAll('.multi-btn').forEach(function (b) {
+        b.classList.toggle('on', !!multiOn);
+        var tx = b.querySelector('.mb-tx');
+        if (tx) tx.textContent = multiOn ? '退出多选' : '多选';
+        b.title = multiOn ? '退出多选' : '多选（Ctrl+左键也可以）';
+      });
+      renderMultiDock();
+    } catch (e) { }
+  }
+  function enterMulti() { multiOn = true; syncMulti(); }
+  function exitMulti() {
+    if (!multiOn && !multiSel.size) return;
+    multiOn = false; multiSel.clear(); syncMulti();
+  }
+  function toggleMulti() { if (multiOn) exitMulti(); else enterMulti(); }
+
+  // 列表右上角的「多选」按钮（每个歌曲列表一份）
+  function multiBtn() {
+    var b = el('button', 'multi-btn');
+    b.innerHTML = SVG.check + '<span class="mb-tx">多选</span>';
+    b.title = '多选（Ctrl+左键也可以）';
+    b.onclick = function (e) { e.stopPropagation(); toggleMulti(); };
+    return b;
+  }
+  // 列表 + 右上角工具条（替掉原来裸的 renderSongs 容器）
+  function songBlock(songs) {
+    var box = el('div', 'list-block');
+    var bar = el('div', 'list-bar');
+    bar.appendChild(multiBtn());
+    box.appendChild(bar);
+    var dl = el('div');
+    renderSongs(songs, dl);
+    box.appendChild(dl);
+    return box;
+  }
+
+  function placeMultiDock() {
+    var md = $('#multi-dock'), dock = $('#player');
+    if (md && dock) md.style.bottom = (dock.offsetHeight + 14 + 10) + 'px';
+  }
+  function renderMultiDock() {
+    var md = $('#multi-dock'); if (!md) return;
+    if (!multiOn) { md.classList.remove('show'); md.setAttribute('aria-hidden', 'true'); return; }
+    var cnt = $('#multi-count');
+    if (cnt) cnt.textContent = '已选 ' + multiSongs().length + ' 首';
+    var box = $('#multi-btns');
+    if (box) {
+      var acts = MD_ACTS.slice();
+      // 歌单列表里多给一个「移除歌单」
+      if (curView === 'playlist' && curViewData && curViewData.id) acts.push({ k: 'rm', ic: 'trash', t: '移除歌单' });
+      var key = acts.map(function (a) { return a.k; }).join('|');
+      if (box.dataset.key !== key) {
+        box.dataset.key = key;
+        box.innerHTML = '';
+        acts.forEach(function (a, i) {
+          if (i) box.appendChild(el('span', 'md-sep', '|'));
+          var b = el('button', 'md-btn');
+          b.setAttribute('data-k', a.k);
+          b.innerHTML = '<span class="md-ic">' + (SVG[a.ic] || '') + '</span><span class="md-tx">' + esc(a.t) + '</span>';
+          b.onclick = function (e) { e.stopPropagation(); multiRun(a.k); };
+          box.appendChild(b);
+        });
+      }
+    }
+    md.classList.add('show');
+    md.setAttribute('aria-hidden', 'false');
+    placeMultiDock();
+  }
+
+  async function multiRun(k) {
+    var songs = multiSongs();
+    if (!songs.length) { toast('还没有选中歌曲'); return; }
+    if (k === 'next') {
+      // 宿主每次把歌插到「当前之后」，所以倒序发送才能让最终顺序跟列表一致
+      for (var i = songs.length - 1; i >= 0; i--) NE.post({ type: 'playnext', song: songs[i] });
+      toast('已加入下一首播放：' + songs.length + ' 首');
+      return;
+    }
+    if (k === 'queue') { NE.post({ type: 'queue_append', songs: songs }); return; }   // 宿主自己会 toast
+    if (k === 'dl') {
+      songs.forEach(function (s, i) { setTimeout(function () { NE.post({ type: 'download', song: s }); }, i * 40); });
+      toast('已加入下载队列：' + songs.length + ' 首');
+      return;
+    }
+    if (k === 'like') {
+      var ids = await ensureLikes();
+      if (!ids) { toast('请先在「账号」页扫码登录'); go('account'); return; }
+      var ok = 0;
+      for (var j = 0; j < songs.length; j++) {
+        try {
+          var r = await likeApi(songs[j].Id, true);
+          var code = r && (r.code || (r.data && r.data.code));
+          if (code === 200) { ids[String(songs[j].Id)] = 1; ok++; }
+        } catch (e) { }
+      }
+      syncLikeBtn();
+      toast('已喜欢 ' + ok + ' 首');
+      return;
+    }
+    if (k === 'pl') { openPickPlaylist(songs); return; }
+    if (k === 'rm') { removeFromCurPlaylist(songs); return; }
+  }
+
+  // 「添加到歌单」：列出自己创建的歌单，点一个就批量加进去
+  async function openPickPlaylist(songs) {
+    toast('正在读取歌单…');
+    var st = await NE.loginStatus().catch(function () { return {}; });
+    var uid = (st && st.data && st.data.profile && st.data.profile.userId) || (st && st.profile && st.profile.userId) || 0;
+    if (!uid) { toast('请先在「账号」页扫码登录'); return; }
+    var r = await NE.userPlaylist(uid, 200).catch(function () { return {}; });
+    var mine = ((r && r.playlist) || []).filter(function (p) { return p && p.userId === uid; });
+    if (!mine.length) { toast('没有可添加的歌单'); return; }
+    var mask = el('div', 'modal-mask show');
+    mask.innerHTML = '<div class="modal-card pick-card" role="dialog" aria-modal="true">'
+      + '<div class="modal-head"><span class="modal-dot"></span><h3>添加到歌单</h3></div>'
+      + '<div class="modal-body"><p class="pick-hint">已选 ' + songs.length + ' 首，点歌单即刻加入</p><div class="pick-list"></div></div>'
+      + '<div class="modal-foot"><button class="action-btn ghost" data-x="cancel">取消</button></div></div>';
+    var listEl = mask.querySelector('.pick-list');
+    mine.forEach(function (p) {
+      var it = el('button', 'pick-item');
+      it.innerHTML = '<span class="pick-name">' + esc(p.name || '') + '</span><span class="pick-num">' + (p.trackCount || 0) + ' 首</span>';
+      it.onclick = function () { addToPlaylist(p, songs, mask); };
+      listEl.appendChild(it);
+    });
+    mask.querySelector('[data-x=cancel]').onclick = function () { mask.remove(); };
+    mask.onclick = function (e) { if (e.target === mask) mask.remove(); };
+    document.body.appendChild(mask);
+  }
+  async function addToPlaylist(p, songs, mask) {
+    try {
+      var tracks = songs.map(function (s) { return s.Id; }).join(',');
+      var res = await NE.api('playlist/manipulate/tracks', { op: 'add', pid: p.id, tracks: tracks }, true);
+      var code = res && (res.code || (res.data && res.data.code));
+      if (code !== 200) throw new Error((res && (res.message || res.msg)) || ('code ' + code));
+      toast('已添加到歌单《' + (p.name || '') + '》：' + songs.length + ' 首');
+      if (mask) mask.remove();
+      if (curView === 'playlist' && curViewData && curViewData.id === p.id) go('playlist', curViewData);
+    } catch (e) { toast('添加失败: ' + (e && e.message ? e.message : e)); }
+  }
+
+  // 歌单列表里的「移除歌单」：批量从当前歌单删掉（「我喜欢的音乐」退化成取消喜欢）
+  function removeFromCurPlaylist(songs) {
+    var pid = curViewData && curViewData.id;
+    if (!pid) { toast('当前页面不是歌单'); return; }
+    var ids = songs.map(function (s) { return s.Id; });
+    confirmDialog('移除歌曲', '确定把选中的 ' + ids.length + ' 首从当前歌单移除吗？', '移除', async function () {
+      try {
+        var res = await NE.api('playlist/manipulate/tracks', { op: 'del', pid: pid, tracks: ids.join(',') }, true);
+        var code = res && (res.code || (res.data && res.data.code));
+        if (code !== 200) throw new Error((res && (res.message || res.msg)) || ('code ' + code));
+        finishRemove(ids);
+        toast('已从歌单移除 ' + ids.length + ' 首');
+      } catch (e) {
+        // 「我喜欢的音乐」这类歌单不认 manipulate，退化成逐首取消喜欢
+        try {
+          for (var i = 0; i < ids.length; i++) await likeApi(ids[i], false);
+          finishRemove(ids);
+          toast('已从「我喜欢的音乐」移除 ' + ids.length + ' 首');
+        } catch (e2) { toast('移除失败: ' + (e2 && e2.message ? e2.message : e2)); }
+      }
+    });
+  }
+  function finishRemove(ids) {
+    var set = new Set(ids.map(String));
+    currentList = (currentList || []).filter(function (s) { return !set.has(String(s.Id)); });
+    for (var i = 0; i < ids.length; i++) multiSel.delete(String(ids[i]));
+    var host = document.querySelector('.list-block');
+    if (host) { var fresh = songBlock(currentList); host.parentNode.replaceChild(fresh, host); }
+    syncMulti();
+  }
+
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && multiOn) exitMulti(); });
+  window.addEventListener('resize', function () { if (multiOn) placeMultiDock(); });
+
   function songRow(ns, i) {
     const r = el('div','song-row');
     try { r.setAttribute('data-sid', String(ns.Id || '')); } catch (eSid) { }   // 离线置灰要按 id 判断
+    if (multiOn && multiSel.has(String(ns.Id || ''))) r.classList.add('sel');    // 多选态：重建出来的行也要带选中态
     var blocked = function () {
       if (!isOffline()) return false;
       if (audioCached.has(String(ns.Id))) return false;
@@ -1097,7 +1304,18 @@ function applyPerfAnim(s) {
     r.querySelector('[data-do=play]').onclick = e => { e.stopPropagation(); if (!blocked()) play(ns); };
     r.querySelector('[data-do=add]').onclick = e => { e.stopPropagation(); addPlaylist(ns); };
     r.querySelector('[data-do=dl]').onclick = e => { e.stopPropagation(); NE.post({type:'download', song:ns}); };
-    r.onclick = () => { if (!blocked()) play(ns); };
+    r.onclick = function (e) {
+      // 多选态（或 Ctrl+左键）下左键只用来勾选，不再直接播放
+      if (multiOn || (e && e.ctrlKey)) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        multiOn = true;
+        var sid = String(ns.Id || '');
+        if (multiSel.has(sid)) multiSel.delete(sid); else multiSel.add(sid);
+        syncMulti();
+        return;
+      }
+      if (!blocked()) play(ns);
+    };
     return r;
   }
   function addPlaylist(ns) { NE.post({ type:'queue_add', song: ns }); toast('已添加到播放列表: ' + ns.Title); }
@@ -1549,6 +1767,7 @@ function applyPerfAnim(s) {
   });
   async function go(viewName, data) {
     try {
+      if (multiOn) exitMulti();   // 换页自动退出多选（选中集合只对当前列表有效）
       var prevView = curView;
       curView = viewName; curViewData = data;   // 切语言时要按当前页重画
       // 离开列表页：把内存里的列表副本丢掉（磁盘缓存里还有，回去时再读）
@@ -1594,8 +1813,7 @@ function applyPerfAnim(s) {
     html.appendChild(el('h2','greet-title', esc(nick) + '，' + tw + '好！想听点什么？'));
     html.appendChild(el('h3','sec-title','每日推荐'));
     html.appendChild(allBtns(songs, refreshBtn(function () { goHome(); })));
-    const dl = el('div');
-    renderSongs(songs, dl); html.appendChild(dl);
+    html.appendChild(songBlock(songs));
     view.innerHTML=''; view.appendChild(html);
   }
   async function goRecommend() {
@@ -1613,7 +1831,7 @@ function applyPerfAnim(s) {
     const html = el('div','page');
     html.appendChild(el('h2','page-title','每日推荐 ('+songs.length+')'));
     html.appendChild(allBtns(songs, refreshBtn(function () { goRecommend(); })));
-    const dl = el('div'); renderSongs(songs, dl); html.appendChild(dl);
+    html.appendChild(songBlock(songs));
     view.innerHTML=''; view.appendChild(html);
   }
   async function goToplist() {
@@ -1645,7 +1863,7 @@ function applyPerfAnim(s) {
     const html = el('div','page');
     html.appendChild(el('h2','page-title', name || '歌单'));
     html.appendChild(allBtns(songs));
-    const dl = el('div'); renderSongs(songs, dl); html.appendChild(dl);
+    html.appendChild(songBlock(songs));
     view.innerHTML=''; view.appendChild(html);
   }
   async function goSearch(data) {
@@ -1661,7 +1879,7 @@ function applyPerfAnim(s) {
       try {
         var songs = await pcGet('search_' + kw);
         if (!songs) { const r = await NE.search(kw, 50, 0); songs = (r.result && r.result.songs) || []; pcPut('search_' + kw, songs); }
-        html.innerHTML=''; html.appendChild(el('h2','page-title','“'+esc(kw)+'” ('+songs.length+')')); const dl=el('div'); renderSongs(songs,dl); html.appendChild(dl); view.innerHTML=''; view.appendChild(html);
+        html.innerHTML=''; html.appendChild(el('h2','page-title','“'+esc(kw)+'” ('+songs.length+')')); html.appendChild(songBlock(songs)); view.innerHTML=''; view.appendChild(html);
       }
       catch(e){ toast('搜索失败: '+e.message); }
     };
@@ -3592,7 +3810,7 @@ function applyPerfAnim(s) {
       const songs = (r.result && r.result.songs) || [];
       const html = el('div', 'page');
       html.appendChild(el('h2', 'page-title', '“' + esc(kw) + '” 搜索结果 (' + songs.length + ')'));
-      const dl = el('div'); renderSongs(songs, dl); html.appendChild(dl);
+      html.appendChild(songBlock(songs));
       view.innerHTML = ''; view.appendChild(html);
       document.querySelectorAll('#sidebar a[data-nav]').forEach(x => x.classList.remove('on'));
     } catch (e) { toast('搜索失败: ' + e.message); }
