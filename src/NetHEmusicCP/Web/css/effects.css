@@ -26,18 +26,18 @@ html.no-fx .fx-shake{animation:none;}
 /* ---------- 侧边栏选项卡：鼠标移入的过渡动画 ---------- */
 #nav a, a.nav-bottom{
   position:relative;
-  transition:background .22s ease, color .18s ease, transform .22s cubic-bezier(.2,.8,.3,1.1), box-shadow .22s ease;
+  transition:background .22s ease, transform .22s cubic-bezier(.2,.8,.3,1.1), box-shadow .22s ease;
 }
 #nav a .ic, a.nav-bottom .ic{
   display:inline-block;
-  transition:transform .26s cubic-bezier(.2,.8,.3,1.3), color .18s ease, filter .26s ease;
+  transition:transform .26s cubic-bezier(.2,.8,.3,1.3), filter .26s ease;
   will-change:transform;
 }
 /* 侧栏里用内联 SVG 的两项（下载管理 / 插件）：补上同款动效。
    transform + will-change 让它们也提升为独立合成层，悬停缩放才和「主页」那几项一致
    （原来只有 .ic 有动画，这两项是静态 SVG，所以看不出缩放） */
 #nav a .nav-svg, a.nav-bottom .nav-svg{
-  transition:transform .26s cubic-bezier(.2,.8,.3,1.3), color .18s ease, filter .26s ease;
+  transition:transform .26s cubic-bezier(.2,.8,.3,1.3), filter .26s ease;
   will-change:transform;
 }
 /* 悬停时左侧探出的小指示条（选中态用的是 ::before，这里用 ::after 不冲突） */
@@ -59,11 +59,11 @@ html.no-fx .fx-shake{animation:none;}
 #nav a:hover:not(.on)::after, a.nav-bottom:hover:not(.on)::after{opacity:.7;transform:translateY(-50%) scaleY(1);}
 #nav a:active:not(.on), a.nav-bottom:active:not(.on){transform:translateX(2px) scale(.97);}
 /* 选中项本身也带一点呼吸式的过渡，切换时更顺滑 */
-#nav a.on, a.nav-bottom.on{transition:background .26s ease, color .18s ease, transform .26s ease;}
+#nav a.on, a.nav-bottom.on{transition:background .26s ease, transform .26s ease;}
 
 /* 系统开启“减少动态效果”时不做位移/缩放 */
 @media (prefers-reduced-motion: reduce){
-  #nav a, a.nav-bottom, #nav a .ic, a.nav-bottom .ic, #nav a .nav-svg, a.nav-bottom .nav-svg{transition:background .12s ease, color .12s ease;}
+  #nav a, a.nav-bottom, #nav a .ic, a.nav-bottom .ic, #nav a .nav-svg, a.nav-bottom .nav-svg{transition:background .12s ease;}
   #nav a:hover:not(.on), a.nav-bottom:hover:not(.on),
   #nav a:hover:not(.on) .ic, a.nav-bottom:hover:not(.on) .ic,
   #nav a:hover:not(.on) .nav-svg, a.nav-bottom:hover:not(.on) .nav-svg{transform:none;}
@@ -71,11 +71,11 @@ html.no-fx .fx-shake{animation:none;}
 /* ---------- 侧边栏「展开/关闭导航」按钮：与上面的 tab 完全同款动效 ---------- */
 .sb-toggle{
   position:relative;
-  transition:background .22s ease, color .18s ease, transform .22s cubic-bezier(.2,.8,.3,1.1), box-shadow .22s ease;
+  transition:background .22s ease, transform .22s cubic-bezier(.2,.8,.3,1.1), box-shadow .22s ease;
 }
 .sb-toggle .sb-ic svg{
   display:block;
-  transition:transform .28s cubic-bezier(.2,.8,.3,1.3), color .18s ease, filter .26s ease;
+  transition:transform .28s cubic-bezier(.2,.8,.3,1.3), filter .26s ease;
   will-change:transform;
 }
 .sb-toggle::after{
@@ -94,7 +94,7 @@ html.no-fx .fx-shake{animation:none;}
 /* 侧栏已是展开态时，图标本身转着 90°（main.css），悬停要保留这个角度再放大 */
 #sidebar.sb-open .sb-toggle:hover .sb-ic svg{transform:rotate(90deg) scale(1.12);}
 @media (prefers-reduced-motion: reduce){
-  .sb-toggle,.sb-toggle .sb-ic svg{transition:background .12s ease, color .12s ease;}
+  .sb-toggle,.sb-toggle .sb-ic svg{transition:background .12s ease;}
   .sb-toggle:hover,.sb-toggle:active{transform:none;}
   .sb-toggle:hover .sb-ic svg{transform:none;}
   #sidebar.sb-open .sb-toggle:hover .sb-ic svg{transform:rotate(90deg);}
@@ -117,7 +117,7 @@ html.no-fx .fx-shake{animation:none;}
   width:34px;height:34px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
   border:none;border-radius:50%;background:transparent;
   color:rgba(var(--md-accent-color-grey-base-rgb),.78);cursor:pointer;
-  transition:color .18s ease, transform .2s cubic-bezier(.2,.8,.3,1.3), filter .22s ease;
+  transition:transform .2s cubic-bezier(.2,.8,.3,1.3), filter .22s ease;
 }
 .row-btn:hover{
   color:var(--md-accent-color);
@@ -152,7 +152,7 @@ html.no-fx .fx-shake{animation:none;}
   width:30px;height:30px;border:none;border-radius:50%;background:transparent;cursor:pointer;
   color:rgba(var(--md-accent-color-grey-base-rgb),.7);
   font-family:'Segoe Fluent Icons','Segoe MDL2 Assets';font-size:13px;
-  transition:background .18s ease,color .18s ease,transform .18s ease;
+  transition:background .18s ease,transform .18s ease;
 }
 .modal-x:hover{background:rgba(var(--md-accent-color-grey-base-rgb),.12);color:var(--md-accent-color);transform:rotate(90deg);}
 .modal-body{padding:2px 18px 6px;font-size:13.5px;line-height:1.8;color:rgba(var(--md-accent-color-grey-base-rgb),.84);}
@@ -224,7 +224,7 @@ html.no-anim-page .page.view-in, html.no-anim-page .big-load.view-in{animation:n
 .ic-btn:hover{color:var(--md-accent-color);}
 
 /* ================= 播放/暂停按钮：鼠标移上去的过渡动画 ================= */
-#pb-play{transition:transform .3s cubic-bezier(.2,.8,.3,1.35), box-shadow .32s ease, background .28s ease, color .22s ease;}
+#pb-play{transition:transform .3s cubic-bezier(.2,.8,.3,1.35), box-shadow .32s ease, background .28s ease;}
 #pb-play:hover{
   transform:scale(1.12) rotate(-5deg);
   box-shadow:0 0 0 7px rgba(var(--md-accent-color-rgb),.13), 0 8px 22px rgba(var(--md-accent-color-rgb),.38);
@@ -235,7 +235,7 @@ html.no-anim-page .page.view-in, html.no-anim-page .big-load.view-in{animation:n
 
 /* 播放模式按钮 / 播放列表按钮 也用同样的鼠标移入过渡 */
 #pb-mode,#pb-lyric,#pb-prev,#pb-next,#pl-list,#pl-like,#pl-dl{
-  transition:transform .26s cubic-bezier(.2,.8,.3,1.3), color .2s ease, filter .24s ease;
+  transition:transform .26s cubic-bezier(.2,.8,.3,1.3), filter .24s ease;
 }
 #pb-mode:hover,#pb-lyric:hover,#pb-prev:hover,#pb-next:hover,#pl-list:hover,#pl-like:hover,#pl-dl:hover{transform:scale(1.14);}
 
@@ -317,7 +317,7 @@ html.no-anim-page .page.view-in, html.no-anim-page .big-load.view-in{animation:n
   margin-left:auto;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;
   border:none;border-radius:50%;background:transparent;cursor:pointer;
   color:rgba(var(--md-accent-color-grey-base-rgb),.6);
-  transition:color .18s ease, background .18s ease, transform .2s cubic-bezier(.2,.8,.3,1.3);
+  transition:background .18s ease, transform .2s cubic-bezier(.2,.8,.3,1.3);
 }
 .pl-clear svg{width:16px;height:16px;display:block;}
 .pl-clear:hover{color:var(--md-accent-color);background:var(--nm-fill);transform:scale(1.12);}
@@ -365,9 +365,19 @@ html.no-anim-page .page.view-in, html.no-anim-page .big-load.view-in{animation:n
 .np-bg{transform:scale(1.05);transition:transform 1.1s cubic-bezier(.2,.8,.3,1), background-image .4s ease;}
 .np.show .np-bg{transform:scale(1.18);}
 .np-cover-wrap{
-  transition:transform .5s cubic-bezier(.2,.8,.3,1), box-shadow .4s ease;
+  transition:transform .5s cubic-bezier(.2,.8,.3,1), box-shadow .4s ease, opacity .3s ease;
   will-change:transform;
 }
+/* 歌词页封面 FLIP：从 dock 小封面飞入、关闭时飞回 dock。
+   过渡曲线放在 CSS，JS 只测量两处位置、写起始 transform/opacity，然后切下面的 class：
+   .np-fly-in 飞入 / .np-fly-out 飞回 / .np-no-trans 写起始帧时临时关过渡。 */
+.np-cover-wrap.np-fly-in{transition:transform .52s cubic-bezier(.2,.8,.25,1), opacity .3s ease;}
+.np-cover-wrap.np-fly-out{transition:transform .42s cubic-bezier(.4,0,.6,1), opacity .3s ease;}
+.np-cover-wrap.np-no-trans{transition:none;}
+/* html.anim-tuned 会给 .np-cover-wrap 加 !important 的 transition-duration，
+   会盖掉上面的 transition:none，导致写 FLIP 起始帧时也走过渡（表现为「从原位飘过去」而不是瞬移）。
+   这里用更高特异性把它压回去。 */
+html.anim-tuned .np-cover-wrap.np-no-trans{transition-property:none !important;transition-duration:0s !important;}
 /* 背景：模糊放大封面 + 暗色渐层 */
 .np-bg{
   position:absolute;inset:-8%;background-size:cover;background-position:center;
@@ -420,7 +430,9 @@ html.no-anim-page .page.view-in, html.no-anim-page .big-load.view-in{animation:n
   color:rgba(255,255,255,.42);
   transform-origin:left center;
   /* 注意：不要给每行加 will-change —— 73 行会各自提升为合成层，CPU/内存都会爆 */
-  transition:transform .62s var(--ly-ease), filter .62s ease, opacity .62s ease, color .4s ease, background .3s ease;
+  transition:transform .62s var(--ly-ease), filter .62s ease, opacity .62s ease, background .3s ease;
+  /* 换行波浪延迟：JS 只写 --ly-dly（css 变量），不再逐行改内联 transitionDelay */
+  transition-delay:var(--ly-dly,0ms);
 }
 .np-line.on{color:#fff;}
 /* 歌词行：可点击跳转 —— 悬浮时整句放大/提亮 + 一层药丸底，提示“这句能点” */
@@ -456,7 +468,7 @@ html.no-anim-np .np-line .np-orig,html.no-anim-np .np-line .np-sub{transition:no
 .np-btn,.np-close{
   width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;
   border:none;border-radius:50%;background:transparent;color:rgba(255,255,255,.85);cursor:pointer;
-  transition:background .2s ease,color .2s ease,transform .2s cubic-bezier(.2,.8,.3,1.3);
+  transition:background .2s ease,transform .2s cubic-bezier(.2,.8,.3,1.3);
 }
 .np-btn svg,.np-close svg{width:19px;height:19px;display:block;}
 .np-btn:hover,.np-close:hover{background:rgba(255,255,255,.16);color:#fff;transform:scale(1.1);}
@@ -468,7 +480,7 @@ html.no-anim-np .np-line .np-orig,html.no-anim-np .np-line .np-sub{transition:no
   display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
   width:28px;height:28px;border-radius:50%;cursor:pointer;
   color:rgba(var(--md-accent-color-grey-base-rgb),.8);
-  transition:color .2s ease,background .2s ease,transform .22s cubic-bezier(.2,.8,.3,1.3);
+  transition:background .2s ease,transform .22s cubic-bezier(.2,.8,.3,1.3);
 }
 .pl-vol svg{width:19px;height:19px;display:block;}
 .pl-vol:hover{color:var(--md-accent-color);background:var(--nm-fill);transform:scale(1.12);}
@@ -527,7 +539,7 @@ html.no-anim-np .np-line .np-orig,html.no-anim-np .np-line .np-sub{transition:no
   position:absolute;right:26px;top:22px;width:38px;height:38px;z-index:20;
   display:inline-flex;align-items:center;justify-content:center;
   border:none;border-radius:50%;background:rgba(255,255,255,.10);color:rgba(255,255,255,.88);cursor:pointer;
-  transition:background .2s ease,color .2s ease,opacity .24s ease,transform .24s cubic-bezier(.2,.8,.3,1.3);
+  transition:background .2s ease,opacity .24s ease,transform .24s cubic-bezier(.2,.8,.3,1.3);
 }
 .np-gear svg{width:19px;height:19px;display:block;}
 .np-gear:hover{background:rgba(255,255,255,.22);transform:scale(1.08) rotate(24deg);}
@@ -553,7 +565,7 @@ html.no-anim-np .np-line .np-orig,html.no-anim-np .np-line .np-sub{transition:no
 .np-settings-hint{font-size:11px;font-weight:400;color:rgba(255,255,255,.42);}
 .np-settings-close{
   border:none;background:transparent;color:rgba(255,255,255,.7);font-size:15px;cursor:pointer;
-  width:28px;height:28px;border-radius:50%;transition:background .2s ease,color .2s ease;
+  width:28px;height:28px;border-radius:50%;transition:background .2s ease;
 }
 .np-settings-close:hover{background:rgba(255,255,255,.14);color:#fff;}
 .np-settings-body{overflow-y:auto;padding:0 20px 56px;}
@@ -653,7 +665,7 @@ html.no-anim-np .np-line .np-orig,html.no-anim-np .np-line .np-sub{transition:no
   background:rgba(var(--md-accent-color-grey-base-rgb),.10);
   border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.18);
   color:var(--md-accent-color-secondary);font-size:12.5px;font-family:inherit;
-  transition:border-color .2s ease, background .2s ease, color .2s ease, box-shadow .2s ease;
+  transition:border-color .2s ease, background .2s ease, box-shadow .2s ease;
 }
 .hk-btn:hover{border-color:var(--md-accent-color);color:var(--md-accent-color);}
 .hk-btn.rec{
@@ -666,7 +678,7 @@ html.no-anim-np .np-line .np-orig,html.no-anim-np .np-line .np-sub{transition:no
   margin-left:10px;height:30px;padding:0 10px;border-radius:9px;cursor:pointer;
   background:transparent;border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.16);
   color:rgba(var(--md-accent-color-grey-base-rgb),.6);font-size:12px;font-family:inherit;
-  transition:color .2s ease, border-color .2s ease;
+  transition:border-color .2s ease;
 }
 .hk-reset:hover{color:var(--md-accent-color);border-color:var(--md-accent-color);}
 .hk-btn.off{color:rgba(var(--md-accent-color-grey-base-rgb),.45);border-style:dashed;}
@@ -768,7 +780,7 @@ html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
   background:rgba(18,20,26,.99);border:1px solid rgba(var(--md-accent-color-rgb),.28);
   box-shadow:0 12px 32px rgba(0,0,0,.5);transform:translateY(8px) scale(.94);transform-origin:bottom center;transition:opacity .16s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),transform .2s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),visibility .2s;}
 .qual-menu.show{visibility:visible;opacity:1;transform:none;}
-.qual-item{opacity:0;transform:translateY(4px);transition:opacity .18s ease,transform .2s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),background .15s ease,color .15s ease;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:7px;cursor:pointer;
+.qual-item{opacity:0;transform:translateY(4px);transition:opacity .18s ease,transform .2s var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),background .15s ease;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:7px;cursor:pointer;
   font-size:13px;color:rgba(235,235,245,.88);white-space:nowrap;}
 .qual-menu.show .qual-item{opacity:1;transform:none;}
 .qual-menu.show .qual-item:nth-child(2){transition-delay:.04s;}
@@ -784,7 +796,7 @@ html.anim-tuned .np{transition-duration:calc(.34s * var(--anim-k)) !important;}
 .np.hidden{display:none !important;}
 
 /* ---- 逐字填充：未唱的暗、已唱的亮（KTV 效果）---- */
-.np.ly-char .np-line .ly-ch{opacity:.42;transition:opacity .12s linear,color .12s linear;}
+.np.ly-char .np-line .ly-ch{opacity:.42;transition:opacity .12s linear;}
 .np.ly-char .np-line .ly-ch.sung{opacity:1;}
 .np.ly-char .np-line.on .ly-ch.sung{color:#fff;}
 

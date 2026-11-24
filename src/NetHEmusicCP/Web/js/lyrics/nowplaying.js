@@ -45,12 +45,16 @@
     var s = Math.max(.12, Math.min(sx, sy));
     var dx = (a.left + a.width / 2) - (b.left + b.width / 2);
     var dy = (a.top + a.height / 2) - (b.top + b.height / 2);
-    wrap.style.transition = 'none';
+    // 过渡曲线在 CSS（.np-fly-in）：这里只负责 FLIP 起始帧。
+    // 用 class 开关过渡、不再写内联 transition，避免覆盖设置里的动画速率（--anim-k）。
+    wrap.classList.remove('np-fly-out', 'np-no-trans');
+    wrap.classList.add('np-no-trans');
     wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(' + s + ')';
     wrap.style.opacity = '.85';
     void wrap.offsetWidth;                       // 强制回流，保证起始帧生效
     requestAnimationFrame(function () {
-      wrap.style.transition = 'transform .52s cubic-bezier(.2,.8,.25,1), opacity .3s ease';
+      wrap.classList.remove('np-no-trans');
+      wrap.classList.add('np-fly-in');
       wrap.style.transform = 'none';
       wrap.style.opacity = '1';
     });

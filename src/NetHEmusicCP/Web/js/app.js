@@ -2106,9 +2106,10 @@ function applyPerfAnim(s) {
       n.style.filter = (b[i] > 0.05 && Math.abs(off2) <= 4) ? 'blur(' + b[i].toFixed(2) + 'px)' : '';
       n.style.opacity = o[i].toFixed(3);
       n.style.zIndex = String(900 - Math.abs(off2));
-      // 错落：离中心行越远，动得越晚一点（换行时形成波浪感）
+      // 错落：离中心行越远，动得越晚一点（换行时形成波浪感）。
+      // 延迟写成 CSS 变量 --ly-dly，由 .np-line 的 transition-delay 消费（过渡定义留在 CSS）
       var dly = off2 === 0 ? 0 : Math.min(Math.abs(off2), 4) * 22 + 16;
-      n.style.transitionDelay = dly + 'ms';
+      n.style.setProperty('--ly-dly', dly + 'ms');
       n.classList.toggle('on', i === cur && npIndex >= 0);
     }
     // 逐字动画的节奏：把这一句的时长（到下一句为止）平均分给每个字，写进 --beat-step
@@ -2569,7 +2570,9 @@ function applyPerfAnim(s) {
         var s = Math.max(.12, Math.min(a.width / b.width, a.height / b.height));
         var dx = (a.left + a.width / 2) - (b.left + b.width / 2);
         var dy = (a.top + a.height / 2) - (b.top + b.height / 2);
-        wrap.style.transition = 'transform .42s cubic-bezier(.4,0,.6,1), opacity .3s ease';
+        // 收起飞回：过渡曲线在 CSS（.np-fly-out），不再写内联 transition
+        wrap.classList.remove('np-fly-in', 'np-no-trans');
+        wrap.classList.add('np-fly-out');
         wrap.style.transformOrigin = 'center';
         wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(' + s + ')';
         wrap.style.opacity = '.6';
@@ -2581,7 +2584,13 @@ function applyPerfAnim(s) {
     setTimeout(function () {
       if (npOpen) return;
       var w = document.querySelector('#np .np-cover-wrap');
-      if (w) { w.style.transition = 'none'; w.style.transform = 'none'; w.style.opacity = ''; }
+      if (w) {
+        // 收尾复位：回到无过渡状态，避免下次打开时残留 transform/opacity（过渡开关同样走 class）
+        w.classList.remove('np-fly-out', 'np-fly-in');
+        w.classList.add('np-no-trans');
+        w.style.transform = 'none';
+        w.style.opacity = '';
+      }
     }, 460);
     try { setTimeout(function () { if (!npOpen) document.getElementById('np').classList.add('hidden'); }, 420); } catch (e) { }
   }
