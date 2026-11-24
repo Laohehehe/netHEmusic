@@ -46,6 +46,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.1.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.240802000" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.22621.3233" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
@@ -56,6 +57,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="..\..\resources\logo.png" Link="Assets\logo.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 托盘图标（H.NotifyIcon.WinUI 用）：WinUI 的 BitmapImage 不支持 .ico，
+         所以用 resources/tray-icon.png（由 icon.ico 转出的 64x64 PNG） -->
+    <None Include="..\..\resources\tray-icon.png" Link="Assets\tray-icon.png" CopyToOutputDirectory="PreserveNewest" />
     <!-- 证书是 gitignore 的（只有本机 / 发布时才有），所以必须加 Exists 判断：
          否则全新的 clone（比如 GitHub Actions 上）会因为拷不到这个文件直接编译失败（MSB3030） -->
     <None Include="..\..\resources\LaoheTeam.cer" Link="Assets\LaoheTeam.cer" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\resources\LaoheTeam.cer')" />
@@ -72,10 +76,8 @@
       <_BuildInfoFile>$(_ApiSecretsDir)BuildInfo.g.cs</_BuildInfoFile>
     </PropertyGroup>
     <MakeDir Directories="$(_ApiSecretsDir)" Condition="!Exists('$(_ApiSecretsDir)')" />
-    <WriteLinesToFile File="$(_ApiSecretsFile)" Overwrite="true"
-      Lines="// &lt;auto-generated&gt; 由 csproj 的 GenerateApiSecrets 目标生成，不要手改%3B 真实值见本地 build.local.props&#xA;namespace netHEmusic.Core { internal static class ApiSecrets { public const string Base = &quot;$(NetHEApiBase)&quot;%3B } }" />
-    <WriteLinesToFile File="$(_BuildInfoFile)" Overwrite="true"
-      Lines="// &lt;auto-generated&gt; 由 csproj 的 GenerateApiSecrets 目标生成，不要手改%3B 版本号唯一来源是仓库根的 config/version.txt&#xA;namespace netHEmusic { internal static class BuildInfo { public const string Version = &quot;$(NetHEVersion)&quot;%3B } }" />
+    <WriteLinesToFile File="$(_ApiSecretsFile)" Overwrite="true" Lines="// &lt;auto-generated&gt; 由 csproj 的 GenerateApiSecrets 目标生成，不要手改%3B 真实值见本地 build.local.props&#xA;namespace netHEmusic.Core { internal static class ApiSecrets { public const string Base = &quot;$(NetHEApiBase)&quot;%3B } }" />
+    <WriteLinesToFile File="$(_BuildInfoFile)" Overwrite="true" Lines="// &lt;auto-generated&gt; 由 csproj 的 GenerateApiSecrets 目标生成，不要手改%3B 版本号唯一来源是仓库根的 config/version.txt&#xA;namespace netHEmusic { internal static class BuildInfo { public const string Version = &quot;$(NetHEVersion)&quot;%3B } }" />
     <ItemGroup>
       <Compile Include="$(_ApiSecretsFile)" Condition="'$(NetHEApiSecretsAdded)' != 'true'" />
       <FileWrites Include="$(_ApiSecretsFile)" />

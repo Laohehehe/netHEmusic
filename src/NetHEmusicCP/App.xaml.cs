@@ -22,7 +22,7 @@ public partial class App : Application
     private static Mutex? _singleMutex;
     private static EventWaitHandle? _activateEvent;
     private static IntPtr _mainHwnd;
-    private static TrayIcon? _tray;
+    private static TrayIconH? _tray;
     private static MainWindow? _main;
     private static volatile bool _exiting;   // 真退出（更新 / 托盘退出）时为 true，关闭拦截要让路
     private static string? _pendingLogWarning;   // 日志目录不可写的提示，等主窗口起来再弹
@@ -49,7 +49,7 @@ public partial class App : Application
         _mainHwnd = Platform.WindowHelper.Hwnd(w);
         _main = w as MainWindow;
         // 监听“新实例已启动”信号 → 把本实例调到前台
-        _ = Task.Run(() => { try { while (_activateEvent != null) { _activateEvent.WaitOne(); TrayIcon.ShowMainWindow(_mainHwnd); } } catch { } });
+        _ = Task.Run(() => { try { while (_activateEvent != null) { _activateEvent.WaitOne(); TrayIconH.ShowMainWindow(_mainHwnd); } } catch { } });
         // 关闭=最小化到托盘（可配置）
         try
         {
@@ -72,12 +72,13 @@ public partial class App : Application
 
     private static void EnsureTray()
     {
-        if (_tray is null && _mainHwnd != IntPtr.Zero)
+        // TaskbarIcon 必须挂在窗口可视树上，所以这里要拿到 MainWindow 本身（不是只有 HWND）
+        if (_tray is null && _main is not null && _mainHwnd != IntPtr.Zero)
         {
-            _tray = new TrayIcon(_mainHwnd,
-                onOpen: () => TrayIcon.ShowMainWindow(_mainHwnd),
+            _tray = new TrayIconH(_main,
+                onOpen: () => TrayIconH.ShowMainWindow(_mainHwnd),
                 onExit: () => ExitApp(),
-                actions: _main?.TrayActions());
+                actions: _main.TrayActions());
         }
     }
 
