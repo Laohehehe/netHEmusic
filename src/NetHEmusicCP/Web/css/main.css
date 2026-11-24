@@ -554,3 +554,37 @@ body.multi-open #view{padding-bottom:176px;}
 .pick-item:hover{background:var(--nm-fill-hover);color:var(--md-accent-color);}
 .pick-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .pick-num{font-size:11px;opacity:.6;white-space:nowrap;}
+
+/* ===== 框选多选（按住左键拖拽） ===== */
+body.seling{cursor:crosshair;user-select:none;-webkit-user-select:none;}
+.sel-box{position:fixed;z-index:80;pointer-events:none;display:none;
+  border:1px solid var(--md-accent-color);
+  background:rgba(var(--md-accent-color-rgb),.12);
+  border-radius:2px;
+  box-shadow:0 0 0 1px rgba(var(--md-accent-color-rgb),.18) inset;}
+.sel-box.on{display:block;}
+
+/* ===== 多选悬浮窗「全选 / 取消全选」状态动画（时长与曲线跟随软件动画预设） ===== */
+.md-btn.swap .md-tx{animation:mdAllSwap calc(.24s * var(--anim-k,1)) var(--anim-ease,cubic-bezier(.18,.77,.58,.99)) both;}
+@keyframes mdAllSwap{from{opacity:0;transform:translateY(4px) scale(.9);}to{opacity:1;transform:none;}}
+.md-btn[data-k=all].on .md-ic{color:var(--md-accent-color);}
+
+/* ===== 搜索结果分页 ===== */
+.search-bar{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:12px;
+  color:rgba(var(--md-accent-color-grey-base-rgb),.72);}
+.search-bar-tx{white-space:nowrap;}
+.page-size{height:28px;padding:0 8px;border-radius:8px;font:inherit;font-size:12px;
+  background:var(--nm-fill);color:inherit;border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.14);
+  outline:none;cursor:pointer;}
+.page-size:hover{border-color:rgba(var(--md-accent-color-rgb),.5);}
+.pager{display:flex;align-items:center;justify-content:center;gap:14px;margin:20px 0 8px;}
+.pager-btn{height:30px;padding:0 16px;border-radius:999px;font:inherit;font-size:12px;cursor:pointer;
+  background:var(--nm-fill);color:inherit;border:1px solid rgba(var(--md-accent-color-grey-base-rgb),.14);
+  transition:background calc(.2s * var(--anim-k,1)) var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),
+             border-color calc(.2s * var(--anim-k,1)) var(--anim-ease,cubic-bezier(.18,.77,.58,.99)),
+             color calc(.2s * var(--anim-k,1)) var(--anim-ease,cubic-bezier(.18,.77,.58,.99));}
+.pager-btn:hover:not(:disabled){background:rgba(var(--md-accent-color-rgb),.14);
+  border-color:rgba(var(--md-accent-color-rgb),.5);color:var(--md-accent-color);}
+.pager-btn:active:not(:disabled){transform:scale(.97);}
+.pager-btn:disabled{opacity:.38;cursor:default;}
+.pager-info{font-size:12px;color:rgba(var(--md-accent-color-grey-base-rgb),.6);}

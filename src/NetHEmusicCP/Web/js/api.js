@@ -7,7 +7,11 @@
   window.chrome.webview.addEventListener('message', function(ev){
     var data; try { data = JSON.parse(ev.data); } catch(e){ data = ev.data; }
     if(!data || !data.type) return;
-    if(data.type === 'api_result' && data.id && pending[data.id]){ var p=pending[data.id]; delete pending[data.id]; if(data.error) p.reject(new Error(data.error)); else p.resolve(data.data); }
+    if(data.type === 'api_result' && data.id && pending[data.id]){
+      var p=pending[data.id]; delete pending[data.id];
+      if(data.error){ try{ window.dispatchEvent(new CustomEvent('ne-api-error',{detail:{name:data.name,error:data.error}})); }catch(eI){ } p.reject(new Error(data.error)); }
+      else p.resolve(data.data);
+    }
     if(data.type === 'settings'){ var w=settingsWaiters.shift(); if(w) w(data.data); }
     (hooks[data.type]||[]).forEach(function(fn){ try{ fn(data); }catch(e){ console.error(e); } });
   });
@@ -20,7 +24,7 @@
       var id = 'r'+(++seq);
       pending[id] = { resolve: resolve, reject: reject };
       post({ type:'api', name:name, args:args||{}, post:!!isPost, id:id });
-      setTimeout(function(){ if(pending[id]){ delete pending[id]; reject(new Error('timeout '+name)); } }, 25000);
+      setTimeout(function(){ if(pending[id]){ delete pending[id]; try{ window.dispatchEvent(new CustomEvent('ne-api-error',{detail:{name:name,error:'timeout'}})); }catch(eT){ } reject(new Error('timeout '+name)); } }, 25000);
     });
   }
   window.NE = {
