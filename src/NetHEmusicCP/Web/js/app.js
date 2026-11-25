@@ -3552,11 +3552,9 @@ function applyPerfAnim(s) {
     }
     var glassDetail = subBlock([
       hint('该材质显著影响性能，请酌情启用'),
-      glassSw('液态玻璃强度（200%）','ui_liquid_power', 200, glassPowerValue(s)),
-      glassSw('色散（彩边）','ui_liquid_ca', 100, glassCaValue(s)),
-      glassSw('厚度倾向','ui_liquid_thick', 100, glassThickValue(s)),
-      glassSw('视角跟随','ui_liquid_para', 100, glassParaValue(s)),
-      glassSw('流体质感','ui_liquid_fluid', 100, glassFluidValue(s))
+      // 引擎已换成 Liquid-Glass-HTML：只保留它真正支持的两个参数
+      glassSw('折射强度（200%）','ui_liquid_power', 200, glassPowerValue(s)),
+      glassSw('扰动强度','ui_liquid_fluid', 100, glassFluidValue(s))
     ], matCur === 'liquid');
     html.appendChild(group('主题 / 外观', [
       custSel('配色方案','scheme', s.scheme, zhOpts('scheme', s.schemes||[]).concat([{ v:'custom', t:'自定义…' }]), function (v) {
@@ -3616,6 +3614,9 @@ function applyPerfAnim(s) {
     // ---- 快捷键（可自定义）----
     function hotkeyGroup() {
       var g = el('div','set-group');
+      // 这个分组是手工拼的、不走 group()，所以要自己登记到顶栏导航里，否则 set-mode 下没有「快捷键」跳转按钮
+      g.id = 'setg-' + navItems.length;
+      navItems.push({ id: g.id, t: '快捷键' });
       g.appendChild(el('h3','','快捷键'));
       Object.keys(HK_LABELS).forEach(function (key) {
         var r = el('div','set-row');
