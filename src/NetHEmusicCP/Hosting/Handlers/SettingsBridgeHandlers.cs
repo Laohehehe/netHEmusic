@@ -118,6 +118,7 @@ public sealed partial class MainWindow
                     || key.StartsWith("hk_", StringComparison.OrdinalIgnoreCase)
                     || key.StartsWith("vz_", StringComparison.OrdinalIgnoreCase)
                     || key.StartsWith("perf_", StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith("np_", StringComparison.OrdinalIgnoreCase)      // np_* = 歌词页设置（背景样式 / 流动速度）
                     || key.StartsWith("dl_", StringComparison.OrdinalIgnoreCase))     // dl_* = 桌面歌词外观
                 {
                     AppServices.Config.Set("App", key, value);

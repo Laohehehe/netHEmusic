@@ -2133,6 +2133,8 @@ function applyPerfAnim(s) {
   function npSetPlaying(on) {
     npPlaying = !!on;
     var b = npEl('np-play'); if (b) b.innerHTML = npPlaying ? SVG.pause : SVG.play;
+    // 歌词页大封面和 dock 小封面用同一套「呼吸」动画，所以播放态要同步到 #np
+    var np = document.getElementById('np'); if (np) np.classList.toggle('playing', npPlaying);
   }
 
   function parseLrc(lrc) {
@@ -2180,6 +2182,8 @@ function applyPerfAnim(s) {
   function npApplyLyricSettings(s) {
     lyStyles.glow = cfgBool(s, 'lyric_glow', false);
     lyStyles.shadow = cfgBool(s, 'lyric_shadow', true);
+    // 字体效果合并成一个下拉（无/辉光/阴影）；老配置没有这个键时按 glow/shadow 推导
+    lyStyles.fontEffect = String(cfgGet(s, 'lyric_font_effect', lyStyles.glow ? 'glow' : (lyStyles.shadow ? 'shadow' : 'none')));
     lyStyles.layout = String(cfgGet(s, 'lyric_layout', 'vertical'));
     lyStyles.curve = Number(cfgGet(s, 'lyric_curve', 50)) || 0;
     lyStyles.charAnim = cfgBool(s, 'lyric_char_anim', false);
@@ -2198,6 +2202,8 @@ function applyPerfAnim(s) {
     // 性能开关
     lyStyles.bgBlur = cfgBool(s, 'perf_bg_blur', true);
     lyStyles.bgBlurAmt = Math.max(0, Math.min(100, Number(cfgGet(s, 'perf_bg_blur_amount', 30)) || 0));
+    lyStyles.bgStyle = String(cfgGet(s, 'np_bg_style', 'cover'));   // 歌词页背景：cover 歌词封面 / color 纯色 / fluid 动态
+    lyStyles.flowSpeed = Math.max(0, Math.min(100, Number(cfgGet(s, 'np_bg_flow_speed', 40)) || 0));   // 动态背景流动速度 0~100
     lyStyles.playAnim = cfgBool(s, 'perf_play_anim', true);
     lyStyles.vzFps = Math.max(10, Math.min(120, Number(cfgGet(s, 'perf_vz_fps', 33)) || 33));
     lyStyles.vz = cfgBool(s, 'vz_enabled', false);
@@ -2211,8 +2217,9 @@ function applyPerfAnim(s) {
   function npApplyStyleFromState() {
     var np = npEl('np'); if (!np) return;
     var s = lyStyles;
-    np.classList.toggle('ly-glow', !!s.glow && !s.shadow);
-    np.classList.toggle('ly-shadow', !!s.shadow && !s.glow);
+    var fx = s.fontEffect || (s.glow ? 'glow' : (s.shadow ? 'shadow' : 'none'));
+    np.classList.toggle('ly-glow', fx === 'glow');
+    np.classList.toggle('ly-shadow', fx === 'shadow');
     np.classList.toggle('ly-blur', !!s.blur);
     np.classList.toggle('ly-curved', s.layout === 'curved');
     np.classList.toggle('ly-char', !!s.charAnim);
@@ -2223,6 +2230,7 @@ function applyPerfAnim(s) {
     VZ_FRAME_MS = Math.round(1000 / (lyStyles.vzFps || 33));
     np.style.setProperty('--ly-blur', (s.blurAmt / 100 * 5).toFixed(2) + 'px');
     np.style.setProperty('--np-bg-blur', (lyStyles.bgBlurAmt / 100 * 40).toFixed(1) + 'px');   // 歌词页背景模糊量（0% = 不模糊，30% ≈ 原来的 12px）
+    try { npSetBgStyle(lyStyles.bgStyle, lyStyles.ease, lyStyles.flowSpeed); } catch (eBg) { }  // 背景三态：歌词封面 / 纯色 / 动态
     np.style.setProperty('--ly-ch-anim', LY_CH_ANIM[s.charStyle] || LY_CH_ANIM.jump);          // 逐字动画样式
     np.style.setProperty('--ly-ch-power', (s.charPower / 100).toFixed(2));                     // 跳动强度 0~1
     np.style.setProperty('--ly-ease', LY_EASE[s.ease] || LY_EASE.smooth);
@@ -2689,14 +2697,16 @@ function applyPerfAnim(s) {
     }
     function addRange(label, key, field, lo, hi) {
       var r = row(label);
+      r.classList.add('nps-row-rng');
       var val = el('span', 'nps-val', String(lyStyles[field]));
       var i = el('input'); i.type = 'range'; i.min = lo; i.max = hi; i.value = lyStyles[field];
       i.oninput = function () { val.textContent = i.value; lyStyles[field] = Number(i.value); npApplyStyleFromState(); };
       i.onchange = function () { persist(key, i.value); };
       r.appendChild(i); r.appendChild(val);
     }
-    function addSelect(label, key, field, opts) {
+    function addSelect(label, key, field, opts, onChange) {
       var r = row(label);
+      r.classList.add('nps-row-sel');
       var box = el('div', 'cust-select nps-cust');
       var cur = opts[0];
       opts.forEach(function (o) { if (o.v === lyStyles[field]) cur = o; });
@@ -2713,6 +2723,7 @@ function applyPerfAnim(s) {
           Array.prototype.forEach.call(list.children, function (x) { x.classList.remove('sel'); });
           it.classList.add('sel');
           persist(key, o.v);
+          if (onChange) onChange(o.v);
         };
         list.appendChild(it);
       });
@@ -2732,28 +2743,50 @@ function applyPerfAnim(s) {
       document.addEventListener('click', function () { box.classList.remove('open'); });
       box.appendChild(v); box.appendChild(list); r.appendChild(box);
     }
-    addSwitch('字体辉光', 'lyric_glow', 'glow');
-    addSwitch('字体阴影', 'lyric_shadow', 'shadow');
-    addSelect('歌词排列', 'lyric_layout', 'layout', [{ v: 'vertical', t: '竖向' }, { v: 'curved', t: '旋转弧形' }]);
-    addRange('排列曲率', 'lyric_curve', 'curve', 0, 100);
+    // ---- 字体设置 ----
+    box.appendChild(el('div', 'nps-title', '字体设置'));
+    addSelect('字体效果', 'lyric_font_effect', 'fontEffect', [
+      { v: 'none', t: '无' }, { v: 'glow', t: '辉光' }, { v: 'shadow', t: '阴影' }
+    ], function (v) {
+      // 兼容旧的两项独立设置：同步写回 lyric_glow / lyric_shadow，其他读取方行为不变
+      lyStyles.glow = v === 'glow';
+      lyStyles.shadow = v === 'shadow';
+      NE.setSetting('lyric_glow', lyStyles.glow ? 'true' : 'false');
+      NE.setSetting('lyric_shadow', lyStyles.shadow ? 'true' : 'false');
+      npApplyStyleFromState();
+    });
     addRange('主行字号', 'lyric_font_size', 'fontSize', 14, 56);
     addRange('罗马音字号', 'lyric_romaji_size', 'roSize', 8, 40);
     addRange('译文字号', 'lyric_trans_size', 'trSize', 8, 40);
+
+    // ---- 歌词排版 ----
+    box.appendChild(el('div', 'nps-title', '歌词排版'));
+    addSelect('歌词排列', 'lyric_layout', 'layout', [{ v: 'vertical', t: '竖向' }, { v: 'curved', t: '旋转弧形' }]);
+    addRange('排列曲率', 'lyric_curve', 'curve', 0, 100);
     addSwitch('显示翻译', 'lyric_show_translation', 'showTr');
     addSwitch('显示罗马音', 'lyric_show_romaji', 'showRo');
+    addSwitch('非当前行模糊', 'lyric_blur', 'blur');
+    addRange('模糊程度', 'lyric_blur_amount', 'blurAmt', 0, 100);
+
+    // ---- 逐字动画 ----
+    box.appendChild(el('div', 'nps-title', '逐字动画'));
     addSwitch('逐字动画', 'lyric_char_anim', 'charAnim');
     addSelect('逐字动画样式', 'lyric_char_style', 'charStyle', [
       { v: 'jump', t: '字符上跳' }, { v: 'pulse', t: '缩放脉冲' }, { v: 'glow', t: '颜色高亮' },
       { v: 'fade', t: '逐字浮现' }, { v: 'fill', t: '仅逐字填充' }
     ]);
     addRange('跳动强度', 'lyric_char_power', 'charPower', 0, 100);
-    addSwitch('非当前行模糊', 'lyric_blur', 'blur');
-    addRange('模糊程度', 'lyric_blur_amount', 'blurAmt', 0, 100);
     addSelect('动画曲线', 'lyric_ease', 'ease', [
       { v: 'smooth', t: '平滑' }, { v: 'sharp', t: '急促' }, { v: 'gentle', t: '温和' }, { v: 'easeout', t: '缓出' }
     ]);
+
     // ---- 背景特效 ----
     box.appendChild(el('div', 'nps-title', '背景特效'));
+    addSelect('背景样式', 'np_bg_style', 'bgStyle', [
+      { v: 'cover', t: '歌词封面' }, { v: 'color', t: '纯色' }, { v: 'fluid', t: '动态' }
+    ]);
+    addRange('流动速度', 'np_bg_flow_speed', 'flowSpeed', 0, 100);
+    addRange('背景模糊度', 'perf_bg_blur_amount', 'bgBlurAmt', 0, 100);
     addSwitch('音乐律动（频谱）', 'vz_enabled', 'vz');
     addSelect('律动样式', 'vz_style', 'vzStyle', [
       { v: 'bars', t: '柱状' }, { v: 'ring', t: '环形（绕封面）' }, { v: 'wave', t: '波形' }
@@ -4163,6 +4196,14 @@ function applyPerfAnim(s) {
     var nx = npIcon('np-next', SVG.next); if (nx) nx.onclick = function () { NE.post({ type: 'next' }); };
     var gear = npIcon('np-gear', ico('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.9 8.9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9.4a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'));
     if (gear) gear.onclick = function (e) { e.stopPropagation(); npToggleSettings(); };
+    // 设置面板展开时，点面板和齿轮以外的空白处也收起（原来只能再点一次齿轮）
+    document.addEventListener('click', function (e) {
+      var p = document.getElementById('np-settings');
+      if (!p || !p.classList.contains('show')) return;
+      if (p.contains(e.target)) return;
+      if (e.target && e.target.closest && e.target.closest('#np-gear')) return;
+      npToggleSettings(false);
+    });
     var pl = npIcon('np-play', npPlaying ? SVG.pause : SVG.play);
     if (pl) pl.onclick = function () { NE.post({ type: 'toggle' }); npSetPlaying(!npPlaying); };
     // dock 的进度条也支持点击跳转

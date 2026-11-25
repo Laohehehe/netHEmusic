@@ -258,10 +258,121 @@ public sealed partial class MainWindow
                 case "audio_cache_list":
                     PostToWeb(new { type = "audio_cache_list", ids = AppServices.Cache.AudioIds() });
                     break;
+                case "cover_palette":
+                    {
+                        // 歌词页背景取色：WebView 里 canvas 读跨域封面不稳定（时好时坏），改由 C# 下载后采样
+                        var cpUrl = doc.TryGetProperty("url", out var cpv) ? cpv.GetString() ?? "" : "";
+                        _ = HandleCoverPalette(cpUrl);
+                        break;
+                    }
                 case "log": LogManager.Info("web: " + (doc.TryGetProperty("msg", out var m) ? m.GetString() : "")); break;
             }
         }
         catch (Exception ex) { LogManager.Debug("Web 消息失败: " + ex.Message); }
+    }
+
+    /// <summary>歌词页背景取色：下载封面 → 缩到 48x48 → 过滤纯白纯黑 → k-means(k=4) → 回传 4 主色。</summary>
+    private async Task HandleCoverPalette(string url)
+    {
+        var colors = new List<object>();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(url)) throw new InvalidOperationException("empty url");
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+            var bytes = await http.GetByteArrayAsync(url);
+            using var ms = new MemoryStream(bytes);
+            using var src = new System.Drawing.Bitmap(ms);
+            using var small = new System.Drawing.Bitmap(src, new System.Drawing.Size(48, 48));
+            var pts = new List<int[]>();
+            for (var y = 0; y < 48; y++)
+            {
+                for (var x = 0; x < 48; x++)
+                {
+                    var c = small.GetPixel(x, y);
+                    if (c.A < 200) continue;
+                    var mx = Math.Max(c.R, Math.Max(c.G, c.B));
+                    var mn = Math.Min(c.R, Math.Min(c.G, c.B));
+                    if (mn > 240 || mx < 12) continue;
+                    pts.Add(new[] { (int)c.R, (int)c.G, (int)c.B });
+                }
+            }
+            if (pts.Count < 8) throw new InvalidOperationException("too few pixels");
+            foreach (var c in KMeansPalette(pts, 4))
+                colors.Add(new { r = Math.Round(c[0]), g = Math.Round(c[1]), b = Math.Round(c[2]) });
+        }
+        catch (Exception e) { LogManager.Debug("封面取色失败: " + e.Message); }
+        PostToWeb(new { type = "cover_palette", url, colors });
+    }
+
+    private static List<double[]> KMeansPalette(List<int[]> pts, int k)
+    {
+        var centers = new List<double[]>();
+        for (var i = 0; i < k; i++)
+        {
+            var p = pts[(int)((double)pts.Count * (i + 0.5) / k)];
+            centers.Add(new[] { (double)p[0], p[1], p[2] });
+        }
+        for (var iter = 0; iter < 10; iter++)
+        {
+            var sums = new double[k][];
+            var cnt = new int[k];
+            for (var i = 0; i < k; i++) sums[i] = new double[3];
+            foreach (var p in pts)
+            {
+                var bi = 0;
+                var bd = double.MaxValue;
+                for (var j = 0; j < k; j++)
+                {
+                    var dr = p[0] - centers[j][0];
+                    var dg = p[1] - centers[j][1];
+                    var db = p[2] - centers[j][2];
+                    var d = dr * dr + dg * dg + db * db;
+                    if (d < bd) { bd = d; bi = j; }
+                }
+                sums[bi][0] += p[0]; sums[bi][1] += p[1]; sums[bi][2] += p[2]; cnt[bi]++;
+            }
+            for (var j = 0; j < k; j++)
+            {
+                if (cnt[j] == 0) continue;
+                centers[j] = new[] { sums[j][0] / cnt[j], sums[j][1] / cnt[j], sums[j][2] / cnt[j] };
+            }
+        }
+        return centers.Select(PaletteBoost).ToList();
+    }
+
+    private static double[] PaletteBoost(double[] c)
+    {
+        var r = c[0] / 255.0;
+        var g = c[1] / 255.0;
+        var b = c[2] / 255.0;
+        var mx = Math.Max(r, Math.Max(g, b));
+        var mn = Math.Min(r, Math.Min(g, b));
+        var l = (mx + mn) / 2;
+        var s = Math.Abs(mx - mn) < 1e-9 ? 0 : (l > .5 ? (mx - mn) / (2 - mx - mn) : (mx - mn) / (mx + mn));
+        s = Math.Min(1, s * 1.35 + 0.05);
+        l = Math.Min(.72, Math.Max(.2, l * 1.02));
+        double h = 0;
+        if (Math.Abs(mx - mn) > 1e-9)
+        {
+            if (Math.Abs(mx - r) < 1e-9) h = (g - b) / (mx - mn) % 6;
+            else if (Math.Abs(mx - g) < 1e-9) h = (b - r) / (mx - mn) + 2;
+            else h = (r - g) / (mx - mn) + 4;
+            h *= 60;
+            if (h < 0) h += 360;
+        }
+        var q = l < .5 ? l * (1 + s) : l + s - l * s;
+        var p2 = 2 * l - q;
+        static double Hue(double pp, double qq, double t)
+        {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1.0 / 6) return pp + (qq - pp) * 6 * t;
+            if (t < 1.0 / 2) return qq;
+            if (t < 2.0 / 3) return pp + (qq - pp) * (2.0 / 3 - t) * 6;
+            return pp;
+        }
+        var hh = h / 360;
+        return new[] { Hue(p2, q, hh + 1.0 / 3) * 255, Hue(p2, q, hh) * 255, Hue(p2, q, hh - 1.0 / 3) * 255 };
     }
 
     /// <summary>通用 API 透传：前端按 name+args 调网易云接口，返回原始 JSON。</summary>

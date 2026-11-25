@@ -192,6 +192,9 @@ html.no-fx .fx-shake{animation:none;}
 #player.playing #pb-play{animation:btn-breathe 1.9s ease-in-out infinite;position:relative;}
 @keyframes cover-float{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-2px) scale(1.035);}}
 #player.playing .pl-cover{animation:cover-float 2.6s ease-in-out infinite;}
+/* 歌词页大封面：整张卡片（圆角边框 + 阴影）一起呼吸，而不是只让图片在框里缩放；
+   延迟 0.6s 等 FLIP 飞入动画结束后再开始，避免两个 transform 打架 */
+#np.playing .np-cover-wrap{animation:cover-float 2.6s ease-in-out .6s infinite;}
 #pl-fill{transition:width .18s linear;}
 
 /* 封面占位：没有封面时显示音符，而不是破图 */
@@ -699,6 +702,7 @@ html.no-anim-np .np-line .np-orig,html.no-anim-np .np-line .np-sub{transition:no
 html.no-play-anim #player.playing #pb-play{animation:none !important;}
 html.no-play-anim #player.playing #pb-play::after{animation:none !important;opacity:0 !important;}
 html.no-play-anim #player.playing .pl-cover{animation:none !important;}
+html.no-play-anim #np.playing .np-cover-wrap{animation:none !important;}
 /* ================= 更新公告正文（Markdown 渲染） ================= */
 .notice-md{margin:2px 0 0;max-height:46vh;overflow:auto;padding-right:4px;}
 .notice-md h3{font-size:15px;font-weight:600;margin:10px 0 4px;color:#fff;}
@@ -878,3 +882,61 @@ html.liquid .qual-menu{
 #fps-box{position:fixed;right:14px;bottom:112px;z-index:99999;padding:2px 8px;border-radius:6px;pointer-events:none;background:rgba(0,0,0,.62);color:#8fe3ff;font:12px/16px Consolas,monospace;box-shadow:0 2px 10px rgba(0,0,0,.35);}
 
 
+
+
+/* ================= 歌词页背景三态（歌词封面 / 纯色 / 动态） =================
+   纯色/动态用当前封面 k-means 取出的 4 个主色（--np-c1..4）叠成多径向渐变；
+   动态再叠一层慢速 background-position 动画（时长 --np-fluid-dur 跟随动画曲线档位）。 */
+.np-bg.bg-color, .np-bg.bg-fluid{
+  background-image:
+    radial-gradient(52% 64% at 12% 16%, var(--np-c1) 0%, transparent 70%),
+    radial-gradient(58% 70% at 88% 12%, var(--np-c2) 0%, transparent 72%),
+    radial-gradient(62% 76% at 86% 88%, var(--np-c3) 0%, transparent 70%),
+    radial-gradient(58% 68% at 14% 86%, var(--np-c4) 0%, transparent 72%),
+    linear-gradient(135deg, var(--np-c1), var(--np-c3));
+  /* 各层缩放不同，位移时才会有明显的层次流动感 */
+  background-size: 130% 130%, 170% 170%, 150% 150%, 190% 190%, 100% 100%;
+  background-repeat: no-repeat;
+  filter: blur(var(--np-bg-blur,12px)) saturate(1.3) brightness(.98);
+}
+.np-bg.bg-fluid{
+  animation: npBgFluid var(--np-fluid-dur,18s) var(--ly-ease,cubic-bezier(.18,.77,.58,.99)) infinite alternate;
+  will-change: background-position;
+}
+@keyframes npBgFluid{
+  0%   { background-position: 0% 0%,    100% 0%,   100% 100%, 0% 100%,   50% 50%; }
+  25%  { background-position: 32% 10%,  68% 14%,   88% 74%,   10% 86%,   58% 42%; }
+  50%  { background-position: 12% 28%,  92% 34%,   62% 96%,   24% 56%,   42% 58%; }
+  75%  { background-position: 26% 6%,   64% 24%,   92% 82%,   6% 74%,   56% 46%; }
+  100% { background-position: 0% 0%,    100% 0%,   100% 100%, 0% 100%,   50% 50%; }
+}
+/* 关掉背景模糊时三态背景也要去掉 filter（原 .np.no-bg-blur 规则被更具体的三态选择器压住了） */
+.np.no-bg-blur .np-bg{filter:none !important;}
+
+/* ================= 歌词显示设置面板排版 v2 =================
+   面板加宽；分组标题统一成小号大写 + 分隔线；滑块行改成「标签一行 + 滑块一行」，
+   拖动区域更宽、数值更清楚；下拉固定宽度、开关统一尺寸。 */
+.np-settings{width:352px;}
+.np-settings-body{padding:0 20px 60px;}
+.nps-title{
+  margin:10px 0 10px;padding-top:16px;font-size:10.5px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.40);
+  border-top:1px solid rgba(255,255,255,.09);
+}
+.nps-title:first-child{margin-top:0;padding-top:2px;border-top:none;}
+.nps-row{min-height:auto;padding:9px 0;gap:12px;align-items:center;}
+.nps-label{font-size:13px;color:rgba(255,255,255,.88);}
+.nps-val{width:38px;font-size:11.5px;color:rgba(255,255,255,.55);}
+/* 滑块：和标签保持同一行，滑块占满剩余宽度（与最初 gear 的长度一致） */
+.nps-row-rng{flex-wrap:nowrap;gap:6px;}
+.nps-row-rng .nps-label{flex:0 0 auto;white-space:nowrap;padding-right:6px;}
+.nps-row-rng input[type=range]{flex:1;min-width:0;width:auto;}
+.nps-row-rng .nps-val{width:34px;}
+/* 下拉：固定宽度，标签不被挤压 */
+.nps-row-sel .nps-cust{flex:0 0 156px;max-width:156px;}
+.nps-cust .cs-value{height:32px;border-radius:9px;}
+.nps-cust .cs-value span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nps-cust .cs-list{min-width:150px;}
+.nps-switch{width:44px;height:25px;}
+.nps-switch::after{width:19px;height:19px;}
+.nps-switch.on::after{transform:translateX(19px);}
